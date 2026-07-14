@@ -27,33 +27,46 @@ import {
   LogAktivitas,
   DatabaseState,
   Kehadiran,
+  LaporanKejadian,
 } from '../types';
 
 const LOCAL_STORAGE_KEY = 'hds_bk_database_v1';
 
-// List of 21 Wali Kelas requested by user
+// List of 33 Wali Kelas requested by user
 export const WALI_KELAS_USERS: User[] = [
-  { id: 'wk-7-1', username: 'damianus', nama: 'Damianus, S.Pd', role: UserRole.WALI_KELAS, email: 'damianus@sekolah.sch.id', isActive: true },
-  { id: 'wk-7-2', username: 'albert', nama: 'Albert Allen, M.A.Ed', role: UserRole.WALI_KELAS, email: 'albert@sekolah.sch.id', isActive: true },
-  { id: 'wk-7-3', username: 'novie', nama: 'Novie Maryadiati, S.E', role: UserRole.WALI_KELAS, email: 'novie@sekolah.sch.id', isActive: true },
-  { id: 'wk-7-4', username: 'ira', nama: 'Ira Riswana Maha, S.Pd', role: UserRole.WALI_KELAS, email: 'ira@sekolah.sch.id', isActive: true },
-  { id: 'wk-7-5', username: 'yulia', nama: 'Yulia Mawarini, S.Pd', role: UserRole.WALI_KELAS, email: 'yulia@sekolah.sch.id', isActive: true },
-  { id: 'wk-7-6', username: 'terra', nama: 'Terra Meira. S. A. S, S.Pd', role: UserRole.WALI_KELAS, email: 'terra@sekolah.sch.id', isActive: true },
-  { id: 'wk-7-7', username: 'lidya', nama: 'Lidya Septi Setyowati, S.Pd', role: UserRole.WALI_KELAS, email: 'lidya@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-1', username: 'sri', nama: 'Sri Lawati, S.Pd', role: UserRole.WALI_KELAS, email: 'sri@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-2', username: 'farah', nama: 'Farah Muthia Zadfa, S.Pd', role: UserRole.WALI_KELAS, email: 'farah@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-3', username: 'eva', nama: 'Eva SYarifatul Maesyaroh, S.Pdi', role: UserRole.WALI_KELAS, email: 'eva@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-4', username: 'nur', nama: 'Nur Sakinah, S.Pd', role: UserRole.WALI_KELAS, email: 'nur@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-5', username: 'selfi', nama: 'Selfi Widiardin, S.Pd', role: UserRole.WALI_KELAS, email: 'selfi@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-6', username: 'gerry', nama: 'Gerry Adinagara, S.Pd', role: UserRole.WALI_KELAS, email: 'gerry@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-7', username: 'ibnu', nama: 'Ibnu, S.Pd', role: UserRole.WALI_KELAS, email: 'ibnu@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-1', username: 'nani', nama: 'Nani Saidah, S.Pd', role: UserRole.WALI_KELAS, email: 'nani@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-2', username: 'ana', nama: 'A. A. Ana Dian Kahayani, M.Pd', role: UserRole.WALI_KELAS, email: 'ana@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-3', username: 'monica', nama: 'Monica Herlina, S.Pdi', role: UserRole.WALI_KELAS, email: 'monica@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-4', username: 'indri', nama: 'Indri Purnamasari Yusuf, S.Pd', role: UserRole.WALI_KELAS, email: 'indri@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-5', username: 'wahyunis', nama: 'Wahyunis Argowati, S.Pd', role: UserRole.WALI_KELAS, email: 'wahyunis@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-6', username: 'titin', nama: 'Titin Octa Rahma, S.Pd', role: UserRole.WALI_KELAS, email: 'titin@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-7', username: 'ifah', nama: 'Ifah Siti Latifah. A. K, S.Pd', role: UserRole.WALI_KELAS, email: 'ifah@sekolah.sch.id', isActive: true }
+  { id: 'wk-7-1', username: 'fay', nama: 'Nurrifa`ah Fairuz, S.Pd', role: UserRole.WALI_KELAS, email: 'fay@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-2', username: 'aida', nama: 'Aida Sri Rahayu, S.Pd', role: UserRole.WALI_KELAS, email: 'aida@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-3', username: 'viika', nama: 'Viika Amalia Ainuna, M.Pd', role: UserRole.WALI_KELAS, email: 'viika@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-4', username: 'sribarnetti', nama: 'Sri Barnetti, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'sribarnetti@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-5', username: 'viny', nama: 'Viny Krisni Rahmi Maulani, S.Pd', role: UserRole.WALI_KELAS, email: 'viny@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-6', username: 'lia', nama: 'Amalia, S.Pd', role: UserRole.WALI_KELAS, email: 'lia@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-7', username: 'yanah', nama: 'Maryanah, S.Pd', role: UserRole.WALI_KELAS, email: 'yanah@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-8', username: 'srirahayu', nama: 'Sri Rahayu, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'srirahayu@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-9', username: 'putri', nama: 'Putri Pradipta, S.Pd', role: UserRole.WALI_KELAS, email: 'putri@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-10', username: 'sari', nama: 'Prammita Sari, S.Kom', role: UserRole.WALI_KELAS, email: 'sari@sekolah.sch.id', isActive: true },
+  { id: 'wk-7-11', username: 'rifal', nama: 'Rifalfi Hamdi, S.Pd', role: UserRole.WALI_KELAS, email: 'rifal@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-1', username: 'neneng', nama: 'Neneng Fitria, M.Pd', role: UserRole.WALI_KELAS, email: 'neneng@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-2', username: 'meli', nama: 'Meliana Nursanti, S.Pd', role: UserRole.WALI_KELAS, email: 'meli@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-3', username: 'tiar', nama: 'Riztiary Pranacita, S.Pd', role: UserRole.WALI_KELAS, email: 'tiar@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-4', username: 'joko', nama: 'Marjoko, S.Pd', role: UserRole.WALI_KELAS, email: 'joko@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-5', username: 'danang', nama: 'Danang Bayu Permadi, S.Pd', role: UserRole.WALI_KELAS, email: 'danang@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-6', username: 'annisa', nama: 'Annisa C. Wicikononing, S.Kom', role: UserRole.WALI_KELAS, email: 'annisa@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-7', username: 'haifa', nama: 'Haifa Suryati, S.Pd', role: UserRole.WALI_KELAS, email: 'haifa@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-8', username: 'santi', nama: 'Santi Ramadhani, S.Pd', role: UserRole.WALI_KELAS, email: 'santi@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-9', username: 'reni', nama: 'Reni Septiati, S.Pd', role: UserRole.WALI_KELAS, email: 'reni@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-10', username: 'dewi', nama: 'Dewi Sri Kusumaningrum, S.Pd', role: UserRole.WALI_KELAS, email: 'dewi@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-11', username: 'emi', nama: 'Emi Jamiah, M.Pd', role: UserRole.WALI_KELAS, email: 'emi@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-1', username: 'tere', nama: 'Theresia Erni Setyawati, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'tere@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-2', username: 'ferry', nama: 'Ferry Ferdiansyah, S.Pd', role: UserRole.WALI_KELAS, email: 'ferry@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-3', username: 'sifah', nama: 'Sifah Fauziah, S.Pd', role: UserRole.WALI_KELAS, email: 'sifah@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-4', username: 'mia', nama: 'Mia Hardina, S.Pd', role: UserRole.WALI_KELAS, email: 'mia@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-5', username: 'nur', nama: 'Nur Komar, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'nur@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-6', username: 'warsih', nama: 'Suwarsih, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'warsih@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-7', username: 'tut', nama: 'Hastutiningsih, S.Pd', role: UserRole.WALI_KELAS, email: 'tut@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-8', username: 'kasrah', nama: 'Dra. Kasrah', role: UserRole.WALI_KELAS, email: 'kasrah@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-9', username: 'habib', nama: 'Habib Baehaqi, S.Kom', role: UserRole.WALI_KELAS, email: 'habib@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-10', username: 'pendi', nama: 'Pendi, S.Pd', role: UserRole.WALI_KELAS, email: 'pendi@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-11', username: 'hadi', nama: 'Hadi Suryadi, S.Pd', role: UserRole.WALI_KELAS, email: 'hadi@sekolah.sch.id', isActive: true }
 ];
 
 // Seed data to make the dashboard charts and widgets look spectacular and complete right away
@@ -64,12 +77,12 @@ const INITIAL_DATABASE: DatabaseState = {
   },
   users: [
     { id: 'usr-1', username: 'admin', nama: 'Holfi Aulia, S.Pd', role: UserRole.ADMIN, email: 'holfi.aulia@sekolah.sch.id', isActive: true },
-    { id: 'usr-2', username: 'Jamilah', nama: 'Nur Jamilah Purwaningsih, S.Psi', role: UserRole.GURU_BK, email: 'nurjamilah.bk@sekolah.sch.id', isActive: true },
-    { id: 'usr-3-bk', username: 'Arta', nama: 'Arta Polta, S.Pd', role: UserRole.GURU_BK, email: 'artapolta.bk@sekolah.sch.id', isActive: true },
-    { id: 'usr-5-bk', username: 'Nanda', nama: 'Nanda Putri Utami, S.Pd', role: UserRole.GURU_BK, email: 'nandaputri.bk@sekolah.sch.id', isActive: true },
-    { id: 'usr-3', username: 'artapolta', nama: 'Arta Polta, S.Pd', role: UserRole.WALI_KELAS, email: 'artapolta@sekolah.sch.id', isActive: true },
+    { id: 'bk-sulaiman', username: 'sulaiman', nama: 'Sulaiman, S.Psi', role: UserRole.GURU_BK, email: 'sulaiman@sekolah.sch.id', isActive: true },
+    { id: 'bk-aulia', username: 'aulia', nama: 'Aulia Rohmah, S.Pd,.MM', role: UserRole.GURU_BK, email: 'aulia@sekolah.sch.id', isActive: true },
+    { id: 'bk-dwi', username: 'dwi', nama: 'Dwi Susanti, S.Pd', role: UserRole.GURU_BK, email: 'dwi@sekolah.sch.id', isActive: true },
+    { id: 'bk-kholfi', username: 'kholfi', nama: 'Kholfi Aulia, S.Pd', role: UserRole.GURU_BK, email: 'kholfi@sekolah.sch.id', isActive: true },
+    { id: 'bk-novita', username: 'novita', nama: 'Novita Kusuma Wardhani, S.Pd', role: UserRole.GURU_BK, email: 'novita@sekolah.sch.id', isActive: true },
     { id: 'usr-4', username: 'kepsek', nama: 'Salim, S.Pd., M.Hum.', role: UserRole.KEPALA_SEKOLAH, email: 'salim.kepsek@sekolah.sch.id', isActive: true },
-    { id: 'usr-5', username: 'nandaputri', nama: 'Nanda Putri Utami, S.Pd', role: UserRole.WALI_KELAS, email: 'nandaputri@sekolah.sch.id', isActive: true },
     ...WALI_KELAS_USERS
   ],
   tahunPelajaran: [
@@ -80,41 +93,41 @@ const INITIAL_DATABASE: DatabaseState = {
   jurusan: [],
   kelas: [
     // Kelas 7-1 s.d. 7-11
-    { id: 'kl-1', namaKelas: 'Kelas 7-1', waliKelasId: 'usr-3' },
-    { id: 'kl-2', namaKelas: 'Kelas 7-2', waliKelasId: 'usr-3' },
-    { id: 'kl-3', namaKelas: 'Kelas 7-3', waliKelasId: 'usr-3' },
-    { id: 'kl-4', namaKelas: 'Kelas 7-4', waliKelasId: 'usr-3' },
-    { id: 'kl-5', namaKelas: 'Kelas 7-5', waliKelasId: 'usr-3' },
-    { id: 'kl-6', namaKelas: 'Kelas 7-6', waliKelasId: 'usr-3' },
-    { id: 'kl-7', namaKelas: 'Kelas 7-7', waliKelasId: 'usr-3' },
-    { id: 'kl-8', namaKelas: 'Kelas 7-8', waliKelasId: 'usr-3' },
-    { id: 'kl-9', namaKelas: 'Kelas 7-9', waliKelasId: 'usr-3' },
-    { id: 'kl-10', namaKelas: 'Kelas 7-10', waliKelasId: 'usr-3' },
-    { id: 'kl-11', namaKelas: 'Kelas 7-11', waliKelasId: 'usr-3' },
+    { id: 'kl-1', namaKelas: 'Kelas 7-1', waliKelasId: 'wk-7-1' },
+    { id: 'kl-2', namaKelas: 'Kelas 7-2', waliKelasId: 'wk-7-2' },
+    { id: 'kl-3', namaKelas: 'Kelas 7-3', waliKelasId: 'wk-7-3' },
+    { id: 'kl-4', namaKelas: 'Kelas 7-4', waliKelasId: 'wk-7-4' },
+    { id: 'kl-5', namaKelas: 'Kelas 7-5', waliKelasId: 'wk-7-5' },
+    { id: 'kl-6', namaKelas: 'Kelas 7-6', waliKelasId: 'wk-7-6' },
+    { id: 'kl-7', namaKelas: 'Kelas 7-7', waliKelasId: 'wk-7-7' },
+    { id: 'kl-8', namaKelas: 'Kelas 7-8', waliKelasId: 'wk-7-8' },
+    { id: 'kl-9', namaKelas: 'Kelas 7-9', waliKelasId: 'wk-7-9' },
+    { id: 'kl-10', namaKelas: 'Kelas 7-10', waliKelasId: 'wk-7-10' },
+    { id: 'kl-11', namaKelas: 'Kelas 7-11', waliKelasId: 'wk-7-11' },
     // Kelas 8-1 s.d. 8-11
-    { id: 'kl-12', namaKelas: 'Kelas 8-1', waliKelasId: 'usr-5' },
-    { id: 'kl-13', namaKelas: 'Kelas 8-2', waliKelasId: 'usr-5' },
-    { id: 'kl-14', namaKelas: 'Kelas 8-3', waliKelasId: 'usr-5' },
-    { id: 'kl-15', namaKelas: 'Kelas 8-4', waliKelasId: 'usr-5' },
-    { id: 'kl-16', namaKelas: 'Kelas 8-5', waliKelasId: 'usr-5' },
-    { id: 'kl-17', namaKelas: 'Kelas 8-6', waliKelasId: 'usr-5' },
-    { id: 'kl-18', namaKelas: 'Kelas 8-7', waliKelasId: 'usr-5' },
-    { id: 'kl-19', namaKelas: 'Kelas 8-8', waliKelasId: 'usr-5' },
-    { id: 'kl-20', namaKelas: 'Kelas 8-9', waliKelasId: 'usr-5' },
-    { id: 'kl-21', namaKelas: 'Kelas 8-10', waliKelasId: 'usr-5' },
-    { id: 'kl-22', namaKelas: 'Kelas 8-11', waliKelasId: 'usr-5' },
+    { id: 'kl-12', namaKelas: 'Kelas 8-1', waliKelasId: 'wk-8-1' },
+    { id: 'kl-13', namaKelas: 'Kelas 8-2', waliKelasId: 'wk-8-2' },
+    { id: 'kl-14', namaKelas: 'Kelas 8-3', waliKelasId: 'wk-8-3' },
+    { id: 'kl-15', namaKelas: 'Kelas 8-4', waliKelasId: 'wk-8-4' },
+    { id: 'kl-16', namaKelas: 'Kelas 8-5', waliKelasId: 'wk-8-5' },
+    { id: 'kl-17', namaKelas: 'Kelas 8-6', waliKelasId: 'wk-8-6' },
+    { id: 'kl-18', namaKelas: 'Kelas 8-7', waliKelasId: 'wk-8-7' },
+    { id: 'kl-19', namaKelas: 'Kelas 8-8', waliKelasId: 'wk-8-8' },
+    { id: 'kl-20', namaKelas: 'Kelas 8-9', waliKelasId: 'wk-8-9' },
+    { id: 'kl-21', namaKelas: 'Kelas 8-10', waliKelasId: 'wk-8-10' },
+    { id: 'kl-22', namaKelas: 'Kelas 8-11', waliKelasId: 'wk-8-11' },
     // Kelas 9-1 s.d. 9-11
-    { id: 'kl-23', namaKelas: 'Kelas 9-1', waliKelasId: 'usr-3' },
-    { id: 'kl-24', namaKelas: 'Kelas 9-2', waliKelasId: 'usr-3' },
-    { id: 'kl-25', namaKelas: 'Kelas 9-3', waliKelasId: 'usr-3' },
-    { id: 'kl-26', namaKelas: 'Kelas 9-4', waliKelasId: 'usr-3' },
-    { id: 'kl-27', namaKelas: 'Kelas 9-5', waliKelasId: 'usr-3' },
-    { id: 'kl-28', namaKelas: 'Kelas 9-6', waliKelasId: 'usr-3' },
-    { id: 'kl-29', namaKelas: 'Kelas 9-7', waliKelasId: 'usr-3' },
-    { id: 'kl-30', namaKelas: 'Kelas 9-8', waliKelasId: 'usr-3' },
-    { id: 'kl-31', namaKelas: 'Kelas 9-9', waliKelasId: 'usr-3' },
-    { id: 'kl-32', namaKelas: 'Kelas 9-10', waliKelasId: 'usr-3' },
-    { id: 'kl-33', namaKelas: 'Kelas 9-11', waliKelasId: 'usr-3' },
+    { id: 'kl-23', namaKelas: 'Kelas 9-1', waliKelasId: 'wk-9-1' },
+    { id: 'kl-24', namaKelas: 'Kelas 9-2', waliKelasId: 'wk-9-2' },
+    { id: 'kl-25', namaKelas: 'Kelas 9-3', waliKelasId: 'wk-9-3' },
+    { id: 'kl-26', namaKelas: 'Kelas 9-4', waliKelasId: 'wk-9-4' },
+    { id: 'kl-27', namaKelas: 'Kelas 9-5', waliKelasId: 'wk-9-5' },
+    { id: 'kl-28', namaKelas: 'Kelas 9-6', waliKelasId: 'wk-9-6' },
+    { id: 'kl-29', namaKelas: 'Kelas 9-7', waliKelasId: 'wk-9-7' },
+    { id: 'kl-30', namaKelas: 'Kelas 9-8', waliKelasId: 'wk-9-8' },
+    { id: 'kl-31', namaKelas: 'Kelas 9-9', waliKelasId: 'wk-9-9' },
+    { id: 'kl-32', namaKelas: 'Kelas 9-10', waliKelasId: 'wk-9-10' },
+    { id: 'kl-33', namaKelas: 'Kelas 9-11', waliKelasId: 'wk-9-11' },
   ],
   siswa: [
     {
@@ -380,13 +393,14 @@ const INITIAL_DATABASE: DatabaseState = {
     { id: 'att-1', siswaId: 'sis-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
     { id: 'att-2', siswaId: 'sis-3', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 4, sakit: 0, izin: 1, alfa: 0, keterangan: 'Izin urusan keluarga' }
   ],
+  laporanKejadian: []
 };
 
 // Local cache
 let currentDatabase: DatabaseState | null = null;
 
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
-  if (parsed && parsed._sanitized_v6) {
+  if (parsed && parsed._sanitized_v6 && parsed.laporanKejadian) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
   let migrated = false;
@@ -419,7 +433,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     'users', 'siswa', 'orangTua', 'akademik', 'kesehatan', 'ekonomi', 
     'psikologi', 'sosial', 'prestasi', 'pelanggaran', 'remisiPoin', 
     'konseling', 'asesmen', 'homeVisit', 'surat', 'dokumen', 
-    'catatanPerkembangan', 'tahunPelajaran', 'kelas', 'jurusan', 'logAktivitas', 'kehadiran'
+    'catatanPerkembangan', 'tahunPelajaran', 'kelas', 'jurusan', 'logAktivitas', 'kehadiran', 'laporanKejadian'
   ];
 
   listKeys.forEach(key => {
@@ -429,159 +443,22 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
-  // Self-healing: Ensure users array has critical admin/Jamilah accounts
-  const hasAdmin = parsed.users.some((u: any) => u && u.username && u.username.toString().toLowerCase() === 'admin');
-  if (!hasAdmin) {
-    parsed.users.push({ 
-      id: 'usr-1', 
-      username: 'admin', 
-      nama: 'Holfi Aulia, S.Pd', 
-      role: UserRole.ADMIN, 
-      email: 'holfi.aulia@sekolah.sch.id', 
-      isActive: true 
+  // Self-healing: Check if the new BK users and 33 Wali Kelas exist in database. If not, reset users and kelas arrays to make sure accounts are loaded.
+  const hasSulaiman = parsed.users.some((u: any) => u && u.username && u.username.toString().toLowerCase() === 'sulaiman');
+  if (!hasSulaiman) {
+    parsed.users = [...INITIAL_DATABASE.users];
+    parsed.kelas = [...INITIAL_DATABASE.kelas];
+    migrated = true;
+  } else {
+    // Ensure every Wali Kelas user in WALI_KELAS_USERS exists in parsed.users
+    WALI_KELAS_USERS.forEach((wku) => {
+      const exists = parsed.users.some((u: any) => u && u.username === wku.username);
+      if (!exists) {
+        parsed.users.push(wku);
+        migrated = true;
+      }
     });
-    migrated = true;
   }
-
-  const hasJamilah = parsed.users.some((u: any) => u && u.username && u.username.toString().toLowerCase() === 'jamilah');
-  if (!hasJamilah) {
-    const gbkIdx = parsed.users.findIndex((u: any) => u && (u.id === 'usr-2' || u.username?.toString().toLowerCase() === 'gurubk'));
-    if (gbkIdx >= 0) {
-      parsed.users[gbkIdx].id = 'usr-2';
-      parsed.users[gbkIdx].username = 'Jamilah';
-      parsed.users[gbkIdx].role = UserRole.GURU_BK;
-      parsed.users[gbkIdx].nama = 'Nur Jamilah Purwaningsih, S.Psi';
-      parsed.users[gbkIdx].email = 'nurjamilah.bk@sekolah.sch.id';
-    } else {
-      parsed.users.push({ 
-        id: 'usr-2', 
-        username: 'Jamilah', 
-        nama: 'Nur Jamilah Purwaningsih, S.Psi', 
-        role: UserRole.GURU_BK, 
-        email: 'nurjamilah.bk@sekolah.sch.id', 
-        isActive: true 
-      });
-    }
-    migrated = true;
-  }
-
-  const hasArtaBk = parsed.users.some((u: any) => u && u.id === 'usr-3-bk');
-  if (!hasArtaBk) {
-    parsed.users.push({ 
-      id: 'usr-3-bk', 
-      username: 'Arta', 
-      nama: 'Arta Polta, S.Pd', 
-      role: UserRole.GURU_BK, 
-      email: 'artapolta.bk@sekolah.sch.id', 
-      isActive: true 
-    });
-    migrated = true;
-  }
-
-  const hasNandaBk = parsed.users.some((u: any) => u && u.id === 'usr-5-bk');
-  if (!hasNandaBk) {
-    parsed.users.push({ 
-      id: 'usr-5-bk', 
-      username: 'Nanda', 
-      nama: 'Nanda Putri Utami, S.Pd', 
-      role: UserRole.GURU_BK, 
-      email: 'nandaputri.bk@sekolah.sch.id', 
-      isActive: true 
-    });
-    migrated = true;
-  }
-
-  // Update BK teacher name and Admin name and Kepala Sekolah
-  let hasUsr3 = false;
-  let hasUsr5 = false;
-
-  parsed.users = parsed.users.map((u: any) => {
-    if (!u) return null;
-    if (u.id === 'usr-6') return null; // Remove usr-6 completely to ensure we only have 2 Wali Kelas
-    if (u.id === 'usr-1') {
-      if (u.nama !== 'Holfi Aulia, S.Pd' || u.username !== 'admin' || u.role !== UserRole.ADMIN || u.isActive !== true) {
-        u.nama = 'Holfi Aulia, S.Pd';
-        u.username = 'admin';
-        u.role = UserRole.ADMIN;
-        u.email = 'holfi.aulia@sekolah.sch.id';
-        u.isActive = true;
-        migrated = true;
-      }
-    }
-    if (u.id === 'usr-2') {
-      if (u.nama !== 'Nur Jamilah Purwaningsih, S.Psi' || u.username !== 'Jamilah' || u.role !== UserRole.GURU_BK || u.isActive !== true) {
-        u.nama = 'Nur Jamilah Purwaningsih, S.Psi';
-        u.username = 'Jamilah';
-        u.role = UserRole.GURU_BK;
-        u.email = 'nurjamilah.bk@sekolah.sch.id';
-        u.isActive = true;
-        migrated = true;
-      }
-    } else {
-      // Dynamic fallback check for user objects representing the BK teacher from sheets/offline
-      const normalizedName = (u.nama || '').toString().toLowerCase();
-      const normalizedUser = (u.username || '').toString().toLowerCase();
-      if (normalizedUser === 'gurubk' || normalizedName.includes('sulaiman') || normalizedName.includes('siti rahma')) {
-        u.nama = 'Nur Jamilah Purwaningsih, S.Psi';
-        u.role = UserRole.GURU_BK;
-        u.username = 'Jamilah';
-        u.email = 'nurjamilah.bk@sekolah.sch.id';
-        migrated = true;
-      }
-    }
-    if (u.id === 'usr-3') {
-      hasUsr3 = true;
-      if (u.nama !== 'Arta Polta, S.Pd' || u.role !== UserRole.WALI_KELAS || u.username !== 'artapolta') {
-        u.nama = 'Arta Polta, S.Pd';
-        u.username = 'artapolta';
-        u.email = 'artapolta@sekolah.sch.id';
-        u.role = UserRole.WALI_KELAS;
-        migrated = true;
-      }
-    }
-    if (u.id === 'usr-4') {
-      if (u.nama !== 'Salim, S.Pd., M.Hum.') {
-        u.nama = 'Salim, S.Pd., M.Hum.';
-        u.email = 'salim.kepsek@sekolah.sch.id';
-        migrated = true;
-      }
-    }
-    if (u.id === 'usr-5') {
-      hasUsr5 = true;
-      if (u.nama !== 'Nanda Putri Utami, S.Pd' || u.role !== UserRole.WALI_KELAS || u.username !== 'nandaputri') {
-        u.nama = 'Nanda Putri Utami, S.Pd';
-        u.username = 'nandaputri';
-        u.role = UserRole.WALI_KELAS;
-        u.email = 'nandaputri@sekolah.sch.id';
-        migrated = true;
-      }
-    }
-    // Convert isActive string to boolean
-    const prevActive = u.isActive;
-    u.isActive = u.isActive === undefined || u.isActive === true || String(u.isActive).toLowerCase() === 'true';
-    if (u.isActive !== prevActive) {
-      migrated = true;
-    }
-    return u;
-  }).filter(Boolean);
-
-  if (!hasUsr3) {
-    parsed.users.push({ id: 'usr-3', username: 'artapolta', nama: 'Arta Polta, S.Pd', role: UserRole.WALI_KELAS, email: 'artapolta@sekolah.sch.id', isActive: true });
-    migrated = true;
-  }
-  if (!hasUsr5) {
-    parsed.users.push({ id: 'usr-5', username: 'nandaputri', nama: 'Nanda Putri Utami, S.Pd', role: UserRole.WALI_KELAS, email: 'nandaputri@sekolah.sch.id', isActive: true });
-    migrated = true;
-  }
-
-  // Ensure all 21 Wali Kelas are present
-  WALI_KELAS_USERS.forEach((wku) => {
-    const exists = parsed.users.some((u: any) => u && u.username === wku.username);
-    if (!exists) {
-      parsed.users.push(wku);
-      migrated = true;
-    }
-  });
 
   // Update log activities with old BK/Admin names and Kepala Sekolah
   parsed.logAktivitas = parsed.logAktivitas.map((l: any) => {
@@ -738,58 +615,46 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       k.namaKelas = name;
       migrated = true;
     }
-
-    // Assign appropriate wali kelas
-    const idNum = parseInt(k.id.replace('kl-', ''), 10);
-    if (!isNaN(idNum)) {
-      if (idNum >= 1 && idNum <= 7) {
-        const expectedId = `wk-7-${idNum}`;
-        if (k.waliKelasId !== expectedId) {
-          k.waliKelasId = expectedId;
-          migrated = true;
-        }
-      } else if (idNum >= 12 && idNum <= 18) {
-        const expectedId = `wk-8-${idNum - 11}`;
-        if (k.waliKelasId !== expectedId) {
-          k.waliKelasId = expectedId;
-          migrated = true;
-        }
-      } else if (idNum >= 23 && idNum <= 29) {
-        const expectedId = `wk-9-${idNum - 22}`;
-        if (k.waliKelasId !== expectedId) {
-          k.waliKelasId = expectedId;
-          migrated = true;
-        }
-      } else {
-        // Fallback for classes 8-11
-        if (idNum >= 8 && idNum <= 11) {
-          if (k.waliKelasId !== 'wk-7-7') {
-            k.waliKelasId = 'wk-7-7';
-            migrated = true;
-          }
-        } else if (idNum >= 19 && idNum <= 22) {
-          if (k.waliKelasId !== 'wk-8-7') {
-            k.waliKelasId = 'wk-8-7';
-            migrated = true;
-          }
-        } else if (idNum >= 30 && idNum <= 33) {
-          if (k.waliKelasId !== 'wk-9-7') {
-            k.waliKelasId = 'wk-9-7';
-            migrated = true;
-          }
-        }
-      }
-    }
-
     return k;
   }).filter(Boolean);
 
-  // Now, deduplicate classes based on their normalized namaKelas
-  // We want to make sure we keep only one class per name, prioritizing standard id "kl-X"
+  // Now, ensure all 33 standard classes from INITIAL_DATABASE are present with standard IDs, correct names, and correct waliKelasId
+  INITIAL_DATABASE.kelas.forEach((c) => {
+    // Check if class with standard ID exists
+    const existingById = parsed.kelas.find((k: any) => k && k.id === c.id);
+    if (existingById) {
+      const normalizedName = normalizeClassName(existingById.namaKelas);
+      const targetName = normalizeClassName(c.namaKelas);
+      if (normalizedName !== targetName) {
+        existingById.namaKelas = c.namaKelas;
+        migrated = true;
+      }
+      if (existingById.waliKelasId !== c.waliKelasId) {
+        existingById.waliKelasId = c.waliKelasId;
+        migrated = true;
+      }
+    } else {
+      // Find if there is a class with the same name but different ID (e.g., 'kelas-7-1' or raw 'Kelas 7-1')
+      const existingByName = parsed.kelas.find((k: any) => k && k.namaKelas && normalizeClassName(k.namaKelas) === normalizeClassName(c.namaKelas));
+      if (existingByName) {
+        redirectKelasIdMap[existingByName.id] = c.id;
+        existingByName.id = c.id;
+        existingByName.namaKelas = c.namaKelas;
+        existingByName.waliKelasId = c.waliKelasId;
+        migrated = true;
+      } else {
+        // If not found by ID or Name, insert the standard class!
+        parsed.kelas.push({ ...c });
+        migrated = true;
+      }
+    }
+  });
+
+  // Deduplicate and filter classes to ensure clean unique list
   const seenClassNames = new Set<string>();
   const uniqueClasses: any[] = [];
 
-  // Sort them so that standard IDs ('kl-1' through 'kl-33') come first, ensuring they are preserved as the primary objects
+  // Sort standard IDs ('kl-1' through 'kl-33') first to make sure they are prioritized
   const sortedClasses = [...parsed.kelas].sort((a: any, b: any) => {
     const isAStandard = a && a.id && a.id.startsWith('kl-');
     const isBStandard = b && b.id && b.id.startsWith('kl-');
@@ -801,8 +666,6 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
   sortedClasses.forEach((k: any) => {
     if (!k) return;
     const name = k.namaKelas;
-    
-    // Determine the target ID for this class name
     const standardId = standardKelasMap[name] || k.id;
 
     if (seenClassNames.has(name)) {
@@ -815,9 +678,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       }
     } else {
       // First time we see this class name!
-      // If its current ID is not standard but we have a standard ID for it, redirect it to standard ID
       if (k.id !== standardId && !parsed.kelas.some((x: any) => x && x.id === standardId)) {
-        // Only redirect if the standard ID isn't already taken by something else
         redirectKelasIdMap[k.id] = standardId;
         k.id = standardId;
         migrated = true;
@@ -873,18 +734,48 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       parsed.jurusan = [];
       migrated = true;
     }
-
-    // Check if classes are high school (e.g., has 'RPL', 'TKJ', 'DKV') or if they don't match our new grades (33 rombel)
-    const hasHighSchoolClasses = parsed.kelas.some((k: any) => 
-      k && k.namaKelas && (k.namaKelas.includes('RPL') || k.namaKelas.includes('TKJ') || k.namaKelas.includes('DKV'))
-    );
-    if (hasHighSchoolClasses || parsed.kelas.length < 33 || parsed.siswa.length === 0) {
-      parsed.kelas = [...INITIAL_DATABASE.kelas];
-      parsed.siswa = [...INITIAL_DATABASE.siswa];
-      parsed.orangTua = [...INITIAL_DATABASE.orangTua];
-      migrated = true;
-    }
   }
+
+  // Ensure every student record matches standard types, has basic info, and uses stable deterministic IDs
+  parsed.siswa = parsed.siswa.map((s: any) => {
+    if (s) {
+      // 1. If it's a completely empty/blank row from Google Sheets, filter it out
+      const hasNoName = !s.nama || s.nama.toString().trim() === '';
+      const hasNoNis = !s.nis || s.nis.toString().trim() === '';
+      const hasNoNisn = !s.nisn || s.nisn.toString().trim() === '';
+      const hasNoId = !s.id || s.id.toString().trim() === '';
+      
+      if (hasNoName && hasNoNis && hasNoNisn && hasNoId) {
+        return null;
+      }
+
+      // 2. Generate a stable, deterministic, permanent ID based on NIS / NISN / Name if missing
+      if (!s.id || s.id.toString().trim() === '') {
+        const cleanNis = (s.nis || '').toString().trim();
+        const cleanNisn = (s.nisn || '').toString().trim();
+        const cleanNama = (s.nama || '').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        if (cleanNis) {
+          s.id = `sis-nis-${cleanNis}`;
+        } else if (cleanNisn) {
+          s.id = `sis-nisn-${cleanNisn}`;
+        } else if (cleanNama) {
+          s.id = `sis-name-${cleanNama}`;
+        } else {
+          s.id = `sis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        }
+        migrated = true;
+      }
+
+      if (s.nis === undefined) { s.nis = ''; migrated = true; }
+      if (s.nisn === undefined) { s.nisn = ''; migrated = true; }
+      if (!s.nama || s.nama.toString().trim() === '') { 
+        s.nama = 'Siswa Tanpa Nama'; 
+        migrated = true; 
+      }
+    }
+    return s;
+  }).filter(Boolean);
 
   // Double check that all mock siswa records have expanded parent fields initialized
   parsed.orangTua = parsed.orangTua.map((ot: any) => {
@@ -897,19 +788,26 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     return ot;
   });
 
-  // Ensure every student record matches standard types and has basic info
-  parsed.siswa = parsed.siswa.map((s: any) => {
-    if (s) {
-      if (!s.id) {
-        s.id = `sis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Self-heal secondary records for every student to ensure complete data integrity across all sheets
+  const secondaryKeys = [
+    { key: 'orangTua', defaultObj: { namaAyah: '', statusAyah: '', namaIbu: '', statusIbu: '', wali: '', statusWali: '', penghasilan: '', pendidikanOrangTua: '' } },
+    { key: 'akademik', defaultObj: { semester: 'Ganjil', rataRataRaport: '', catatanWaliKelas: '' } },
+    { key: 'kesehatan', defaultObj: { tinggiBadan: '', beratBadan: '', golonganDarah: '-', penyakit: '', alergi: '', disabilitas: '' } },
+    { key: 'ekonomi', defaultObj: { statusRumah: '', penghasilan: '', kendaraan: '', pip: '-', pkh: '-', kip: '-' } },
+    { key: 'psikologi', defaultObj: { minat: '', bakat: '', hobi: '', gayaBelajar: '', citaCita: '', kepribadian: '' } },
+    { key: 'sosial', defaultObj: { hubunganTeman: 'Baik', organisasi: '-', masalahSosial: '-' } }
+  ];
+
+  parsed.siswa.forEach((s: any) => {
+    secondaryKeys.forEach(({ key, defaultObj }) => {
+      const exists = parsed[key] && parsed[key].some((item: any) => item && item.id === s.id);
+      if (!exists) {
+        if (!parsed[key]) parsed[key] = [];
+        parsed[key].push({ id: s.id, ...defaultObj });
         migrated = true;
       }
-      if (s.nis === undefined) { s.nis = ''; migrated = true; }
-      if (s.nisn === undefined) { s.nisn = ''; migrated = true; }
-      if (!s.nama) { s.nama = 'Siswa Tanpa Nama'; migrated = true; }
-    }
-    return s;
-  }).filter(Boolean);
+    });
+  });
 
   parsed._sanitized_v6 = true;
   return { sanitized: parsed as DatabaseState, migrated };
@@ -1154,48 +1052,53 @@ export const apiService = {
         }
       } else if (isGuruBk) {
         const uNameLower = (user.username || '').toString().toLowerCase();
-        if (uNameLower === 'jamilah' || uNameLower === 'gurubk') {
-          if (password !== 'Nur123') {
-            return { success: false, message: 'Password Guru BK Jamilah salah.' };
-          }
-        } else if (uNameLower === 'arta') {
-          if (password !== 'Arta123') {
-            return { success: false, message: 'Password Guru BK Arta salah.' };
-          }
-        } else if (uNameLower === 'nanda') {
-          if (password !== 'Putri123') {
-            return { success: false, message: 'Password Guru BK Nanda salah.' };
-          }
-        } else {
-          // fallback
-          if (password !== 'bk123') {
-            return { success: false, message: 'Password Guru BK salah.' };
-          }
+        const bkPasswords: Record<string, string> = {
+          sulaiman: 'ayman123',
+          aulia: 'aulia123',
+          dwi: 'dwi123',
+          kholfi: 'kholfi123',
+          novita: 'novita123',
+        };
+        const expectedPassword = bkPasswords[uNameLower] || 'bk123';
+        if (password !== expectedPassword) {
+          return { success: false, message: `Password Guru BK ${user.nama} salah.` };
         }
       } else if (roleStr === UserRole.WALI_KELAS.toLowerCase() || roleStr === 'wali kelas') {
         const uNameLower = (user.username || '').toString().toLowerCase();
         const wkPasswords: Record<string, string> = {
-          damianus: 'damianus123',
-          albert: 'albert123',
-          novie: 'novie123',
-          ira: 'ira123',
-          yulia: 'yulia123',
-          terra: 'terra123',
-          lidya: 'lidya123',
-          sri: 'sri123',
-          farah: 'farah123',
-          eva: 'eva123',
+          fay: 'fay123',
+          aida: 'aida123',
+          viika: 'viika123',
+          sribarnetti: 'sri123',
+          viny: 'viny123',
+          lia: 'lia123',
+          yanah: 'yanah123',
+          srirahayu: 'sri123',
+          putri: 'putri123',
+          sari: 'sari123',
+          rifal: 'rifal123',
+          neneng: 'neneng123',
+          meli: 'meli123',
+          tiar: 'tiar123',
+          joko: 'joko123',
+          danang: 'danang123',
+          annisa: 'annisa123',
+          haifa: 'haifa123',
+          santi: 'santi123',
+          reni: 'reni123',
+          dewi: 'dewi123',
+          emi: 'emi123',
+          tere: 'tere23',
+          ferry: 'ferry123',
+          sifah: 'sifah123',
+          mia: 'mia123',
           nur: 'nur123',
-          selfi: 'selfi123',
-          gerry: 'gerry123',
-          ibnu: 'ibnu123',
-          nani: 'nani123',
-          ana: 'ana123',
-          monica: 'monica123',
-          indri: 'indri123',
-          wahyunis: 'wahyunis123',
-          titin: 'titin123',
-          ifah: 'ifah123'
+          warsih: 'warsih123',
+          tut: 'tut123',
+          kasrah: 'kasrah123',
+          habib: 'habib123',
+          pendi: 'pendi123',
+          hadi: 'hadi123'
         };
         const expectedPassword = wkPasswords[uNameLower] || '123';
         if (password !== expectedPassword) {
@@ -1282,10 +1185,18 @@ export const apiService = {
         }
 
         // Update local cache with remote data, preserving the config block and sanitizing it
-        const { sanitized } = sanitizeDatabaseState(res.data);
+        const { sanitized, migrated } = sanitizeDatabaseState(res.data);
         const updated = { ...sanitized, config: { ...localDb.config, gasApiUrl: getGasApiUrl() } };
         saveLocalDatabase(updated);
         lastFetchSuccessful = true;
+
+        if (migrated) {
+          console.log('Sinkronisasi data terdeteksi: mengunggah data kelas dan relasi yang diperbaiki kembali ke Google Sheets secara otomatis...');
+          apiCall('uploadFullDatabase', updated).catch((err) => {
+            console.error('Gagal mengunggah pembaruan sinkronisasi ke Google Sheets:', err);
+          });
+        }
+
         return updated;
       } else {
         lastFetchSuccessful = false;
@@ -1728,5 +1639,57 @@ export const apiService = {
     saveLocalDatabase(db);
     if (getGasApiUrl()) await apiCall('deleteKehadiran', { id });
     return { success: true, message: 'Rekap Kehadiran berhasil dihapus.' };
+  },
+
+  // 16. LAPORAN KEJADIAN CRUD
+  saveLaporanKejadian: async (l: LaporanKejadian, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    const db = loadLocalDatabase();
+    if (!db.laporanKejadian) db.laporanKejadian = [];
+    if (isNew) {
+      db.laporanKejadian.push(l);
+    } else {
+      db.laporanKejadian = db.laporanKejadian.map(item => item.id === l.id ? l : item);
+    }
+    saveLocalDatabase(db);
+    // Since Google sheets won't have standard support for LaporanKejadian unless we update GAS,
+    // we safely send it to Gas but wrap it so it doesn't crash if the endpoint isn't there.
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('saveLaporanKejadian', { l, isNew });
+      } catch (e) {
+        console.warn('Google Sheet does not support saveLaporanKejadian yet, saved locally.', e);
+      }
+    }
+    return { success: true, message: 'Laporan Kejadian berhasil dikirim ke Admin & Guru BK.' };
+  },
+
+  deleteLaporanKejadian: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const db = loadLocalDatabase();
+    if (!db.laporanKejadian) db.laporanKejadian = [];
+    db.laporanKejadian = db.laporanKejadian.filter(item => item.id !== id);
+    saveLocalDatabase(db);
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('deleteLaporanKejadian', { id });
+      } catch (e) {
+        console.warn('Google Sheet does not support deleteLaporanKejadian yet.', e);
+      }
+    }
+    return { success: true, message: 'Laporan Kejadian berhasil dihapus.' };
+  },
+
+  updateLaporanKejadianStatus: async (id: string, status: 'Belum Dibaca' | 'Dibaca'): Promise<{ success: boolean; message: string }> => {
+    const db = loadLocalDatabase();
+    if (!db.laporanKejadian) db.laporanKejadian = [];
+    db.laporanKejadian = db.laporanKejadian.map(item => item.id === id ? { ...item, status } : item);
+    saveLocalDatabase(db);
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('updateLaporanKejadianStatus', { id, status });
+      } catch (e) {
+        console.warn('Google Sheet does not support updateLaporanKejadianStatus yet.', e);
+      }
+    }
+    return { success: true, message: 'Status laporan berhasil diperbarui.' };
   }
 };

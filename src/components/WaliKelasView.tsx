@@ -25,9 +25,11 @@ import {
   Sparkles,
   Smile,
   AlertCircle,
-  Lock
+  Lock,
+  Send,
+  Trash
 } from 'lucide-react';
-import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen } from '../types';
+import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian } from '../types';
 
 interface HdsDetailDrawerProps {
   siswa: Siswa;
@@ -336,11 +338,13 @@ interface WaliKelasViewProps {
   db: DatabaseState | null;
   currentUser: User;
   onNavigateToSiswa: (siswaId: string, subTab: string) => void;
+  onSaveLaporanKejadian?: (l: LaporanKejadian, isNew: boolean) => Promise<boolean>;
+  onDeleteLaporanKejadian?: (id: string) => Promise<boolean>;
 }
 
 type ClassLevel = '7' | '8' | '9';
 
-export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: WaliKelasViewProps) {
+export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSaveLaporanKejadian, onDeleteLaporanKejadian }: WaliKelasViewProps) {
   // Allowed class lookup for each Wali Kelas
   const allowedClassName = useMemo(() => {
     if (currentUser.role !== UserRole.WALI_KELAS) return null;
@@ -355,6 +359,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
     
     // Map username to the assigned class
     const mapping: Record<string, string> = {
+      // Old ones
       damianus: 'Kelas 7-1',
       albert: 'Kelas 7-2',
       novie: 'Kelas 7-3',
@@ -365,7 +370,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
       sri: 'Kelas 8-1',
       farah: 'Kelas 8-2',
       eva: 'Kelas 8-3',
-      nur: 'Kelas 8-4',
+      nur: 'Kelas 9-5',
       selfi: 'Kelas 8-5',
       gerry: 'Kelas 8-6',
       ibnu: 'Kelas 8-7',
@@ -375,7 +380,43 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
       indri: 'Kelas 9-4',
       wahyunis: 'Kelas 9-5',
       titin: 'Kelas 9-6',
-      ifah: 'Kelas 9-7'
+      ifah: 'Kelas 9-7',
+
+      // New 33 ones
+      fay: 'Kelas 7-1',
+      aida: 'Kelas 7-2',
+      viika: 'Kelas 7-3',
+      sribarnetti: 'Kelas 7-4',
+      viny: 'Kelas 7-5',
+      lia: 'Kelas 7-6',
+      yanah: 'Kelas 7-7',
+      srirahayu: 'Kelas 7-8',
+      putri: 'Kelas 7-9',
+      sari: 'Kelas 7-10',
+      rifal: 'Kelas 7-11',
+
+      neneng: 'Kelas 8-1',
+      meli: 'Kelas 8-2',
+      tiar: 'Kelas 8-3',
+      joko: 'Kelas 8-4',
+      danang: 'Kelas 8-5',
+      annisa: 'Kelas 8-6',
+      haifa: 'Kelas 8-7',
+      santi: 'Kelas 8-8',
+      reni: 'Kelas 8-9',
+      dewi: 'Kelas 8-10',
+      emi: 'Kelas 8-11',
+
+      tere: 'Kelas 9-1',
+      ferry: 'Kelas 9-2',
+      sifah: 'Kelas 9-3',
+      mia: 'Kelas 9-4',
+      warsih: 'Kelas 9-6',
+      tut: 'Kelas 9-7',
+      kasrah: 'Kelas 9-8',
+      habib: 'Kelas 9-9',
+      pendi: 'Kelas 9-10',
+      hadi: 'Kelas 9-11'
     };
     
     return mapping[username] || null;
@@ -393,9 +434,15 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
     if (currentUser.role === UserRole.WALI_KELAS) {
       const username = (currentUser.username || '').toLowerCase();
       const mapping: Record<string, string> = {
+        // Old
         damianus: '7', albert: '7', novie: '7', ira: '7', yulia: '7', terra: '7', lidya: '7',
-        sri: '8', farah: '8', eva: '8', nur: '8', selfi: '8', gerry: '8', ibnu: '8',
-        nani: '9', ana: '9', monica: '9', indri: '9', wahyunis: '9', titin: '9', ifah: '9'
+        sri: '8', farah: '8', eva: '8', selfi: '8', gerry: '8', ibnu: '8',
+        nani: '9', ana: '9', monica: '9', indri: '9', wahyunis: '9', titin: '9', ifah: '9',
+
+        // New
+        fay: '7', aida: '7', viika: '7', sribarnetti: '7', viny: '7', lia: '7', yanah: '7', srirahayu: '7', putri: '7', sari: '7', rifal: '7',
+        neneng: '8', meli: '8', tiar: '8', joko: '8', danang: '8', annisa: '8', haifa: '8', santi: '8', reni: '8', dewi: '8', emi: '8',
+        tere: '9', ferry: '9', sifah: '9', mia: '9', nur: '9', warsih: '9', tut: '9', kasrah: '9', habib: '9', pendi: '9', hadi: '9'
       };
       const mappedVal = mapping[username];
       if (mappedVal) return mappedVal as ClassLevel;
@@ -408,7 +455,8 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
     if (currentUser.role === UserRole.WALI_KELAS) {
       const username = (currentUser.username || '').toLowerCase();
       const mapping: Record<string, string> = {
-        damianus: 'Kelas 7-1', albert: 'Kelas 7-2', novie: 'Kelas 7-3', ira: 'Kelas 7-4', yulia: 'Kelas 7-5', terra: 'Kelas 7-6', lidya: 'Kelas 7-7'
+        damianus: 'Kelas 7-1', albert: 'Kelas 7-2', novie: 'Kelas 7-3', ira: 'Kelas 7-4', yulia: 'Kelas 7-5', terra: 'Kelas 7-6', lidya: 'Kelas 7-7',
+        fay: 'Kelas 7-1', aida: 'Kelas 7-2', viika: 'Kelas 7-3', sribarnetti: 'Kelas 7-4', viny: 'Kelas 7-5', lia: 'Kelas 7-6', yanah: 'Kelas 7-7', srirahayu: 'Kelas 7-8', putri: 'Kelas 7-9', sari: 'Kelas 7-10', rifal: 'Kelas 7-11'
       };
       const mappedVal = mapping[username];
       if (mappedVal) return mappedVal;
@@ -420,7 +468,8 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
     if (currentUser.role === UserRole.WALI_KELAS) {
       const username = (currentUser.username || '').toLowerCase();
       const mapping: Record<string, string> = {
-        sri: 'Kelas 8-1', farah: 'Kelas 8-2', eva: 'Kelas 8-3', nur: 'Kelas 8-4', selfi: 'Kelas 8-5', gerry: 'Kelas 8-6', ibnu: 'Kelas 8-7'
+        sri: 'Kelas 8-1', farah: 'Kelas 8-2', eva: 'Kelas 8-3', selfi: 'Kelas 8-5', gerry: 'Kelas 8-6', ibnu: 'Kelas 8-7',
+        neneng: 'Kelas 8-1', meli: 'Kelas 8-2', tiar: 'Kelas 8-3', joko: 'Kelas 8-4', danang: 'Kelas 8-5', annisa: 'Kelas 8-6', haifa: 'Kelas 8-7', santi: 'Kelas 8-8', reni: 'Kelas 8-9', dewi: 'Kelas 8-10', emi: 'Kelas 8-11'
       };
       const mappedVal = mapping[username];
       if (mappedVal) return mappedVal;
@@ -432,7 +481,8 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
     if (currentUser.role === UserRole.WALI_KELAS) {
       const username = (currentUser.username || '').toLowerCase();
       const mapping: Record<string, string> = {
-        nani: 'Kelas 9-1', ana: 'Kelas 9-2', monica: 'Kelas 9-3', indri: 'Kelas 9-4', wahyunis: 'Kelas 9-5', titin: 'Kelas 9-6', ifah: 'Kelas 9-7'
+        nani: 'Kelas 9-1', ana: 'Kelas 9-2', monica: 'Kelas 9-3', indri: 'Kelas 9-4', wahyunis: 'Kelas 9-5', titin: 'Kelas 9-6', ifah: 'Kelas 9-7',
+        tere: 'Kelas 9-1', ferry: 'Kelas 9-2', sifah: 'Kelas 9-3', mia: 'Kelas 9-4', nur: 'Kelas 9-5', warsih: 'Kelas 9-6', tut: 'Kelas 9-7', kasrah: 'Kelas 9-8', habib: 'Kelas 9-9', pendi: 'Kelas 9-10', hadi: 'Kelas 9-11'
       };
       const mappedVal = mapping[username];
       if (mappedVal) return mappedVal;
@@ -463,7 +513,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
   const [selectedSiswaId, setSelectedSiswaId] = useState<string | null>(null);
 
   // Integrated sub-feature tabs and chart hover state
-  const [activeSubFeature, setActiveSubFeature] = useState<'hds' | 'kedisiplinan' | 'remisi' | 'rekap_grafik'>('rekap_grafik');
+  const [activeSubFeature, setActiveSubFeature] = useState<'hds' | 'kedisiplinan' | 'remisi' | 'rekap_grafik' | 'prestasi' | 'kehadiran' | 'laporan'>('rekap_grafik');
   const [hoveredBar, setHoveredBar] = useState<{ month: string; value: number; x: number; y: number } | null>(null);
 
   // Determine currently selected full class name based on active level
@@ -901,6 +951,50 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
     });
   }, [classRemisi, searchQuery, db]);
 
+  // Filter class prestasi (Prestasi Tab)
+  const classPrestasi = useMemo(() => {
+    if (!db || !db.prestasi) return [];
+    const studentIds = new Set(classStudents.map(s => s.id));
+    return db.prestasi.filter(p => studentIds.has(p.siswaId));
+  }, [db, classStudents]);
+
+  // Search filter for Prestasi
+  const filteredPrestasi = useMemo(() => {
+    if (!searchQuery.trim()) return classPrestasi;
+    const q = searchQuery.toLowerCase();
+    return classPrestasi.filter(p => {
+      const student = db?.siswa.find(s => s.id === p.siswaId);
+      return (
+        (student && student.nama.toLowerCase().includes(q)) ||
+        p.namaPrestasi.toLowerCase().includes(q) ||
+        p.tingkat.toLowerCase().includes(q) ||
+        p.juara.toLowerCase().includes(q)
+      );
+    });
+  }, [classPrestasi, searchQuery, db]);
+
+  // Filter class kehadiran (Kehadiran Tab)
+  const classKehadiran = useMemo(() => {
+    if (!db || !db.kehadiran) return [];
+    const studentIds = new Set(classStudents.map(s => s.id));
+    return db.kehadiran.filter(k => studentIds.has(k.siswaId));
+  }, [db, classStudents]);
+
+  // Search filter for Kehadiran
+  const filteredKehadiran = useMemo(() => {
+    if (!searchQuery.trim()) return classKehadiran;
+    const q = searchQuery.toLowerCase();
+    return classKehadiran.filter(k => {
+      const student = db?.siswa.find(s => s.id === k.siswaId);
+      return (
+        (student && student.nama.toLowerCase().includes(q)) ||
+        k.mingguKe.toLowerCase().includes(q) ||
+        k.bulan.toLowerCase().includes(q) ||
+        (k.keterangan && k.keterangan.toLowerCase().includes(q))
+      );
+    });
+  }, [classKehadiran, searchQuery, db]);
+
   // Monthly violation points calculation for the selected class
   const monthlyChartData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -1031,6 +1125,72 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
       achievementsCount
     };
   }, [viewingSiswa, db]);
+
+  // Laporan Kejadian states & helpers
+  const [selectedStudentForReport, setSelectedStudentForReport] = useState('');
+  const [reportText, setReportText] = useState('');
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportError, setReportError] = useState('');
+  const [reportSuccessMsg, setReportSuccessMsg] = useState('');
+
+  // Find reports for students in this class
+  const classReports = useMemo(() => {
+    if (!db || !db.laporanKejadian) return [];
+    const studentIds = new Set(classStudents.map(s => s.id));
+    return db.laporanKejadian.filter(l => studentIds.has(l.siswaId));
+  }, [db, classStudents]);
+
+  const handleSubmitReport = async () => {
+    setReportError('');
+    setReportSuccessMsg('');
+
+    if (!selectedStudentForReport) {
+      setReportError('Pilih siswa yang bersangkutan terlebih dahulu.');
+      return;
+    }
+    if (!reportText.trim()) {
+      setReportError('Tuliskan rincian laporan kejadian terlebih dahulu.');
+      return;
+    }
+    if (!reportDate) {
+      setReportError('Masukkan tanggal kejadian.');
+      return;
+    }
+
+    const currentClassObj = db?.kelas.find(k => k.namaKelas === currentClassName);
+    const newReport: LaporanKejadian = {
+      id: `rep-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      siswaId: selectedStudentForReport,
+      kelasId: currentClassObj?.id || currentClassName,
+      laporan: reportText.trim(),
+      tanggal: reportDate,
+      waliKelasNama: currentUser.nama,
+      status: 'Belum Dibaca',
+      timestamp: new Date().toISOString()
+    };
+
+    setIsSubmittingReport(true);
+    try {
+      if (onSaveLaporanKejadian) {
+        const success = await onSaveLaporanKejadian(newReport, true);
+        if (success) {
+          setReportSuccessMsg('Laporan kejadian berhasil dikirim ke Admin & BK!');
+          setReportText('');
+          setSelectedStudentForReport('');
+          setReportDate(new Date().toISOString().split('T')[0]);
+        } else {
+          setReportError('Gagal mengirim laporan kejadian.');
+        }
+      } else {
+        setReportError('Sistem pelaporan tidak terhubung.');
+      }
+    } catch (err) {
+      setReportError('Terjadi kesalahan saat mengirim laporan.');
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
 
   return (
     <div id="walikelas-container" className="space-y-6">
@@ -1207,13 +1367,37 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
           >
             🌱 Log Remisi Poin
           </button>
+          <button
+            onClick={() => { setActiveSubFeature('prestasi'); setSearchQuery(''); }}
+            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+              activeSubFeature === 'prestasi' ? 'bg-white text-indigo-700 shadow-xs border border-slate-100 font-black' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            🏆 Rekam Prestasi
+          </button>
+          <button
+            onClick={() => { setActiveSubFeature('kehadiran'); setSearchQuery(''); }}
+            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+              activeSubFeature === 'kehadiran' ? 'bg-white text-indigo-700 shadow-xs border border-slate-100 font-black' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            📅 Rekap Kehadiran
+          </button>
+          <button
+            onClick={() => { setActiveSubFeature('laporan'); setSearchQuery(''); }}
+            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+              activeSubFeature === 'laporan' ? 'bg-white text-indigo-700 shadow-xs border border-slate-100 font-black' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            📋 Kirim Laporan Kejadian
+          </button>
         </div>
 
         {/* Sub Feature Main Workspace */}
         <div className="space-y-4 pt-2">
           
           {/* SEARCH BAR (For search-applicable tabs) */}
-          {activeSubFeature !== 'rekap_grafik' && (
+          {activeSubFeature !== 'rekap_grafik' && activeSubFeature !== 'laporan' && (
             <div className="relative max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
               <input
@@ -1355,6 +1539,129 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
                             <td className="p-3 text-slate-500">{r.kategori}</td>
                             <td className="p-3 text-center font-extrabold text-emerald-600">-{r.poin} pts</td>
                             <td className="p-3 text-slate-500">{r.guruPemberi || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: Rekam Prestasi - READ ONLY */}
+          {activeSubFeature === 'prestasi' && (
+            <div className="space-y-4">
+              <div className="bg-amber-50/50 border border-amber-100/30 p-3 rounded-xl flex items-center gap-2.5 text-[11px] text-amber-800 font-medium">
+                <Info size={14} className="shrink-0" />
+                <span>Mode Lihat Saja. Daftar rekam riwayat prestasi siswa di kelas {currentClassName}.</span>
+              </div>
+
+              {filteredPrestasi.length === 0 ? (
+                <div className="py-10 text-center border border-slate-100 rounded-xl text-slate-400 text-xs italic">
+                  Belum ada catatan prestasi terdaftar di kelas ini.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+                        <th className="p-3">Nama Siswa</th>
+                        <th className="p-3">Nama Prestasi</th>
+                        <th className="p-3">Juara</th>
+                        <th className="p-3">Tingkat</th>
+                        <th className="p-3">Tahun</th>
+                        <th className="p-3">Kategori</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {filteredPrestasi.map((p) => {
+                        const student = db?.siswa.find(s => s.id === p.siswaId);
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-bold text-slate-800">{student?.nama || 'Siswa Dihapus'}</td>
+                            <td className="p-3 text-slate-600">{p.namaPrestasi}</td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800">
+                                {p.juara}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-600">{p.tingkat}</td>
+                            <td className="p-3 font-mono text-slate-500">{p.tahun}</td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-600">
+                                {p.kategori || 'Akademik'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: Rekap Kehadiran - READ ONLY */}
+          {activeSubFeature === 'kehadiran' && (
+            <div className="space-y-4">
+              <div className="bg-cyan-50/50 border border-cyan-100/30 p-3 rounded-xl flex items-center gap-2.5 text-[11px] text-cyan-800 font-medium">
+                <Info size={14} className="shrink-0" />
+                <span>Mode Lihat Saja. Rekap kehadiran mingguan siswa di kelas {currentClassName}.</span>
+              </div>
+
+              {filteredKehadiran.length === 0 ? (
+                <div className="py-10 text-center border border-slate-100 rounded-xl text-slate-400 text-xs italic">
+                  Belum ada rekap kehadiran terdaftar di kelas ini.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                        <th className="p-3">Nama Siswa</th>
+                        <th className="p-3">Minggu & Periode</th>
+                        <th className="p-3 text-center">Hadir</th>
+                        <th className="p-3 text-center">Sakit</th>
+                        <th className="p-3 text-center">Izin</th>
+                        <th className="p-3 text-center">Alfa</th>
+                        <th className="p-3">Keterangan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {filteredKehadiran.map((att) => {
+                        const student = db?.siswa.find(s => s.id === att.siswaId);
+                        return (
+                          <tr key={att.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-bold text-slate-800">{student?.nama || 'Siswa Dihapus'}</td>
+                            <td className="p-3">
+                              <p className="font-semibold text-slate-700">{att.mingguKe}</p>
+                              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{att.bulan} {att.tahun}</p>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md border border-emerald-100 text-[10px]">
+                                {att.hadir} Hari
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="bg-sky-50 text-sky-700 font-bold px-2 py-0.5 rounded-md border border-sky-100 text-[10px]">
+                                {att.sakit} Hari
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-md border border-amber-100 text-[10px]">
+                                {att.izin || (att as any).ijin || att.izin === 0 ? att.izin : 0} Hari
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded-md border border-rose-100 text-[10px]">
+                                {att.alfa} Hari
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-500 max-w-xs truncate" title={att.keterangan || '-'}>
+                              {att.keterangan || '-'}
+                            </td>
                           </tr>
                         );
                       })}
@@ -1534,6 +1841,182 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa }: Wa
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 7: Laporan Kejadian */}
+          {activeSubFeature === 'laporan' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Form Column (5 cols) */}
+              <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Send size={14} className="text-indigo-600" />
+                    Kirim Laporan Baru
+                  </h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Isi detail kejadian di bawah untuk dikirim ke Admin & Guru BK</p>
+                </div>
+
+                {reportError && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-rose-600 text-[11px] font-medium animate-bounce">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{reportError}</span>
+                  </div>
+                )}
+
+                {reportSuccessMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2 text-emerald-700 text-[11px] font-medium">
+                    <Smile size={14} className="shrink-0" />
+                    <span>{reportSuccessMsg}</span>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {/* Student Select */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pilih Siswa <span className="text-rose-500">*</span></label>
+                    <select
+                      value={selectedStudentForReport}
+                      onChange={(e) => {
+                        setSelectedStudentForReport(e.target.value);
+                        setReportError('');
+                        setReportSuccessMsg('');
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs focus:outline-none font-semibold transition-all text-slate-700"
+                    >
+                      <option value="">-- Pilih Siswa Kelas {currentClassName} --</option>
+                      {classStudents.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nama} ({s.nis || 'Tanpa NIS'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Incident Date */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tanggal Kejadian <span className="text-rose-500">*</span></label>
+                    <input
+                      type="date"
+                      value={reportDate}
+                      onChange={(e) => {
+                        setReportDate(e.target.value);
+                        setReportError('');
+                        setReportSuccessMsg('');
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs focus:outline-none font-semibold transition-all text-slate-700 font-mono"
+                    />
+                  </div>
+
+                  {/* Report Text */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Keterangan / Kejadian <span className="text-rose-500">*</span></label>
+                    <textarea
+                      value={reportText}
+                      onChange={(e) => {
+                        setReportText(e.target.value);
+                        setReportError('');
+                        setReportSuccessMsg('');
+                      }}
+                      placeholder="Jelaskan secara detail kejadian, masalah, kronologi, tindakan sementara yang telah diambil wali kelas..."
+                      rows={5}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs focus:outline-none font-medium transition-all text-slate-700 leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleSubmitReport}
+                    disabled={isSubmittingReport}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-sm cursor-pointer border border-indigo-700"
+                  >
+                    {isSubmittingReport ? (
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <>
+                        <Send size={13} /> Kirim Laporan ke Admin & BK
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* History Column (7 cols) */}
+              <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText size={14} className="text-indigo-600" />
+                    Riwayat Laporan Kelas {currentClassName} ({classReports.length})
+                  </h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Daftar kejadian siswa di kelas Anda yang dilaporkan ke Guru BK & Admin</p>
+                </div>
+
+                {classReports.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 italic bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-xs">
+                    Belum ada laporan kejadian yang dibuat untuk kelas ini.
+                  </div>
+                ) : (
+                  <div className="space-y-3.5 max-h-[450px] overflow-y-auto pr-1">
+                    {[...classReports]
+                      .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
+                      .map((report) => {
+                        const student = classStudents.find(s => s.id === report.siswaId);
+                        return (
+                          <div
+                            key={report.id}
+                            className={`p-4 border rounded-xl transition ${
+                              report.status === 'Belum Dibaca' 
+                                ? 'bg-amber-50/15 border-amber-100/70' 
+                                : 'bg-slate-50/30 border-slate-100'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-4 text-left">
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-extrabold text-slate-800 text-xs">
+                                    {student?.nama || 'Siswa Dihapus'}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-400">
+                                    {report.tanggal}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider uppercase border ${
+                                    report.status === 'Belum Dibaca'
+                                      ? 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse'
+                                      : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                                  }`}>
+                                    {report.status}
+                                  </span>
+                                </div>
+                                <p className="text-slate-600 text-xs leading-relaxed">
+                                  {report.laporan}
+                                </p>
+                                <div className="text-[10px] text-slate-400 font-medium">
+                                  Dilaporkan oleh Wali Kelas: <strong className="text-slate-500">{report.waliKelasNama}</strong>
+                                </div>
+                              </div>
+
+                              {onDeleteLaporanKejadian && (
+                                <button
+                                  onClick={async () => {
+                                    if (confirm('Apakah Anda yakin ingin menarik/menghapus laporan ini?')) {
+                                      await onDeleteLaporanKejadian(report.id);
+                                    }
+                                  }}
+                                  className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition shrink-0 cursor-pointer border border-transparent hover:border-rose-100"
+                                  title="Tarik/Hapus Laporan"
+                                >
+                                  <Trash size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>

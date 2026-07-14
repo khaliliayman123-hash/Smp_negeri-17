@@ -91,8 +91,39 @@ function setupHDSDatabaseSheets() {
       ["tp-2023-ganjil", "2023/2024", "Ganjil", true]
     ],
     "Kelas": [
-      ["kelas-7-1", "Kelas 7-1", "gurubk"],
-      ["kelas-7-2", "Kelas 7-2", "admin"]
+      ["kl-1", "Kelas 7-1", "wk-7-1"],
+      ["kl-2", "Kelas 7-2", "wk-7-2"],
+      ["kl-3", "Kelas 7-3", "wk-7-3"],
+      ["kl-4", "Kelas 7-4", "wk-7-4"],
+      ["kl-5", "Kelas 7-5", "wk-7-5"],
+      ["kl-6", "Kelas 7-6", "wk-7-6"],
+      ["kl-7", "Kelas 7-7", "wk-7-7"],
+      ["kl-8", "Kelas 7-8", "wk-7-8"],
+      ["kl-9", "Kelas 7-9", "wk-7-9"],
+      ["kl-10", "Kelas 7-10", "wk-7-10"],
+      ["kl-11", "Kelas 7-11", "wk-7-11"],
+      ["kl-12", "Kelas 8-1", "wk-8-1"],
+      ["kl-13", "Kelas 8-2", "wk-8-2"],
+      ["kl-14", "Kelas 8-3", "wk-8-3"],
+      ["kl-15", "Kelas 8-4", "wk-8-4"],
+      ["kl-16", "Kelas 8-5", "wk-8-5"],
+      ["kl-17", "Kelas 8-6", "wk-8-6"],
+      ["kl-18", "Kelas 8-7", "wk-8-7"],
+      ["kl-19", "Kelas 8-8", "wk-8-8"],
+      ["kl-20", "Kelas 8-9", "wk-8-9"],
+      ["kl-21", "Kelas 8-10", "wk-8-10"],
+      ["kl-22", "Kelas 8-11", "wk-8-11"],
+      ["kl-23", "Kelas 9-1", "wk-9-1"],
+      ["kl-24", "Kelas 9-2", "wk-9-2"],
+      ["kl-25", "Kelas 9-3", "wk-9-3"],
+      ["kl-26", "Kelas 9-4", "wk-9-4"],
+      ["kl-27", "Kelas 9-5", "wk-9-5"],
+      ["kl-28", "Kelas 9-6", "wk-9-6"],
+      ["kl-29", "Kelas 9-7", "wk-9-7"],
+      ["kl-30", "Kelas 9-8", "wk-9-8"],
+      ["kl-31", "Kelas 9-9", "wk-9-9"],
+      ["kl-32", "Kelas 9-10", "wk-9-10"],
+      ["kl-33", "Kelas 9-11", "wk-9-11"]
     ]
   };
 

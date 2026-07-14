@@ -260,6 +260,17 @@ export interface Kehadiran {
   keterangan?: string;
 }
 
+export interface LaporanKejadian {
+  id: string;
+  siswaId: string;
+  kelasId: string; // e.g., "kl-1" or "Kelas 7-1"
+  laporan: string; // text description
+  tanggal: string; // YYYY-MM-DD
+  waliKelasNama: string; // reporting teacher name
+  status: 'Belum Dibaca' | 'Dibaca';
+  timestamp: string;
+}
+
 export interface DatabaseState {
   users: User[];
   siswa: Siswa[];
@@ -283,6 +294,7 @@ export interface DatabaseState {
   jurusan: Jurusan[];
   logAktivitas: LogAktivitas[];
   kehadiran?: Kehadiran[];
+  laporanKejadian?: LaporanKejadian[];
   _sanitized?: boolean;
   _sanitized_v3?: boolean;
   _sanitized_v4?: boolean;

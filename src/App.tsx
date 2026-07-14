@@ -21,11 +21,13 @@ import {
   Database,
   ArrowRight,
   BookOpen,
-  CheckCircle2
+  CheckCircle2,
+  Bell,
+  Trash
 } from 'lucide-react';
 
 // Sub views
-import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen } from './types';
+import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen, LaporanKejadian } from './types';
 import { apiService, WALI_KELAS_USERS } from './services/api';
 import DashboardView from './components/DashboardView';
 import SiswaView from './components/SiswaView';
@@ -82,6 +84,7 @@ export default function App() {
     return 'dashboard';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   
   // High-fidelity deep link states to traverse panels
   const [deepLinkSiswaId, setDeepLinkSiswaId] = useState<string | undefined>(() => {
@@ -119,10 +122,10 @@ export default function App() {
     }
   }, [currentUser, activeMenu]);
 
-  const loadDatabase = async (checkConnection: boolean = false, localOnly: boolean = false) => {
-    // Optimization for fast startup: If not checking connection and not explicitly localOnly,
+  const loadDatabase = async (checkConnection: boolean = false, localOnly: boolean = false, forceRemote: boolean = false) => {
+    // Optimization for fast startup: If not checking connection, not explicitly localOnly, and not forceRemote,
     // load cached database instantly to unblock the UI and fetch remote data in background (SWR pattern)
-    if (!checkConnection && !localOnly) {
+    if (!checkConnection && !localOnly && !forceRemote) {
       try {
         const localData = await apiService.getData(false, true); // true = local only (extremely fast)
         setDb(localData);
@@ -156,7 +159,7 @@ export default function App() {
 
     setIsLoading(true);
     try {
-      const data = await apiService.getData(false, localOnly);
+      const data = await apiService.getData(forceRemote, localOnly);
       setDb(data);
       setGasUrlInput(data.config.gasApiUrl || '');
       setSpreadsheetIdInput(data.config.spreadsheetId || '');
@@ -233,6 +236,46 @@ export default function App() {
       localStorage.removeItem('hds_current_user');
     } catch (err) {
       console.error('Failed to clear user session', err);
+    }
+  };
+
+  // Notification management count & handlers
+  const unreadReportsCount = React.useMemo(() => {
+    if (!db || !db.laporanKejadian) return 0;
+    return db.laporanKejadian.filter(l => l.status === 'Belum Dibaca').length;
+  }, [db]);
+
+  const handleMarkAsRead = async (reportId: string) => {
+    setDb(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        laporanKejadian: (prev.laporanKejadian || []).map(item => 
+          item.id === reportId ? { ...item, status: 'Dibaca' as const } : item
+        )
+      };
+    });
+    try {
+      await apiService.updateLaporanKejadianStatus(reportId, 'Dibaca');
+      showToast('Laporan ditandai sudah dibaca', 'success');
+    } catch {
+      showToast('Gagal mengubah status laporan.', 'error');
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    setDb(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        laporanKejadian: (prev.laporanKejadian || []).filter(item => item.id !== reportId)
+      };
+    });
+    try {
+      await apiService.deleteLaporanKejadian(reportId);
+      showToast('Laporan berhasil dihapus', 'success');
+    } catch {
+      showToast('Gagal menghapus laporan.', 'error');
     }
   };
 
@@ -482,7 +525,7 @@ export default function App() {
           {/* Navigation Tabs for Admin & Siswa */}
           <div className="flex bg-slate-100 p-1 rounded-xl">
             <button
-              onClick={() => { setLoginTab('admin'); setSelectedUsername('Jamilah'); setPassword(''); setLoginError(''); }}
+              onClick={() => { setLoginTab('admin'); setSelectedUsername('sulaiman'); setPassword(''); setLoginError(''); }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 loginTab === 'admin' 
                   ? 'bg-white text-slate-800 shadow-xs' 
@@ -523,14 +566,14 @@ export default function App() {
                   </button>
                   <button 
                     type="button"
-                    onClick={() => { setSelectedUsername('Jamilah'); setLoginError(''); }}
+                    onClick={() => { setSelectedUsername('sulaiman'); setLoginError(''); }}
                     className={`p-2 rounded-xl border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                      ['jamilah', 'arta', 'nanda', 'gurubk'].includes(selectedUsername.toLowerCase())
+                      ['sulaiman', 'aulia', 'dwi', 'kholfi', 'novita', 'gurubk', 'jamilah'].includes(selectedUsername.toLowerCase())
                         ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
-                    <Sparkles size={12} className={['jamilah', 'arta', 'nanda', 'gurubk'].includes(selectedUsername.toLowerCase()) ? 'text-emerald-600' : 'text-slate-400'} /> Guru BK
+                    <Sparkles size={12} className={['sulaiman', 'aulia', 'dwi', 'kholfi', 'novita', 'gurubk', 'jamilah'].includes(selectedUsername.toLowerCase()) ? 'text-emerald-600' : 'text-slate-400'} /> Guru BK
                   </button>
                   <div className="relative">
                     <select
@@ -550,7 +593,7 @@ export default function App() {
                     >
                       <option value="" disabled hidden>Wali Kelas ▼</option>
                       {(db?.users || WALI_KELAS_USERS)
-                        .filter(u => u.role === UserRole.WALI_KELAS && u.username !== 'artapolta' && u.username !== 'nandaputri')
+                        .filter(u => u.role === UserRole.WALI_KELAS)
                         .map(u => (
                           <option key={u.id} value={u.username}>
                             {u.nama}
@@ -563,17 +606,19 @@ export default function App() {
               </div>
 
               {/* Specific User Dropdown for Guru BK */}
-              {['jamilah', 'arta', 'nanda', 'gurubk'].includes(selectedUsername.toLowerCase()) && (
+              {['sulaiman', 'aulia', 'dwi', 'kholfi', 'novita', 'gurubk', 'jamilah'].includes(selectedUsername.toLowerCase()) && (
                 <div className="space-y-1.5 text-xs">
                   <label className="block font-semibold text-slate-600">Pilih Nama Guru BK</label>
                   <select
-                    value={['jamilah', 'arta', 'nanda'].includes(selectedUsername.toLowerCase()) ? selectedUsername : 'Jamilah'}
+                    value={['sulaiman', 'aulia', 'dwi', 'kholfi', 'novita'].includes(selectedUsername.toLowerCase()) ? selectedUsername : 'sulaiman'}
                     onChange={(e) => { setSelectedUsername(e.target.value); setLoginError(''); }}
                     className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium"
                   >
-                    <option value="Jamilah">Nur Jamilah Purwaningsih, S.Psi (Jamilah)</option>
-                    <option value="Arta">Arta Polta, S.Pd (Arta)</option>
-                    <option value="Nanda">Nanda Putri Utami, S.Pd (Nanda)</option>
+                    <option value="sulaiman">Sulaiman, S.Psi (sulaiman)</option>
+                    <option value="aulia">Aulia Rohmah, S.Pd,.MM (aulia)</option>
+                    <option value="dwi">Dwi Susanti, S.Pd (dwi)</option>
+                    <option value="kholfi">Kholfi Aulia, S.Pd (kholfi)</option>
+                    <option value="novita">Novita Kusuma Wardhani, S.Pd (novita)</option>
                   </select>
                 </div>
               )}
@@ -757,9 +802,114 @@ export default function App() {
           </div>
           <span className="font-bold text-xs uppercase tracking-wider">HDS BK</span>
         </div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1">
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        
+        <div className="flex items-center gap-2">
+          {/* Mobile Bell Icon */}
+          {currentUser && (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.GURU_BK) && (
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="p-1.5 text-slate-300 hover:text-white rounded-lg transition relative cursor-pointer"
+              >
+                <Bell size={18} className={unreadReportsCount > 0 ? "text-rose-500 animate-pulse" : ""} />
+                {unreadReportsCount > 0 && (
+                  <>
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full"></span>
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
+                  </>
+                )}
+              </button>
+              
+              {/* Mobile Notifications Dropdown */}
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-3 w-72 sm:w-80 bg-white text-slate-800 border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-xs">
+                  <div className="bg-slate-50 px-3.5 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-800">📋 Laporan Wali Kelas</span>
+                      {unreadReportsCount > 0 && (
+                        <span className="bg-rose-100 text-rose-700 font-extrabold px-1.5 py-0.5 rounded-full text-[9px]">
+                          {unreadReportsCount} Baru
+                        </span>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => setIsNotificationsOpen(false)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                  
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {!db?.laporanKejadian || db.laporanKejadian.length === 0 ? (
+                      <div className="p-6 text-center text-slate-400 italic">
+                        Belum ada laporan kejadian.
+                      </div>
+                    ) : (
+                      [...db.laporanKejadian]
+                        .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
+                        .map((report) => {
+                          const student = db?.siswa.find(s => s.id === report.siswaId);
+                          return (
+                            <div 
+                              key={report.id} 
+                              className={`p-3 transition hover:bg-slate-50/50 ${
+                                report.status === 'Belum Dibaca' ? 'bg-indigo-50/25' : ''
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1">
+                                    {report.status === 'Belum Dibaca' && (
+                                      <span className="w-1.5 h-1.5 bg-rose-500 rounded-full shrink-0"></span>
+                                    )}
+                                    <span className="font-bold text-slate-800 text-[11px] truncate max-w-[120px] block">
+                                      {student?.nama || 'Siswa Dihapus'}
+                                    </span>
+                                    <span className="text-[9px] bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded-md font-bold">
+                                      {db?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
+                                    </span>
+                                  </div>
+                                  <p className="text-slate-600 text-[10px] leading-relaxed">
+                                    {report.laporan}
+                                  </p>
+                                  <div className="flex flex-col text-[9px] text-slate-400">
+                                    <span>Wali Kelas: {report.waliKelasNama}</span>
+                                    <span>{report.tanggal}</span>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-0.5">
+                                  {report.status === 'Belum Dibaca' && (
+                                    <button
+                                      onClick={() => handleMarkAsRead(report.id)}
+                                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                                    >
+                                      <CheckCircle2 size={12} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteReport(report.id)}
+                                    className="p-1 text-rose-500 hover:bg-rose-50 rounded"
+                                  >
+                                    <Trash size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1">
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
 
         {/* Mobile menu panel */}
         {mobileMenuOpen && (
@@ -796,6 +946,112 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Desktop Notification Bell */}
+            {currentUser && (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.GURU_BK) && (
+              <div className="relative">
+                <button 
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition cursor-pointer relative"
+                  title="Notifikasi Laporan Wali Kelas"
+                >
+                  <Bell size={20} className={unreadReportsCount > 0 ? "text-rose-500 animate-pulse animate-bounce" : ""} />
+                  {unreadReportsCount > 0 && (
+                    <>
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
+                    </>
+                  )}
+                </button>
+                
+                {/* Desktop Notifications Dropdown */}
+                {isNotificationsOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-slate-800 border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-xs">
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-800 text-xs">📋 Laporan Kejadian Wali Kelas</span>
+                        {unreadReportsCount > 0 && (
+                          <span className="bg-rose-100 text-rose-700 font-extrabold px-2 py-0.5 rounded-full text-[10px]">
+                            {unreadReportsCount} Baru
+                          </span>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => setIsNotificationsOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    
+                    <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
+                      {!db?.laporanKejadian || db.laporanKejadian.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400 italic">
+                          Belum ada laporan kejadian yang masuk.
+                        </div>
+                      ) : (
+                        [...db.laporanKejadian]
+                          .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
+                          .map((report) => {
+                            const student = db?.siswa.find(s => s.id === report.siswaId);
+                            return (
+                              <div 
+                                key={report.id} 
+                                className={`p-3.5 transition hover:bg-slate-50/50 ${
+                                  report.status === 'Belum Dibaca' ? 'bg-indigo-50/20' : ''
+                                }`}
+                              >
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {report.status === 'Belum Dibaca' && (
+                                        <span className="w-2 h-2 bg-rose-500 rounded-full shrink-0 animate-pulse"></span>
+                                      )}
+                                      <span className="font-extrabold text-slate-800 text-xs">
+                                        {student?.nama || 'Siswa Dihapus'}
+                                      </span>
+                                      <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-md font-bold">
+                                        {db?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                                      {report.laporan}
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-400 font-medium">
+                                      <span>Wali Kelas: <strong className="text-slate-500">{report.waliKelasNama}</strong></span>
+                                      <span>•</span>
+                                      <span>{report.tanggal}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {report.status === 'Belum Dibaca' && (
+                                      <button
+                                        onClick={() => handleMarkAsRead(report.id)}
+                                        className="p-1 hover:bg-emerald-50 text-emerald-600 rounded-lg transition cursor-pointer"
+                                        title="Tandai Sudah Dibaca"
+                                      >
+                                        <CheckCircle2 size={14} />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleDeleteReport(report.id)}
+                                      className="p-1 hover:bg-rose-50 text-rose-500 rounded-lg transition cursor-pointer"
+                                      title="Hapus Laporan"
+                                    >
+                                      <Trash size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center gap-2.5 text-xs border-r border-slate-200 pr-4">
               <div className="w-8 h-8 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 rounded-full flex items-center justify-center shrink-0">
                 <UserIcon size={14} />
@@ -862,7 +1118,7 @@ export default function App() {
               return true;
             }}
             onRefresh={async () => {
-              await loadDatabase();
+              await loadDatabase(false, false, true);
             }}
             preSelectedSiswaId={deepLinkSiswaId}
             preSelectedSubTab={deepLinkSubTab}
@@ -902,6 +1158,40 @@ export default function App() {
             db={db}
             currentUser={currentUser}
             onNavigateToSiswa={handleNavigateToSiswa}
+            onSaveLaporanKejadian={async (l, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const list = isNew 
+                  ? [...(prev.laporanKejadian || []), l] 
+                  : (prev.laporanKejadian || []).map(item => item.id === l.id ? l : item);
+                return { ...prev, laporanKejadian: list };
+              });
+              try {
+                const res = await apiService.saveLaporanKejadian(l, isNew);
+                showToast(res.message, res.success ? 'success' : 'error');
+                return res.success;
+              } catch {
+                showToast('Gagal mengirim laporan kejadian.', 'error');
+                return false;
+              }
+            }}
+            onDeleteLaporanKejadian={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  laporanKejadian: (prev.laporanKejadian || []).filter(item => item.id !== id)
+                };
+              });
+              try {
+                const res = await apiService.deleteLaporanKejadian(id);
+                showToast(res.message, res.success ? 'success' : 'error');
+                return res.success;
+              } catch {
+                showToast('Gagal menghapus laporan kejadian.', 'error');
+                return false;
+              }
+            }}
           />
         )}
 
