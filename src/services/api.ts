@@ -412,16 +412,16 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
   // Ensure config block is present
   if (!parsed.config || typeof parsed.config !== 'object') {
     parsed.config = { 
-      gasApiUrl: 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec', 
-      spreadsheetId: ((import.meta as any).env?.VITE_SPREADSHEET_ID as string) || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc' 
+      gasApiUrl: (import.meta as any).env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec', 
+      spreadsheetId: (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc' 
     };
     migrated = true;
   } else {
     const originalGas = parsed.config.gasApiUrl;
     const originalSpreadsheet = parsed.config.spreadsheetId;
     parsed.config = {
-      gasApiUrl: (parsed.config.gasApiUrl && parsed.config.gasApiUrl.trim() !== '' ? parsed.config.gasApiUrl : 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec').toString().trim(),
-      spreadsheetId: (parsed.config.spreadsheetId || ((import.meta as any).env?.VITE_SPREADSHEET_ID as string) || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc').toString().trim()
+      gasApiUrl: (parsed.config.gasApiUrl && parsed.config.gasApiUrl.trim() !== '' ? parsed.config.gasApiUrl : (import.meta as any).env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec').toString().trim(),
+      spreadsheetId: (parsed.config.spreadsheetId || (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc').toString().trim()
     };
     if (parsed.config.gasApiUrl !== originalGas || parsed.config.spreadsheetId !== originalSpreadsheet) {
       migrated = true;
@@ -847,7 +847,11 @@ function saveLocalDatabase(db: DatabaseState) {
 }
 
 export const getGasApiUrl = (): string => {
-  return currentDatabase.config.gasApiUrl || ((import.meta as any).env?.VITE_GAS_API_URL as string) || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec';
+  const envUrl = (import.meta as any).env.VITE_GAS_API_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.trim();
+  }
+  return currentDatabase?.config?.gasApiUrl || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec';
 };
 
 export const setGasApiUrl = (url: string) => {
@@ -856,13 +860,30 @@ export const setGasApiUrl = (url: string) => {
   saveLocalDatabase(db);
 };
 
+export const extractSpreadsheetId = (input: string): string => {
+  if (!input) return '';
+  const trimmed = input.trim();
+  if (trimmed.includes('/d/')) {
+    const parts = trimmed.split('/d/');
+    if (parts.length > 1) {
+      return parts[1].split('/')[0];
+    }
+  }
+  return trimmed;
+};
+
 export const getSpreadsheetId = (): string => {
-  return currentDatabase.config.spreadsheetId || ((import.meta as any).env?.VITE_SPREADSHEET_ID as string) || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc';
+  const envId = (import.meta as any).env.VITE_SPREADSHEET_ID;
+  if (envId && envId.trim() !== '') {
+    return extractSpreadsheetId(envId);
+  }
+  const rawId = currentDatabase?.config?.spreadsheetId || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc';
+  return extractSpreadsheetId(rawId);
 };
 
 export const setSpreadsheetId = (id: string) => {
-  const db = { ...currentDatabase };
-  db.config.spreadsheetId = id ? id.trim() : '';
+  const db = { ...currentDatabase } as DatabaseState;
+  db.config.spreadsheetId = id ? extractSpreadsheetId(id) : '';
   saveLocalDatabase(db);
 };
 
@@ -1115,13 +1136,14 @@ export const apiService = {
       return { success: true, user };
     }
 
-    // 2. Check in student database (by NIS, NISN or Name)
+    // 2. Check in student database (by ID, NIS, NISN or Name)
     const s = db.siswa.find((student) => {
       const uLower = (username || '').toString().trim().toLowerCase();
+      const sId = student.id ? student.id.toString().trim().toLowerCase() : '';
       const sNis = student.nis ? student.nis.toString().trim().toLowerCase() : '';
       const sNisn = student.nisn ? student.nisn.toString().trim().toLowerCase() : '';
       const sNama = student.nama ? student.nama.toString().trim().toLowerCase() : '';
-      return sNis === uLower || sNisn === uLower || sNama === uLower;
+      return sId === uLower || sNis === uLower || sNisn === uLower || sNama === uLower;
     });
 
     if (s) {
@@ -1129,19 +1151,17 @@ export const apiService = {
         return { success: false, message: 'Password wajib diisi.' };
       }
 
-      // Password must match student's NIS, NISN or Nama (case-insensitive)
+      // Password must match student's NIS or NISN (case-insensitive)
       const pLower = (password || '').toString().trim().toLowerCase();
       const sNis = s.nis ? s.nis.toString().trim().toLowerCase() : '';
       const sNisn = s.nisn ? s.nisn.toString().trim().toLowerCase() : '';
-      const sNama = s.nama ? s.nama.toString().trim().toLowerCase() : '';
 
       const validPassword = 
-        pLower === sNis ||
-        pLower === sNisn || 
-        pLower === sNama;
+        (sNis && pLower === sNis) ||
+        (sNisn && pLower === sNisn);
 
       if (!validPassword) {
-        return { success: false, message: 'Password salah. Masukkan NIS, NISN, atau nama lengkap Anda.' };
+        return { success: false, message: 'Password salah. Masukkan NIS atau NISN Anda.' };
       }
 
       const studentUser: User = {

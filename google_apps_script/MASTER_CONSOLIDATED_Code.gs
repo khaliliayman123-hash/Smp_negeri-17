@@ -362,6 +362,10 @@ const SPREADSHEET_ID = SPREADSHEET_ID_CONFIG || "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_q
 
 function getDatabaseSheets(spreadsheetId) {
   let db = null;
+  const DEFAULT_IDS = [
+    "1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc",
+    "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_qZy4u07zbjwKaI"
+  ];
   
   // 1. Coba ambil spreadsheetId dari parameter/payload jika dikirim secara dinamis oleh client
   if (spreadsheetId && spreadsheetId !== "") {
@@ -372,11 +376,24 @@ function getDatabaseSheets(spreadsheetId) {
         cleanedId = parts[1].split("/")[0];
       }
     }
+    
+    var isDefaultPlaceholder = false;
+    for (var i = 0; i < DEFAULT_IDS.length; i++) {
+      if (cleanedId === DEFAULT_IDS[i]) {
+        isDefaultPlaceholder = true;
+        break;
+      }
+    }
+    
     try {
       db = SpreadsheetApp.openById(cleanedId);
       if (db) return db;
     } catch (e) {
       Logger.log("Gagal membuka spreadsheet via parameter ID: " + e.message);
+      // Jika ID yang dimasukkan adalah ID khusus milik user (bukan placeholder), lemparkan error secara eksplisit agar user tahu masalah hak aksesnya!
+      if (!isDefaultPlaceholder) {
+        throw new Error("Gagal mengakses Google Spreadsheet Anda dengan ID '" + cleanedId + "'. Pastikan: 1) Akun Google yang mendeploy Web App ini memiliki akses Edit ke spreadsheet tersebut, 2) ID Spreadsheet sudah benar. Detail error: " + e.message);
+      }
     }
   }
   
@@ -441,12 +458,22 @@ function fetchFullDatabase(db) {
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
   };
 
+  // Ambil seluruh sheet sekali saja untuk optimasi performa tinggi (menghindari puluhan API call eksternal)
+  const sheets = db.getSheets();
+  const existingSheetNames = {};
+  sheets.forEach(function(s) {
+    existingSheetNames[s.getName().toString().trim()] = s;
+  });
+
   // Pastikan seluruh sheet ada (Auto-heal / Auto-provision jika ada sheet yang kurang)
+  // Menggunakan pencarian berbasis objek lokal yang sangat cepat!
   for (var sheetName in schema) {
-    var s = db.getSheetByName(sheetName);
+    var s = existingSheetNames[sheetName];
     if (!s) {
       try {
         s = db.insertSheet(sheetName);
+        existingSheetNames[sheetName] = s;
+        sheets.push(s); // Tambahkan ke array agar ikut diproses di bawah
         var headers = schema[sheetName];
         s.getRange(1, 1, 1, headers.length).setValues([headers]);
         s.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#e2e8f0");
@@ -469,14 +496,15 @@ function fetchFullDatabase(db) {
 
   // Hapus sheet bawaan "Sheet1" jika ada dan kosong untuk merapikan
   try {
-    var defaultSheet = db.getSheetByName("Sheet1");
+    var defaultSheet = existingSheetNames["Sheet1"];
     if (defaultSheet && defaultSheet.getLastRow() === 0 && defaultSheet.getLastColumn() === 0) {
       db.deleteSheet(defaultSheet);
+      var idx = sheets.indexOf(defaultSheet);
+      if (idx !== -1) sheets.splice(idx, 1);
     }
   } catch (e) {}
 
   const result = {};
-  const sheets = db.getSheets();
   
   const sheetNameToKeyMap = {
     "Users": "users",
@@ -849,10 +877,10 @@ function uploadFullDatabase(db, payload) {
     }
     
     if (sheet) {
-      // Clear all rows below header
+      // Clear all rows below header (using clearContent is thousands of times faster than deleteRows)
       var lastRow = sheet.getLastRow();
       if (lastRow > 1) {
-        sheet.deleteRows(2, lastRow - 1);
+        sheet.getRange(2, 1, lastRow - 1, schema[sheetName].length).clearContent();
       } else if (lastRow === 0) {
         // Terapkan headers jika kosong total
         var headers = schema[sheetName];

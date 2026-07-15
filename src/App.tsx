@@ -23,7 +23,10 @@ import {
   BookOpen,
   CheckCircle2,
   Bell,
-  Trash
+  Trash,
+  Loader2,
+  Copy,
+  Download
 } from 'lucide-react';
 
 // Sub views
@@ -51,10 +54,15 @@ export default function App() {
   const [selectedUsername, setSelectedUsername] = useState('gurubk');
   const [password, setPassword] = useState('');
   const [loginTab, setLoginTab] = useState<'admin' | 'siswa'>('admin');
+  const [selectedSiswaKelasId, setSelectedSiswaKelasId] = useState('');
+  const [selectedSiswaId, setSelectedSiswaId] = useState('');
 
   // Application Data States
   const [db, setDb] = useState<DatabaseState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isCopyingGas, setIsCopyingGas] = useState(false);
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -454,36 +462,64 @@ export default function App() {
 
   const handleUploadLocalData = async () => {
     if (!db) return;
-    setIsLoading(true);
+    if (isUploading) return;
+    setIsUploading(true);
+    showToast('Sedang mengunggah data lokal ke Google Sheets...', 'info');
     try {
       const res = await apiService.uploadFullDatabase(db);
       if (res.success) {
-        alert('Sukses! Seluruh data lokal Anda telah berhasil diunggah ke Google Sheets.');
+        showToast('Unggah sukses!', 'success');
+        alert('🎉 SANGAT CEPAT & SUKSES!\n\nSeluruh data lokal Anda telah berhasil diunggah dan disinkronkan ke Google Sheets dalam hitungan detik!');
       } else {
-        alert('Gagal mengunggah data: ' + res.message);
+        showToast('Gagal mengunggah data.', 'error');
+        alert('⚠️ GAGAL MENGUNGGAH DATA:\n\n' + res.message);
       }
     } catch (e: any) {
-      alert('Error saat mengunggah: ' + e.toString());
+      showToast('Terjadi kesalahan koneksi.', 'error');
+      alert('⚠️ ERROR SAAT MENGUNGGAH:\n\n' + e.toString());
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
   const handleForceDownloadData = async () => {
-    setIsLoading(true);
+    if (isDownloading) return;
+    setIsDownloading(true);
+    showToast('Sedang menarik data terbaru dari Google Sheets...', 'info');
     try {
       const localUrl = apiService.getGasUrl();
       if (!localUrl) {
-        alert('URL Google Apps Script belum disetel.');
+        alert('URL Google Apps Script belum disetel. Silakan isi terlebih dahulu pada form di atas.');
         return;
       }
       const res = await apiService.getData(true);
       setDb(res);
-      alert('Sukses! Data terbaru berhasil diambil dari Google Sheets dan disimpan di browser Anda.');
+      showToast('Tarik data sukses!', 'success');
+      alert('🎉 SUKSES!\n\nData terbaru berhasil diambil dari Google Sheets dan disimpan di browser Anda.');
     } catch (e: any) {
-      alert('Gagal mengambil data: ' + e.message);
+      showToast('Gagal menarik data.', 'error');
+      alert('⚠️ GAGAL MENGAMBIL DATA:\n\n' + e.message);
     } finally {
-      setIsLoading(false);
+      setIsDownloading(false);
+    }
+  };
+
+  const handleCopyGasCode = async () => {
+    if (isCopyingGas) return;
+    setIsCopyingGas(true);
+    showToast('Mengambil kode Apps Script...', 'info');
+    try {
+      const res = await fetch('/MASTER_CONSOLIDATED_Code.gs');
+      if (!res.ok) throw new Error('Gagal mengambil file script dari server.');
+      const code = await res.text();
+      await navigator.clipboard.writeText(code);
+      showToast('Seluruh kode Google Apps Script berhasil disalin!', 'success');
+      alert('📋 BERHASIL DISALIN!\n\nSeluruh kode terintegrasi dari file "MASTER_CONSOLIDATED_Code.gs" telah berhasil disalin ke clipboard Anda.\n\nSilakan buka editor Google Apps Script, hapus semua kode bawaan, lalu tempelkan (Ctrl+V / Cmd+V) kode tersebut.');
+    } catch (e: any) {
+      showToast('Gagal menyalin kode.', 'error');
+      alert('⚠️ GAGAL MENYALIN KODE:\n\n' + e.toString());
+    } finally {
+      setIsCopyingGas(false);
     }
   };
 
@@ -525,7 +561,7 @@ export default function App() {
           {/* Navigation Tabs for Admin & Siswa */}
           <div className="flex bg-slate-100 p-1 rounded-xl">
             <button
-              onClick={() => { setLoginTab('admin'); setSelectedUsername('sulaiman'); setPassword(''); setLoginError(''); }}
+              onClick={() => { setLoginTab('admin'); setSelectedUsername('sulaiman'); setPassword(''); setLoginError(''); setSelectedSiswaKelasId(''); setSelectedSiswaId(''); }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 loginTab === 'admin' 
                   ? 'bg-white text-slate-800 shadow-xs' 
@@ -535,7 +571,7 @@ export default function App() {
               Portal Staf & Admin
             </button>
             <button
-              onClick={() => { setLoginTab('siswa'); setSelectedUsername(''); setPassword(''); setLoginError(''); }}
+              onClick={() => { setLoginTab('siswa'); setSelectedUsername(''); setPassword(''); setLoginError(''); setSelectedSiswaKelasId(''); setSelectedSiswaId(''); }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 loginTab === 'siswa' 
                   ? 'bg-white text-slate-800 shadow-xs' 
@@ -651,34 +687,82 @@ export default function App() {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Dropdown Kelas */}
               <div className="space-y-1.5 text-xs">
-                <label className="block font-semibold text-slate-600">Nama Lengkap / NIS / NISN</label>
-                <input 
-                  type="text"
-                  placeholder="Masukkan nama lengkap, NIS, atau NISN siswa..."
-                  value={selectedUsername}
-                  onChange={(e) => { setSelectedUsername(e.target.value); setLoginError(''); }}
+                <label className="block font-semibold text-slate-600">Pilih Kelas</label>
+                <select
+                  value={selectedSiswaKelasId}
+                  onChange={(e) => {
+                    setSelectedSiswaKelasId(e.target.value);
+                    setSelectedSiswaId('');
+                    setLoginError('');
+                  }}
                   className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium"
-                />
+                >
+                  <option value="">-- Pilih Kelas --</option>
+                  {(db?.kelas || [])
+                    .slice()
+                    .sort((a, b) => (a.namaKelas || '').localeCompare(b.namaKelas || '', undefined, { numeric: true }))
+                    .map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.namaKelas}
+                      </option>
+                    ))
+                  }
+                </select>
               </div>
 
+              {/* Dropdown Nama Siswa */}
               <div className="space-y-1.5 text-xs">
-                <label className="block font-semibold text-slate-600">Password / Verifikasi (Nama Lengkap / NIS / NISN)</label>
+                <label className="block font-semibold text-slate-600">Pilih Nama Siswa</label>
+                <select
+                  value={selectedSiswaId}
+                  onChange={(e) => {
+                    setSelectedSiswaId(e.target.value);
+                    setLoginError('');
+                  }}
+                  disabled={!selectedSiswaKelasId}
+                  className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  <option value="">
+                    {selectedSiswaKelasId ? '-- Pilih Nama Siswa --' : 'Pilih Kelas Terlebih Dahulu'}
+                  </option>
+                  {selectedSiswaKelasId && (db?.siswa || [])
+                    .filter((s) => {
+                      const kId = (s.kelasId || '').toLowerCase().trim();
+                      const selectedKelas = db?.kelas.find((k) => k.id === selectedSiswaKelasId);
+                      const classNameLower = selectedKelas ? (selectedKelas.namaKelas || '').toLowerCase().trim() : '';
+                      return kId === selectedSiswaKelasId.toLowerCase().trim() || 
+                             (classNameLower && kId === classNameLower);
+                    })
+                    .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nama}
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              {/* Password (NIS / NISN) */}
+              <div className="space-y-1.5 text-xs">
+                <label className="block font-semibold text-slate-600">Password (NIS / NISN)</label>
                 <input 
                   type="password"
-                  placeholder="Masukkan nama lengkap, NIS, atau NISN sebagai verifikasi..."
+                  placeholder="Masukkan nomor NIS atau NISN Anda..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium"
                 />
                 <p className="text-[9px] text-slate-400 mt-1">
-                  *Gunakan kombinasi identitas siswa (<strong>Nama Lengkap</strong>, <strong>NIS</strong>, atau <strong>NISN</strong>) pada kedua input di atas untuk masuk.
+                  *Gunakan nomor <strong>NIS</strong> atau <strong>NISN</strong> resmi Anda sebagai password untuk melakukan verifikasi masuk.
                 </p>
               </div>
 
               <button 
-                onClick={() => handleLogin(selectedUsername, password)}
-                disabled={isLoggingIn || !selectedUsername || !password}
+                onClick={() => handleLogin(selectedSiswaId, password)}
+                disabled={isLoggingIn || !selectedSiswaId || !password}
                 className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold transition disabled:opacity-50 text-xs cursor-pointer shadow-md"
               >
                 {isLoggingIn ? 'Memproses...' : 'Masuk Sistem'}
@@ -1769,18 +1853,34 @@ export default function App() {
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <button
                         onClick={handleUploadLocalData}
-                        disabled={connStatus === 'checking'}
+                        disabled={connStatus === 'checking' || isUploading || isDownloading}
                         className="flex-1 p-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs text-[11px]"
                       >
-                        <Upload size={14} /> Unggah Data Lokal ke Google Sheets
+                        {isUploading ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" /> Mengunggah...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={14} /> Unggah Data Lokal ke Google Sheets
+                          </>
+                        )}
                       </button>
                       
                       <button
                         onClick={handleForceDownloadData}
-                        disabled={connStatus === 'checking'}
+                        disabled={connStatus === 'checking' || isUploading || isDownloading}
                         className="flex-1 p-3 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs text-[11px]"
                       >
-                        <Database size={14} /> Tarik Data dari Google Sheets
+                        {isDownloading ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" /> Menarik data...
+                          </>
+                        ) : (
+                          <>
+                            <Database size={14} /> Tarik Data dari Google Sheets
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1804,21 +1904,72 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="space-y-1 border-t border-slate-100 pt-3">
-                  <p className="font-bold text-slate-800">Langkah 2: Buka Editor Apps Script</p>
-                  <p>Pada Google Spreadsheet Anda, klik menu <strong className="text-slate-800">Extensions (Ekstensi) &gt; Apps Script</strong>.</p>
-                  <p>Hapus semua kode default dan buat file baru dengan nama-nama berikut sesuai di direktori proyek ini:</p>
-                  <ul className="list-disc pl-5 space-y-1 font-mono text-[10px] text-emerald-700 font-bold">
-                    <li>Code.gs</li>
-                    <li>Auth.gs</li>
-                    <li>Siswa.gs</li>
-                    <li>Konseling.gs</li>
-                    <li>Pelanggaran.gs</li>
-                    <li>Prestasi.gs</li>
-                    <li>Helper.gs</li>
-                    <li>Validation.gs</li>
-                  </ul>
-                  <p>Copy-paste seluruh kode script dari masing-masing file yang ada di folder <strong className="font-mono text-slate-800">/google_apps_script/</strong> ke editor Google Apps Script tersebut.</p>
+                <div className="space-y-3 border-t border-slate-100 pt-3">
+                  <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <span>Langkah 2: Pasang Kode Google Apps Script</span>
+                    <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">Penting!</span>
+                  </p>
+                  <p>Pada Google Spreadsheet Anda, klik menu <strong className="text-slate-800">Extensions (Ekstensi) &gt; Apps Script</strong>. Hapus semua kode bawaan yang ada.</p>
+                  
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 space-y-3">
+                    <p className="font-bold text-emerald-800 text-[11px] flex items-center gap-1">
+                      <Sparkles size={12} className="text-emerald-600 animate-pulse" />
+                      REKOMENDASI UTAMA: Gunakan Satu File Tunggal (Master Consolidated)
+                    </p>
+                    <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                      Anda tidak perlu membuat 8 file terpisah secara manual! Kami telah menggabungkan seluruh kode sistem yang dioptimalkan menjadi satu file master yang sangat efisien: <strong className="font-mono text-slate-700">MASTER_CONSOLIDATED_Code.gs</strong>. Cukup gunakan salah satu tombol di bawah:
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                      <a 
+                        href="/MASTER_CONSOLIDATED_Code.gs" 
+                        download="MASTER_CONSOLIDATED_Code.gs"
+                        className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs text-[10.5px] no-underline"
+                      >
+                        <Download size={13} /> Unduh File .gs Langsung
+                      </a>
+                      
+                      <button
+                        onClick={handleCopyGasCode}
+                        disabled={isCopyingGas}
+                        className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs text-[10.5px] disabled:opacity-50"
+                      >
+                        {isCopyingGas ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" /> Menyalin...
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} /> Salin Semua Kode Ke Clipboard
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-normal italic">
+                      *Setelah mengunduh atau menyalin, cukup buka file bawaan <code className="bg-slate-200 text-slate-700 px-1 py-0.5 rounded text-[9px] font-mono">Code.gs</code> di Apps Script Anda, tempelkan kode tersebut di sana, lalu Simpan.
+                    </p>
+                  </div>
+
+                  <details className="text-[10.5px] text-slate-500 bg-white border border-slate-100 rounded-xl p-3">
+                    <summary className="font-semibold text-slate-700 cursor-pointer select-none hover:text-slate-900 transition-colors">
+                      Alternatif: Jika Anda ingin memisahkan dalam 8 file manual (Klik untuk melihat daftar file)
+                    </summary>
+                    <div className="pt-2 space-y-2">
+                      <p>Buat file baru di editor Google Apps Script dengan nama-nama persis seperti berikut:</p>
+                      <ul className="list-disc pl-5 space-y-1 font-mono text-[10px] text-emerald-700 font-bold">
+                        <li>Code.gs</li>
+                        <li>Auth.gs</li>
+                        <li>Siswa.gs</li>
+                        <li>Konseling.gs</li>
+                        <li>Pelanggaran.gs</li>
+                        <li>Prestasi.gs</li>
+                        <li>Helper.gs</li>
+                        <li>Validation.gs</li>
+                      </ul>
+                      <p className="text-[10px] text-slate-400">Anda dapat menyalin masing-masing kode file tersebut dari folder proyek <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[9px]">/google_apps_script/</code>.</p>
+                    </div>
+                  </details>
                 </div>
 
                 <div className="space-y-1 border-t border-slate-100 pt-3">

@@ -1,21 +1,367 @@
 /**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
+ * ========================================================================
  * SISTEM HIMPUNAN DATA SISWA (HDS) BIMBINGAN DAN KONSELING
- * Google Apps Script - Spreadsheet ORM & Utility Helpers (Helper.gs)
+ * Google Apps Script - CONSOLIDATED MASTER SCRIPT (Satu File)
+ * ========================================================================
+ * 
+ * CARA INSTALASI MUDAH (FOOLPROOF):
+ * 1. Buka Google Spreadsheet baru atau yang sudah ada di Google Drive Anda.
+ * 2. Klik menu "Extensions" -> "Apps Script" (Ekstensi -> Apps Script).
+ * 3. Hapus seluruh kode default yang ada di editor (jika ada).
+ * 4. Paste SELURUH KODE di bawah ini ke dalam editor tersebut (cukup di file Code.gs saja, tidak perlu buat banyak file).
+ * 5. Klik ikon "Save" (Disket) untuk menyimpan proyek.
+ * 6. Di menu dropdown fungsi di bagian atas, pilih "setupHDSDatabaseSheets", lalu klik tombol "Run" (Jalankan).
+ * 7. Setujui dialog otorisasi (klik "Review Permissions", pilih akun Google Anda, klik "Advanced" / "Lanjutan", klik "Go to Untitled project (unsafe)", lalu klik "Allow" / "Izinkan").
+ * 8. Spreadsheet Anda sekarang otomatis terbuat dengan seluruh sheet (tabel) dan baris header kolom yang sesuai!
+ * 9. Klik tombol "Deploy" (Terapkan) -> "New deployment" (Penerapan baru) di pojok kanan atas.
+ * 10. Klik ikon Gerigi di sebelah "Select type", pastikan "Web app" terpilih.
+ * 11. Konfigurasi penting:
+ *     - Execute as (Jalankan sebagai): Me (Surel Google Anda)
+ *     - Who has access (Siapa yang memiliki akses): Anyone (Siapa saja, bahkan anonim)
+ * 12. Klik "Deploy", salin "Web App URL" yang dihasilkan (akhiran /exec) dan simpan ke aplikasi Sistem BK Anda.
  */
 
-const SPREADSHEET_ID = "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_qZy4u07zbjwKaI";
+// ==========================================
+// KONFIGURASI SPREADSHEET ID (OPSIONAL)
+// ==========================================
+// Jika script ini dibuka langsung dari menu "Extensions > Apps Script" di Spreadsheet target,
+// biarkan SPREADSHEET_ID kosong "" atau gunakan default. Script akan otomatis terhubung.
+const SPREADSHEET_ID_CONFIG = "";
+
+
+
+// ==========================================
+// BAGIAN: Setup.gs
+// ==========================================
+function setupHDSDatabaseSheets() {
+  const db = getDatabaseSheets();
+  
+  const schema = {
+    "Users": [
+      "id", "username", "nama", "role", "email", "isActive"
+    ],
+    "Siswa": [
+      "id", "nis", "nisn", "nama", "foto", "tempatLahir", "tanggalLahir", "jenisKelamin", "agama", "alamat", "desa", "kecamatan", "kabupaten", "provinsi", "nomorHp", "email", "kelasId", "tahunMasuk"
+    ],
+    "OrangTua": [
+      "id", "namaAyah", "statusAyah", "tempatLahirAyah", "tanggalLahirAyah", "alamatAyah", "agamaAyah", "pendidikanAyah", "pekerjaanAyah", "noHpAyah", "namaIbu", "statusIbu", "tempatLahirIbu", "tanggalLahirIbu", "alamatIbu", "agamaIbu", "pendidikanIbu", "pekerjaanIbu", "noHpIbu", "wali", "statusWali", "tempatLahirWali", "tanggalLahirWali", "alamatWali", "agamaWali", "pendidikanWali", "pekerjaanWali", "noHpWali", "penghasilan", "pendidikanOrangTua"
+    ],
+    "Akademik": [
+      "id", "semester", "rataRataRaport", "catatanWaliKelas"
+    ],
+    "Kesehatan": [
+      "id", "tinggiBadan", "beratBadan", "golonganDarah", "penyakit", "alergi", "disabilitas"
+    ],
+    "Ekonomi": [
+      "id", "statusRumah", "penghasilan", "kendaraan", "pip", "pkh", "kip"
+    ],
+    "Psikologi": [
+      "id", "minat", "bakat", "hobi", "gayaBelajar", "citaCita", "kepribadian"
+    ],
+    "Sosial": [
+      "id", "hubunganTeman", "organisasi", "masalahSosial"
+    ],
+    "Prestasi": [
+      "id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"
+    ],
+    "Pelanggaran": [
+      "id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"
+    ],
+    "RemisiPoin": [
+      "id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"
+    ],
+    "Konseling": [
+      "id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"
+    ],
+    "Asesmen": [
+      "id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"
+    ],
+    "HomeVisit": [
+      "id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"
+    ],
+    "Surat": [
+      "id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"
+    ],
+    "Dokumen": [
+      "id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"
+    ],
+    "CatatanPerkembangan": [
+      "id", "siswaId", "tanggal", "catatan", "guruBkId"
+    ],
+    "TahunPelajaran": [
+      "id", "tahun", "semester", "isActive"
+    ],
+    "Kelas": [
+      "id", "namaKelas", "waliKelasId"
+    ],
+    "LogAktivitas": [
+      "id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"
+    ]
+  };
+
+  const initialData = {
+    "Users": [
+      ["admin", "admin", "Administrator Utama", "Admin", "admin@sekolah.sch.id", true],
+      ["gurubk", "gurubk", "Nur Jamilah Purwaningsih, S.Psi", "Koordinator BK", "nurjamilah.bk@sekolah.sch.id", true]
+    ],
+    "TahunPelajaran": [
+      ["tp-2023-ganjil", "2023/2024", "Ganjil", true]
+    ],
+    "Kelas": [
+      ["kl-1", "Kelas 7-1", "wk-7-1"],
+      ["kl-2", "Kelas 7-2", "wk-7-2"],
+      ["kl-3", "Kelas 7-3", "wk-7-3"],
+      ["kl-4", "Kelas 7-4", "wk-7-4"],
+      ["kl-5", "Kelas 7-5", "wk-7-5"],
+      ["kl-6", "Kelas 7-6", "wk-7-6"],
+      ["kl-7", "Kelas 7-7", "wk-7-7"],
+      ["kl-8", "Kelas 7-8", "wk-7-8"],
+      ["kl-9", "Kelas 7-9", "wk-7-9"],
+      ["kl-10", "Kelas 7-10", "wk-7-10"],
+      ["kl-11", "Kelas 7-11", "wk-7-11"],
+      ["kl-12", "Kelas 8-1", "wk-8-1"],
+      ["kl-13", "Kelas 8-2", "wk-8-2"],
+      ["kl-14", "Kelas 8-3", "wk-8-3"],
+      ["kl-15", "Kelas 8-4", "wk-8-4"],
+      ["kl-16", "Kelas 8-5", "wk-8-5"],
+      ["kl-17", "Kelas 8-6", "wk-8-6"],
+      ["kl-18", "Kelas 8-7", "wk-8-7"],
+      ["kl-19", "Kelas 8-8", "wk-8-8"],
+      ["kl-20", "Kelas 8-9", "wk-8-9"],
+      ["kl-21", "Kelas 8-10", "wk-8-10"],
+      ["kl-22", "Kelas 8-11", "wk-8-11"],
+      ["kl-23", "Kelas 9-1", "wk-9-1"],
+      ["kl-24", "Kelas 9-2", "wk-9-2"],
+      ["kl-25", "Kelas 9-3", "wk-9-3"],
+      ["kl-26", "Kelas 9-4", "wk-9-4"],
+      ["kl-27", "Kelas 9-5", "wk-9-5"],
+      ["kl-28", "Kelas 9-6", "wk-9-6"],
+      ["kl-29", "Kelas 9-7", "wk-9-7"],
+      ["kl-30", "Kelas 9-8", "wk-9-8"],
+      ["kl-31", "Kelas 9-9", "wk-9-9"],
+      ["kl-32", "Kelas 9-10", "wk-9-10"],
+      ["kl-33", "Kelas 9-11", "wk-9-11"]
+    ]
+  };
+
+  for (let sheetName in schema) {
+    let sheet = db.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = db.insertSheet(sheetName);
+      Logger.log("Membuat sheet baru: " + sheetName);
+    } else {
+      Logger.log("Sheet sudah ada: " + sheetName);
+    }
+    
+    // Terapkan headers
+    const headers = schema[sheetName];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#e2e8f0");
+    
+    // Auto-protect header row
+    try {
+      sheet.autoResizeColumns(1, headers.length);
+    } catch(e) {}
+    
+    // Isi data awal jika sheet masih kosong (hanya ada baris header)
+    if (sheet.getLastRow() === 1 && initialData[sheetName]) {
+      const rows = initialData[sheetName];
+      sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+      Logger.log("Mengisi data awal untuk sheet: " + sheetName);
+    }
+  }
+
+  // Hapus sheet bawaan "Sheet1" jika ada dan kosong untuk merapikan
+  const defaultSheet = db.getSheetByName("Sheet1");
+  if (defaultSheet && defaultSheet.getLastRow() === 0 && defaultSheet.getLastColumn() === 0) {
+    db.deleteSheet(defaultSheet);
+    Logger.log("Menghapus sheet bawaan kosong 'Sheet1' untuk kerapihan.");
+  }
+
+  Logger.log("SUKSES: Seluruh 21 tabel HDS Bimbingan dan Konseling telah sukses dibuat dan dikonfigurasi di Google Spreadsheet ini!");
+}
+
+// ==========================================
+// BAGIAN: Code.gs
+// ==========================================
+function doGet(e) {
+  return handleRequest(e);
+}
+
+function doPost(e) {
+  return handleRequest(e);
+}
+
+function handleRequest(e) {
+  // Set CORS headers
+  const output = ContentService.createTextOutput();
+  output.setMimeType(ContentService.MimeType.JSON);
+  
+  // Jika dijalankan manual di editor Apps Script, 'e' akan bernilai undefined.
+  // Kita cegah error 'Cannot read properties of undefined (reading 'parameter')'.
+  if (!e || !e.parameter) {
+    output.setContent(JSON.stringify({ 
+      success: true, 
+      message: "Koneksi Berhasil! Google Apps Script berjalan dengan baik. Silakan gunakan Web App URL di aplikasi untuk sinkronisasi data secara otomatis." 
+    }));
+    return output;
+  }
+
+  let postData = null;
+  if (e.postData && e.postData.contents) {
+    try {
+      postData = JSON.parse(e.postData.contents);
+    } catch (err) {
+      Logger.log("Gagal parse JSON postData: " + err.toString());
+    }
+  }
+
+  const action = e.parameter.action || (postData && postData.action);
+  const spreadsheetId = e.parameter.spreadsheetId || (postData && postData.spreadsheetId);
+  let responseData = { success: false, message: "Invalid Action" };
+  
+  try {
+    const db = getDatabaseSheets(spreadsheetId);
+
+    switch (action) {
+      case "getFullDatabase":
+        responseData = { success: true, data: fetchFullDatabase(db) };
+        break;
+        
+      case "login":
+        responseData = simulateLogin(db, e.parameter.username || (postData && postData.username));
+        break;
+        
+      case "saveSiswaPackage":
+        if (postData) {
+          responseData = saveSiswaPackage(db, postData);
+        } else {
+          responseData = { success: false, message: "Payload kosong." };
+        }
+        break;
+        
+      case "deleteSiswa":
+        responseData = deleteSiswaPackage(db, postData.id);
+        break;
+        
+      case "saveTahunPelajaran":
+        responseData = saveEntity(db, "TahunPelajaran", postData.tp, postData.isNew);
+        break;
+        
+      case "deleteTahunPelajaran":
+        responseData = deleteEntity(db, "TahunPelajaran", postData.id);
+        break;
+        
+      case "saveKelas":
+        responseData = saveEntity(db, "Kelas", postData.kl, postData.isNew);
+        break;
+        
+      case "deleteKelas":
+        responseData = deleteEntity(db, "Kelas", postData.id);
+        break;
+        
+      case "saveUser":
+        responseData = saveUser(db, postData.user, postData.isNew);
+        break;
+        
+      case "deleteUser":
+        responseData = deleteEntity(db, "Users", postData.id);
+        break;
+        
+      case "savePrestasi":
+        responseData = saveEntity(db, "Prestasi", postData.p, postData.isNew);
+        break;
+        
+      case "deletePrestasi":
+        responseData = deleteEntity(db, "Prestasi", postData.id);
+        break;
+        
+      case "savePelanggaran":
+        responseData = saveEntity(db, "Pelanggaran", postData.p, postData.isNew);
+        break;
+        
+      case "deletePelanggaran":
+        responseData = deleteEntity(db, "Pelanggaran", postData.id);
+        break;
+        
+      case "saveKonseling":
+        responseData = saveEntity(db, "Konseling", postData.k, postData.isNew);
+        break;
+        
+      case "deleteKonseling":
+        responseData = deleteEntity(db, "Konseling", postData.id);
+        break;
+        
+      case "saveAsesmen":
+        responseData = saveEntity(db, "Asesmen", postData.a, postData.isNew);
+        break;
+        
+      case "deleteAsesmen":
+        responseData = deleteEntity(db, "Asesmen", postData.id);
+        break;
+        
+      case "saveHomeVisit":
+        responseData = saveEntity(db, "HomeVisit", postData.h, postData.isNew);
+        break;
+        
+      case "deleteHomeVisit":
+        responseData = deleteEntity(db, "HomeVisit", postData.id);
+        break;
+        
+      case "saveSurat":
+        responseData = saveEntity(db, "Surat", postData.s, postData.isNew);
+        break;
+        
+      case "deleteSurat":
+        responseData = deleteEntity(db, "Surat", postData.id);
+        break;
+        
+      case "saveDokumen":
+        responseData = saveEntity(db, "Dokumen", postData.d, postData.isNew);
+        break;
+        
+      case "deleteDokumen":
+        responseData = deleteEntity(db, "Dokumen", postData.id);
+        break;
+        
+      case "saveCatatanPerkembangan":
+        responseData = saveEntity(db, "CatatanPerkembangan", postData.c, postData.isNew);
+        break;
+        
+      case "deleteCatatanPerkembangan":
+        responseData = deleteEntity(db, "CatatanPerkembangan", postData.id);
+        break;
+        
+      case "addLog":
+        responseData = appendLog(db, postData);
+        break;
+        
+      case "uploadFullDatabase":
+        if (postData) {
+          responseData = uploadFullDatabase(db, postData);
+        } else {
+          responseData = { success: false, message: "Payload kosong." };
+        }
+        break;
+        
+      default:
+        responseData = { success: false, message: "Action '" + action + "' tidak dikenali." };
+    }
+  } catch (error) {
+    responseData = { success: false, message: "Server Error: " + error.toString() };
+  }
+  
+  output.setContent(JSON.stringify(responseData));
+  return output;
+}
+
+// ==========================================
+// BAGIAN: Helper.gs
+// ==========================================
+const SPREADSHEET_ID = SPREADSHEET_ID_CONFIG || "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_qZy4u07zbjwKaI";
 
 function getDatabaseSheets(spreadsheetId) {
   let db = null;
-  const DEFAULT_IDS = [
-    "1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc",
-    "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_qZy4u07zbjwKaI"
-  ];
   
   // 1. Coba ambil spreadsheetId dari parameter/payload jika dikirim secara dinamis oleh client
   if (spreadsheetId && spreadsheetId !== "") {
@@ -26,24 +372,11 @@ function getDatabaseSheets(spreadsheetId) {
         cleanedId = parts[1].split("/")[0];
       }
     }
-    
-    var isDefaultPlaceholder = false;
-    for (var i = 0; i < DEFAULT_IDS.length; i++) {
-      if (cleanedId === DEFAULT_IDS[i]) {
-        isDefaultPlaceholder = true;
-        break;
-      }
-    }
-    
     try {
       db = SpreadsheetApp.openById(cleanedId);
       if (db) return db;
     } catch (e) {
       Logger.log("Gagal membuka spreadsheet via parameter ID: " + e.message);
-      // Jika ID yang dimasukkan adalah ID khusus milik user (bukan placeholder), lemparkan error secara eksplisit agar user tahu masalah hak aksesnya!
-      if (!isDefaultPlaceholder) {
-        throw new Error("Gagal mengakses Google Spreadsheet Anda dengan ID '" + cleanedId + "'. Pastikan: 1) Akun Google yang mendeploy Web App ini memiliki akses Edit ke spreadsheet tersebut, 2) ID Spreadsheet sudah benar. Detail error: " + e.message);
-      }
     }
   }
   
@@ -567,4 +900,193 @@ function uploadFullDatabase(db, payload) {
   } catch (e) {}
   
   return { success: true, message: "Seluruh data lokal berhasil diunggah dan disinkronkan ke Google Spreadsheet!" };
+}
+
+// ==========================================
+// BAGIAN: Siswa.gs
+// ==========================================
+function saveSiswaPackage(db, payload) {
+  db = db || getDatabaseSheets();
+  if (!payload) {
+    Logger.log("Peringatan: Fungsi saveSiswaPackage dijalankan tanpa parameter payload. Jika Anda menjalankan fungsi ini secara manual di editor Apps Script untuk memberikan izin akses (otorisasi), hal ini wajar dan sukses!");
+    return { success: false, message: "Payload kosong. Fungsi ini seharusnya dipanggil dari aplikasi web." };
+  }
+  const siswa = payload.siswa;
+
+  const orangTua = payload.orangTua;
+  const kesehatan = payload.kesehatan;
+  const ekonomi = payload.ekonomi;
+  const psikologi = payload.psikologi;
+  const sosial = payload.sosial;
+  const akademik = payload.akademik;
+  const isNew = payload.isNew;
+
+  try {
+    if (!siswa) {
+      throw new Error("Data siswa tidak ditemukan dalam payload.");
+    }
+    saveRowEntity(db, "Siswa", siswa, isNew);
+    saveRowEntity(db, "OrangTua", orangTua, isNew);
+    saveRowEntity(db, "Kesehatan", kesehatan, isNew);
+    saveRowEntity(db, "Ekonomi", ekonomi, isNew);
+    saveRowEntity(db, "Psikologi", psikologi, isNew);
+    saveRowEntity(db, "Sosial", sosial, isNew);
+    saveRowEntity(db, "Akademik", akademik, isNew);
+    
+    return { success: true, message: "Paket Data Siswa berhasil disimpan secara utuh." };
+  } catch (e) {
+    return { success: false, message: "Kesalahan transaksi siswa: " + e.toString() };
+  }
+}
+
+function deleteSiswaPackage(db, siswaId) {
+  db = db || getDatabaseSheets();
+  if (!siswaId) {
+    Logger.log("Peringatan: Fungsi deleteSiswaPackage dijalankan tanpa parameter siswaId.");
+    return { success: false, message: "siswaId kosong." };
+  }
+  
+  // List of sheets where the student ID is the first column (id)
+  const idSheets = ["Siswa", "OrangTua", "Kesehatan", "Ekonomi", "Psikologi", "Sosial", "Akademik"];
+  
+  // List of sheets where the student ID is the second column (siswaId)
+  const siswaIdSheets = ["Prestasi", "Pelanggaran", "RemisiPoin", "Konseling", "Asesmen", "HomeVisit", "Surat", "Dokumen", "CatatanPerkembangan"];
+  
+  let deletedCount = 0;
+  
+  // 1. Delete from idSheets
+  idSheets.forEach(function(sheetName) {
+    const sheet = db.getSheetByName(sheetName);
+    if (sheet) {
+      const values = sheet.getDataRange().getValues();
+      for (let i = values.length - 1; i >= 1; i--) {
+        if (values[i][0] == siswaId) {
+          sheet.deleteRow(i + 1);
+          deletedCount++;
+        }
+      }
+    }
+  });
+  
+  // 2. Delete from siswaIdSheets
+  siswaIdSheets.forEach(function(sheetName) {
+    const sheet = db.getSheetByName(sheetName);
+    if (sheet) {
+      const values = sheet.getDataRange().getValues();
+      for (let i = values.length - 1; i >= 1; i--) {
+        if (values[i][1] == siswaId) {
+          sheet.deleteRow(i + 1);
+          deletedCount++;
+        }
+      }
+    }
+  });
+  
+  return { success: true, message: "Siswa dan seluruh rekam data terkait berhasil dihapus secara online (" + deletedCount + " baris)." };
+}
+
+// ==========================================
+// BAGIAN: Prestasi.gs
+// ==========================================
+function getStudentAchievements(db, studentId) {
+  db = db || getDatabaseSheets();
+  const sheet = db.getSheetByName("Prestasi");
+  if (!sheet) return [];
+  
+  const data = getSheetDataAsJson(sheet);
+  return data.filter(function(item) {
+    return item.siswaId === studentId;
+  });
+}
+
+// ==========================================
+// BAGIAN: Pelanggaran.gs
+// ==========================================
+function getStudentTotalPoints(db, studentId) {
+  db = db || getDatabaseSheets();
+  const sheet = db.getSheetByName("Pelanggaran");
+  if (!sheet) return 0;
+  
+  const data = getSheetDataAsJson(sheet);
+  let total = 0;
+  
+  data.forEach(function(item) {
+    if (item.siswaId === studentId) {
+      total += parseInt(item.poin || 0);
+    }
+  });
+  
+  return total;
+}
+
+// ==========================================
+// BAGIAN: Konseling.gs
+// ==========================================
+// Inherits from universal saveEntity and deleteEntity helper functions.
+// Adds custom reporting or validation queries specific to Counseling if required.
+function fetchCounselingByStudent(db, studentId) {
+  db = db || getDatabaseSheets();
+  const sheet = db.getSheetByName("Konseling");
+  if (!sheet) return [];
+  const data = getSheetDataAsJson(sheet);
+  return data.filter(function(item) {
+    return item.siswaId === studentId;
+  });
+}
+
+// ==========================================
+// BAGIAN: Validation.gs
+// ==========================================
+function sanitizeString(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function validateSiswa(siswa) {
+  if (!siswa.nis || siswa.nis.toString().trim() === "") {
+    return "NIS wajib diisi.";
+  }
+  if (!siswa.nama || siswa.nama.toString().trim() === "") {
+    return "Nama siswa wajib diisi.";
+  }
+  return null;
+}
+
+// ==========================================
+// BAGIAN: Auth.gs
+// ==========================================
+function simulateLogin(db, username) {
+  db = db || getDatabaseSheets();
+  if (!username) {
+
+    return { success: false, message: "Username wajib diisi." };
+  }
+  
+  const sheet = db.getSheetByName("Users");
+  if (!sheet) {
+    return { success: false, message: "Sheet Users tidak ditemukan." };
+  }
+  
+  const data = getSheetDataAsJson(sheet);
+  const user = data.find(function(u) {
+    return u.username.toString().toLowerCase() === username.toString().toLowerCase() && u.isActive === "true";
+  });
+  
+  if (user) {
+    appendLog(db, {
+      userId: user.id,
+      namaUser: user.nama,
+      role: user.role,
+      aktivitas: "Login (Cloud)",
+      detail: "Berhasil masuk ke dalam sistem menggunakan otentikasi Google Sheets."
+    });
+    return { success: true, user: user };
+  }
+  
+  return { success: false, message: "Username tidak terdaftar atau tidak aktif." };
 }
