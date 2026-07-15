@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, 
   GraduationCap, 
@@ -59,6 +59,90 @@ export default function App() {
 
   // Application Data States
   const [db, setDb] = useState<DatabaseState | null>(null);
+
+  const filteredDb = useMemo(() => {
+    if (!db) return null;
+    if (!currentUser || currentUser.role !== UserRole.GURU_BK) return db;
+
+    const username = currentUser.username || '';
+    
+    // Helper to check if a class is within the counselor's assigned range
+    const isClassAssigned = (className: string): boolean => {
+      const normalized = (className || '').toLowerCase().trim();
+      // Extract numbers like "7-1", "8-10", "11-2"
+      const match = normalized.match(/kelas\s+(\d+)-(\d+)/i) || normalized.match(/(\d+)-(\d+)/);
+      if (!match) return false;
+      const level = parseInt(match[1], 10);
+      const num = parseInt(match[2], 10);
+
+      const u = username.toLowerCase().trim();
+      if (u === 'sulaiman' || u === 'bk-sulaiman') {
+        return level === 8 && num >= 4 && num <= 10;
+      }
+      if (u === 'aulia' || u === 'bk-aulia') {
+        return level === 7 && num >= 1 && num <= 5;
+      }
+      if (u === 'dwi' || u === 'bk-dwi') {
+        return (level === 7 && num >= 6 && num <= 11) || (level === 8 && num === 11);
+      }
+      if (u === 'kholfi' || u === 'bk-kholfi') {
+        return level === 9 && num >= 1 && num <= 7;
+      }
+      if (u === 'novita' || u === 'bk-novita') {
+        return (level === 8 && num >= 1 && num <= 3) || (level === 9 && num >= 8 && num <= 11);
+      }
+      return true; // default to true for other users
+    };
+
+    // Filter classes
+    const assignedClasses = db.kelas.filter(k => isClassAssigned(k.namaKelas));
+    const assignedClassIds = new Set(assignedClasses.map(k => k.id));
+    const assignedClassNamesLower = new Set(assignedClasses.map(k => (k.namaKelas || '').toLowerCase().trim()));
+
+    // Filter students
+    const assignedStudents = db.siswa.filter(s => {
+      if (!s.kelasId) return false;
+      const cleanKelasId = s.kelasId.toString().trim().toLowerCase();
+      return assignedClassIds.has(s.kelasId) || assignedClassNamesLower.has(cleanKelasId);
+    });
+    const assignedStudentIds = new Set(assignedStudents.map(s => s.id));
+
+    // Filter all student-related sub-records safely
+    const filterByStudent = <T extends { id?: string; siswaId?: string }>(list: T[] | undefined): T[] => {
+      if (!list) return [];
+      return list.filter(item => {
+        const idToCheck = item.siswaId || item.id;
+        return idToCheck && assignedStudentIds.has(idToCheck);
+      });
+    };
+
+    return {
+      ...db,
+      kelas: assignedClasses,
+      siswa: assignedStudents,
+      orangTua: filterByStudent(db.orangTua),
+      akademik: filterByStudent(db.akademik),
+      kesehatan: filterByStudent(db.kesehatan),
+      ekonomi: filterByStudent(db.ekonomi),
+      psikologi: filterByStudent(db.psikologi),
+      sosial: filterByStudent(db.sosial),
+      prestasi: filterByStudent(db.prestasi),
+      pelanggaran: filterByStudent(db.pelanggaran),
+      remisiPoin: filterByStudent(db.remisiPoin),
+      konseling: filterByStudent(db.konseling),
+      asesmen: filterByStudent(db.asesmen),
+      homeVisit: filterByStudent(db.homeVisit),
+      surat: filterByStudent(db.surat),
+      dokumen: filterByStudent(db.dokumen),
+      catatanPerkembangan: filterByStudent(db.catatanPerkembangan),
+      kehadiran: filterByStudent(db.kehadiran),
+      laporanKejadian: (db.laporanKejadian || []).filter(item => {
+        const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
+        const isClassMatch = item.kelasId && (assignedClassIds.has(item.kelasId) || assignedClassNamesLower.has(item.kelasId.toString().trim().toLowerCase()));
+        return isStudentMatch || isClassMatch;
+      }),
+    };
+  }, [db, currentUser]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -249,9 +333,9 @@ export default function App() {
 
   // Notification management count & handlers
   const unreadReportsCount = React.useMemo(() => {
-    if (!db || !db.laporanKejadian) return 0;
-    return db.laporanKejadian.filter(l => l.status === 'Belum Dibaca').length;
-  }, [db]);
+    if (!filteredDb || !filteredDb.laporanKejadian) return 0;
+    return filteredDb.laporanKejadian.filter(l => l.status === 'Belum Dibaca').length;
+  }, [filteredDb]);
 
   const handleMarkAsRead = async (reportId: string) => {
     setDb(prev => {
@@ -925,15 +1009,15 @@ export default function App() {
                   </div>
                   
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {!db?.laporanKejadian || db.laporanKejadian.length === 0 ? (
+                    {!filteredDb?.laporanKejadian || filteredDb.laporanKejadian.length === 0 ? (
                       <div className="p-6 text-center text-slate-400 italic">
                         Belum ada laporan kejadian.
                       </div>
                     ) : (
-                      [...db.laporanKejadian]
+                      [...filteredDb.laporanKejadian]
                         .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
                         .map((report) => {
-                          const student = db?.siswa.find(s => s.id === report.siswaId);
+                          const student = filteredDb?.siswa.find(s => s.id === report.siswaId);
                           return (
                             <div 
                               key={report.id} 
@@ -951,7 +1035,7 @@ export default function App() {
                                       {student?.nama || 'Siswa Dihapus'}
                                     </span>
                                     <span className="text-[9px] bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded-md font-bold">
-                                      {db?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
+                                      {filteredDb?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
                                     </span>
                                   </div>
                                   <p className="text-slate-600 text-[10px] leading-relaxed">
@@ -1068,15 +1152,15 @@ export default function App() {
                     </div>
                     
                     <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
-                      {!db?.laporanKejadian || db.laporanKejadian.length === 0 ? (
+                      {!filteredDb?.laporanKejadian || filteredDb.laporanKejadian.length === 0 ? (
                         <div className="p-8 text-center text-slate-400 italic">
                           Belum ada laporan kejadian yang masuk.
                         </div>
                       ) : (
-                        [...db.laporanKejadian]
+                        [...filteredDb.laporanKejadian]
                           .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
                           .map((report) => {
-                            const student = db?.siswa.find(s => s.id === report.siswaId);
+                            const student = filteredDb?.siswa.find(s => s.id === report.siswaId);
                             return (
                               <div 
                                 key={report.id} 
@@ -1094,7 +1178,7 @@ export default function App() {
                                         {student?.nama || 'Siswa Dihapus'}
                                       </span>
                                       <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-md font-bold">
-                                        {db?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
+                                        {filteredDb?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
                                       </span>
                                     </div>
                                     <p className="text-slate-600 text-[11px] leading-relaxed">
@@ -1161,7 +1245,7 @@ export default function App() {
         {/* VIEW 1: DASHBOARD */}
         {activeMenu === 'dashboard' && (
           <DashboardView 
-            db={db} 
+            db={filteredDb} 
             currentUser={currentUser} 
             onNavigateToSiswa={handleNavigateToSiswa} 
           />
@@ -1170,7 +1254,7 @@ export default function App() {
         {/* VIEW 2: SISWA (HDS) */}
         {activeMenu === 'siswa' && (
           <SiswaView 
-            db={db} 
+            db={filteredDb} 
             currentUser={currentUser} 
             onSaveSiswa={handleSaveSiswa}
             onDeleteSiswa={handleDeleteSiswa}
@@ -1239,7 +1323,7 @@ export default function App() {
         {/* VIEW 2.5: WALI KELAS */}
         {activeMenu === 'walikelas' && (
           <WaliKelasView 
-            db={db}
+            db={filteredDb}
             currentUser={currentUser}
             onNavigateToSiswa={handleNavigateToSiswa}
             onSaveLaporanKejadian={async (l, isNew) => {
@@ -1282,7 +1366,7 @@ export default function App() {
         {/* VIEW 3: LAYANAN & DISIPLIN */}
         {activeMenu === 'layanan' && (
           <KonselingView 
-            db={db}
+            db={filteredDb}
             currentUser={currentUser}
             onSaveKonseling={async (k, isNew) => {
               setDb(prev => {
@@ -1479,7 +1563,7 @@ export default function App() {
         {/* VIEW 4: DOKUMEN & SURAT GENERATOR */}
         {activeMenu === 'dokumen' && (
           <DokumenSuratView 
-            db={db}
+            db={filteredDb}
             currentUser={currentUser}
             onSaveSurat={async (s, isNew) => {
               setDb(prev => {
@@ -1541,7 +1625,7 @@ export default function App() {
         {/* VIEW 5: REPORTS & MASTER DATA CONFIG */}
         {activeMenu === 'master' && (
           <MasterLaporanView 
-            db={db}
+            db={filteredDb}
             currentUser={currentUser}
             onSaveTP={async (tp, isNew) => {
               setDb(prev => {

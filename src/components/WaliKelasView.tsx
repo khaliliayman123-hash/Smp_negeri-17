@@ -506,6 +506,28 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
     }
   }, [allowedClassName]);
 
+  // Sync selected class dropdown state for Guru BK when db is loaded
+  React.useEffect(() => {
+    if (!db || !db.kelas || db.kelas.length === 0) return;
+
+    if (currentUser.role === UserRole.GURU_BK) {
+      const class7 = db.kelas.find(k => k.namaKelas.startsWith('Kelas 7'));
+      const class8 = db.kelas.find(k => k.namaKelas.startsWith('Kelas 8'));
+      const class9 = db.kelas.find(k => k.namaKelas.startsWith('Kelas 9'));
+
+      if (class7) setSelectedClass7(class7.namaKelas);
+      if (class8) setSelectedClass8(class8.namaKelas);
+      if (class9) setSelectedClass9(class9.namaKelas);
+
+      // Set active level to the level of the first available class
+      const firstClass = db.kelas[0].namaKelas;
+      const match = firstClass.match(/\d+/);
+      if (match) {
+        setActiveLevel(match[0] as ClassLevel);
+      }
+    }
+  }, [db, currentUser.role]);
+
   // Search input within the filtered class
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1216,7 +1238,10 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
       {/* Main Tabs - Levels 7, 8, 9 */}
       <div className="grid grid-cols-3 bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-sm max-w-xl">
         {(['7', '8', '9'] as ClassLevel[]).map((level) => {
-          const isLocked = allowedClassLevel !== null && allowedClassLevel !== level;
+          let isLocked = allowedClassLevel !== null && allowedClassLevel !== level;
+          if (currentUser.role === UserRole.GURU_BK && db && db.kelas) {
+            isLocked = !db.kelas.some(k => k.namaKelas.startsWith(`Kelas ${level}`));
+          }
           return (
             <button
               key={level}
@@ -1250,7 +1275,10 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
         <div className="flex flex-wrap gap-2">
           {Array.from({ length: 11 }, (_, i) => `Kelas ${activeLevel}-${i + 1}`).map((cls) => {
             const isActive = currentClassName === cls;
-            const isLocked = allowedClassName !== null && allowedClassName !== cls;
+            let isLocked = allowedClassName !== null && allowedClassName !== cls;
+            if (currentUser.role === UserRole.GURU_BK && db && db.kelas) {
+              isLocked = !db.kelas.some(k => k.namaKelas === cls);
+            }
             return (
               <button
                 key={cls}
