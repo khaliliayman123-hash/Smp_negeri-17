@@ -79,10 +79,15 @@ export default function KonselingView({
   onDeleteKehadiran
 }: KonselingViewProps) {
 
-  const canModify = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.GURU_BK;
-
   // Tabs routing state
-  const [activeTab, setActiveTab] = useState<CounselingSubTab>('konseling');
+  const [activeTab, setActiveTab] = useState<CounselingSubTab>(() => {
+    if (currentUser.role === UserRole.GURU_PIKET) return 'pelanggaran';
+    return 'konseling';
+  });
+
+  const canModify = currentUser.role === UserRole.ADMIN || 
+                    currentUser.role === UserRole.GURU_BK ||
+                    (currentUser.role === UserRole.GURU_PIKET && (activeTab === 'pelanggaran' || activeTab === 'remisi'));
   const [searchQuery, setSearchQuery] = useState('');
 
   // State for Remisi and Poin summary dashboard
@@ -697,12 +702,14 @@ export default function KonselingView({
       {/* Dynamic Sub Tab Selector Navigation */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-wrap bg-white p-1 rounded-xl border border-slate-100 shadow-sm text-xs font-semibold text-slate-500">
-          <button 
-            onClick={() => { setActiveTab('konseling'); setSearchQuery(''); }}
-            className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'konseling' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
-          >
-            <MessageSquare size={14} /> Layanan Konseling
-          </button>
+          {currentUser.role !== UserRole.GURU_PIKET && (
+            <button 
+              onClick={() => { setActiveTab('konseling'); setSearchQuery(''); }}
+              className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'konseling' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
+            >
+              <MessageSquare size={14} /> Layanan Konseling
+            </button>
+          )}
           <button 
             onClick={() => { setActiveTab('pelanggaran'); setSearchQuery(''); }}
             className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'pelanggaran' ? 'bg-rose-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
@@ -715,30 +722,34 @@ export default function KonselingView({
           >
             <Heart size={14} className={activeTab === 'remisi' ? 'text-white' : 'text-sky-500'} /> Remisi Poin
           </button>
-          <button 
-            onClick={() => { setActiveTab('prestasi'); setSearchQuery(''); }}
-            className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'prestasi' ? 'bg-amber-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
-          >
-            <Award size={14} /> Rekam Prestasi
-          </button>
-          <button 
-            onClick={() => { setActiveTab('asesmen'); setSearchQuery(''); }}
-            className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'asesmen' ? 'bg-teal-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
-          >
-            <Activity size={14} /> Asesmen BK
-          </button>
-          <button 
-            onClick={() => { setActiveTab('homevisit'); setSearchQuery(''); }}
-            className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'homevisit' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
-          >
-            <Home size={14} /> Kunjungan Rumah
-          </button>
-          <button 
-            onClick={() => { setActiveTab('kehadiran'); setSearchQuery(''); }}
-            className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'kehadiran' ? 'bg-cyan-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
-          >
-            <FileSpreadsheet size={14} /> Rekap Kehadiran
-          </button>
+          {currentUser.role !== UserRole.GURU_PIKET && (
+            <>
+              <button 
+                onClick={() => { setActiveTab('prestasi'); setSearchQuery(''); }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'prestasi' ? 'bg-amber-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
+              >
+                <Award size={14} /> Rekam Prestasi
+              </button>
+              <button 
+                onClick={() => { setActiveTab('asesmen'); setSearchQuery(''); }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'asesmen' ? 'bg-teal-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
+              >
+                <Activity size={14} /> Asesmen BK
+              </button>
+              <button 
+                onClick={() => { setActiveTab('homevisit'); setSearchQuery(''); }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'homevisit' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
+              >
+                <Home size={14} /> Kunjungan Rumah
+              </button>
+              <button 
+                onClick={() => { setActiveTab('kehadiran'); setSearchQuery(''); }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-1.5 transition ${activeTab === 'kehadiran' ? 'bg-cyan-600 text-white shadow-sm' : 'hover:bg-slate-50'}`}
+              >
+                <FileSpreadsheet size={14} /> Rekap Kehadiran
+              </button>
+            </>
+          )}
         </div>
 
         {canModify && (

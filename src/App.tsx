@@ -212,6 +212,11 @@ export default function App() {
     if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas') {
       setActiveMenu('walikelas');
     }
+    if (currentUser && currentUser.role === UserRole.GURU_PIKET) {
+      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan') {
+        setActiveMenu('dashboard');
+      }
+    }
   }, [currentUser, activeMenu]);
 
   const loadDatabase = async (checkConnection: boolean = false, localOnly: boolean = false, forceRemote: boolean = false) => {
@@ -672,11 +677,11 @@ export default function App() {
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block text-center">
                   PILIH AKUN STAF
                 </span>
-                <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold">
+                <div className="grid grid-cols-4 gap-1 text-[10px] font-semibold">
                   <button 
                     type="button"
                     onClick={() => { setSelectedUsername('admin'); setLoginError(''); }}
-                    className={`p-2 rounded-xl border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                    className={`p-1.5 rounded-xl border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
                       selectedUsername === 'admin'
                         ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -687,13 +692,24 @@ export default function App() {
                   <button 
                     type="button"
                     onClick={() => { setSelectedUsername('sulaiman'); setLoginError(''); }}
-                    className={`p-2 rounded-xl border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                    className={`p-1.5 rounded-xl border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
                       ['sulaiman', 'aulia', 'dwi', 'kholfi', 'novita', 'gurubk', 'jamilah'].includes(selectedUsername.toLowerCase())
                         ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
                     <Sparkles size={12} className={['sulaiman', 'aulia', 'dwi', 'kholfi', 'novita', 'gurubk', 'jamilah'].includes(selectedUsername.toLowerCase()) ? 'text-emerald-600' : 'text-slate-400'} /> Guru BK
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setSelectedUsername('Guru Piket'); setLoginError(''); }}
+                    className={`p-1.5 rounded-xl border transition flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      selectedUsername.toLowerCase() === 'guru piket'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-bold'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    <CheckCircle2 size={12} className={selectedUsername.toLowerCase() === 'guru piket' ? 'text-emerald-600' : 'text-slate-400'} /> Piket
                   </button>
                   <div className="relative">
                     <select
@@ -704,7 +720,7 @@ export default function App() {
                           setLoginError(''); 
                         }
                       }}
-                      className={`w-full p-2 h-full rounded-xl border transition text-[10px] font-semibold text-center cursor-pointer appearance-none bg-white ${
+                      className={`w-full p-1.5 h-full rounded-xl border transition text-[10px] font-semibold text-center cursor-pointer appearance-none bg-white ${
                         db?.users.some(u => u.username === selectedUsername && u.role === UserRole.WALI_KELAS)
                           ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-bold'
                           : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -898,6 +914,21 @@ export default function App() {
               >
                 <GraduationCap size={16} /> Ruang Wali Kelas
               </button>
+            ) : currentUser.role === UserRole.GURU_PIKET ? (
+              <>
+                <button 
+                  onClick={() => { setActiveMenu('dashboard'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'dashboard' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <Users size={16} /> Dashboard Evaluasi
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('layanan'); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'layanan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <MessageSquare size={16} /> Layanan BK & Disiplin
+                </button>
+              </>
             ) : (
               <>
                 <button 
@@ -1086,6 +1117,11 @@ export default function App() {
               <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Profil Saya (HDS)</button>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
               <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
+            ) : currentUser.role === UserRole.GURU_PIKET ? (
+              <>
+                <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
+                <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
+              </>
             ) : (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>

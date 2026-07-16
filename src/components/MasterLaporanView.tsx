@@ -1536,6 +1536,7 @@ export default function MasterLaporanView({
                         <option value={UserRole.ADMIN}>Admin</option>
                         <option value={UserRole.GURU_BK}>Guru BK</option>
                         <option value={UserRole.WALI_KELAS}>Wali Kelas</option>
+                        <option value={UserRole.GURU_PIKET}>Guru Piket</option>
                         <option value={UserRole.KEPALA_SEKOLAH}>Kepala Sekolah</option>
                       </select>
                     </div>

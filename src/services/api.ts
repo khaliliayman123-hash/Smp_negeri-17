@@ -76,7 +76,8 @@ const INITIAL_DATABASE: DatabaseState = {
     spreadsheetId: '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc',
   },
   users: [
-    { id: 'usr-1', username: 'admin', nama: 'Holfi Aulia, S.Pd', role: UserRole.ADMIN, email: 'holfi.aulia@sekolah.sch.id', isActive: true },
+    { id: 'usr-1', username: 'admin', nama: 'Sulaiman, S.Psi', role: UserRole.ADMIN, email: 'sulaiman.admin@sekolah.sch.id', isActive: true },
+    { id: 'usr-piket', username: 'Guru Piket', nama: 'Guru Piket', role: UserRole.GURU_PIKET, email: 'piket@sekolah.sch.id', isActive: true },
     { id: 'bk-sulaiman', username: 'sulaiman', nama: 'Sulaiman, S.Psi', role: UserRole.GURU_BK, email: 'sulaiman@sekolah.sch.id', isActive: true },
     { id: 'bk-aulia', username: 'aulia', nama: 'Aulia Rohmah, S.Pd,.MM', role: UserRole.GURU_BK, email: 'aulia@sekolah.sch.id', isActive: true },
     { id: 'bk-dwi', username: 'dwi', nama: 'Dwi Susanti, S.Pd', role: UserRole.GURU_BK, email: 'dwi@sekolah.sch.id', isActive: true },
@@ -386,7 +387,7 @@ const INITIAL_DATABASE: DatabaseState = {
     { id: 'cp-1', siswaId: 'sis-3', tanggal: '2026-06-22', catatan: 'Candra menunjukkan perilaku lebih rapi dan masuk kelas tepat waktu selama 3 hari terakhir.', guruBkId: 'usr-2' },
   ],
   logAktivitas: [
-    { id: 'log-1', timestamp: '2026-06-28T09:00:00Z', userId: 'usr-1', namaUser: 'Holfi Aulia, S.Pd', role: 'Admin', aktivitas: 'Login', detail: 'Berhasil masuk ke dalam sistem.' },
+    { id: 'log-1', timestamp: '2026-06-28T09:00:00Z', userId: 'usr-1', namaUser: 'Sulaiman, S.Psi', role: 'Admin', aktivitas: 'Login', detail: 'Berhasil masuk ke dalam sistem.' },
     { id: 'log-2', timestamp: '2026-06-28T09:15:00Z', userId: 'usr-2', namaUser: 'Nur Jamilah Purwaningsih, S.Psi', role: 'Guru BK', aktivitas: 'Tambah Konseling', detail: 'Membuat rekaman konseling individu untuk Candra Wijaya.' },
   ],
   kehadiran: [
@@ -400,7 +401,7 @@ const INITIAL_DATABASE: DatabaseState = {
 let currentDatabase: DatabaseState | null = null;
 
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
-  if (parsed && parsed._sanitized_v6 && parsed.laporanKejadian) {
+  if (parsed && parsed._sanitized_v7 && parsed.laporanKejadian) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
   let migrated = false;
@@ -460,6 +461,23 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     });
   }
 
+  // Ensure Admin user is updated to Sulaiman, S.Psi
+  const adminUser = parsed.users.find((u: any) => u && u.id === 'usr-1');
+  if (adminUser) {
+    if (adminUser.nama !== 'Sulaiman, S.Psi') {
+      adminUser.nama = 'Sulaiman, S.Psi';
+      adminUser.email = 'sulaiman.admin@sekolah.sch.id';
+      migrated = true;
+    }
+  }
+
+  // Ensure Guru Piket exists in database
+  const hasGuruPiket = parsed.users.some((u: any) => u && u.id === 'usr-piket');
+  if (!hasGuruPiket) {
+    parsed.users.push({ id: 'usr-piket', username: 'Guru Piket', nama: 'Guru Piket', role: UserRole.GURU_PIKET, email: 'piket@sekolah.sch.id', isActive: true });
+    migrated = true;
+  }
+
   // Update log activities with old BK/Admin names and Kepala Sekolah
   parsed.logAktivitas = parsed.logAktivitas.map((l: any) => {
     if (!l) return l;
@@ -480,7 +498,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       migrated = true;
     }
     if (l.namaUser === 'Budi Santoso, S.Kom.') {
-      l.namaUser = 'Holfi Aulia, S.Pd';
+      l.namaUser = 'Sulaiman, S.Psi';
       migrated = true;
     }
     if (l.namaUser === 'Dr. H. Suprapto, M.Pd.') {
@@ -809,7 +827,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     });
   });
 
-  parsed._sanitized_v6 = true;
+  parsed._sanitized_v7 = true;
   return { sanitized: parsed as DatabaseState, migrated };
 }
 
@@ -1066,10 +1084,15 @@ export const apiService = {
       const roleStr = (user.role || '').toString().toLowerCase();
       const isAdmin = roleStr === 'admin' || roleStr === UserRole.ADMIN.toLowerCase();
       const isGuruBk = roleStr === 'gurubk' || roleStr === 'koordinator bk' || roleStr === 'guru bk' || roleStr === UserRole.GURU_BK.toLowerCase();
+      const isGuruPiket = roleStr === 'guru piket' || roleStr === UserRole.GURU_PIKET.toLowerCase();
 
       if (isAdmin) {
         if (password !== 'admin123') {
           return { success: false, message: 'Password Admin salah.' };
+        }
+      } else if (isGuruPiket) {
+        if (password !== 'piket123') {
+          return { success: false, message: 'Password Guru Piket salah.' };
         }
       } else if (isGuruBk) {
         const uNameLower = (user.username || '').toString().toLowerCase();

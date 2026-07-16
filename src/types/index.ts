@@ -9,6 +9,7 @@ export enum UserRole {
   WALI_KELAS = 'Wali Kelas',
   KEPALA_SEKOLAH = 'Kepala Sekolah',
   SISWA = 'Siswa',
+  GURU_PIKET = 'Guru Piket',
 }
 
 export interface User {
