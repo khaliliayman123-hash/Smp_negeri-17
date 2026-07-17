@@ -566,6 +566,11 @@ export default function SiswaView({
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024) {
+        alert('Batas upload foto maksimal 10KB! Silakan lakukan compress pada Simple Image Resizer.');
+        e.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         const img = new Image();
@@ -2059,6 +2064,19 @@ export default function SiswaView({
                         Hapus Foto
                       </button>
                     )}
+                    <div className="text-center max-w-[140px] mt-1 bg-amber-50/70 border border-amber-200 rounded-lg p-1.5">
+                      <p className="text-[9px] text-amber-800 leading-normal">
+                        Batas upload foto maksimal <strong>10KB</strong>. Silakan lakukan compress pada{' '}
+                        <a 
+                          href="https://www.simpleimageresizer.com" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-indigo-600 hover:underline font-bold"
+                        >
+                          Simple Image Resizer
+                        </a>
+                      </p>
+                    </div>
                   </div>
 
                   {/* Identity Fields */}
