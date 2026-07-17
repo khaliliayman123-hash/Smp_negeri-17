@@ -78,19 +78,19 @@ export default function App() {
 
       const u = username.toLowerCase().trim();
       if (u === 'sulaiman' || u === 'bk-sulaiman') {
-        return level === 8 && num >= 4 && num <= 10;
+        return level === 8 && num >= 5 && num <= 11;
       }
       if (u === 'aulia' || u === 'bk-aulia') {
         return level === 7 && num >= 1 && num <= 5;
       }
       if (u === 'dwi' || u === 'bk-dwi') {
-        return (level === 7 && num >= 6 && num <= 11) || (level === 8 && num === 11);
+        return (level === 7 && num >= 6 && num <= 11) || (level === 8 && num === 1);
       }
       if (u === 'kholfi' || u === 'bk-kholfi') {
         return level === 9 && num >= 1 && num <= 7;
       }
       if (u === 'novita' || u === 'bk-novita') {
-        return (level === 8 && num >= 1 && num <= 3) || (level === 9 && num >= 8 && num <= 11);
+        return (level === 8 && num >= 2 && num <= 4) || (level === 9 && num >= 8 && num <= 11);
       }
       return true; // default to true for other users
     };
