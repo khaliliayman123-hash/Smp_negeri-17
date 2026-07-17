@@ -50,21 +50,21 @@ export const WALI_KELAS_USERS: User[] = [
   { id: 'wk-8-3', username: 'tiar', nama: 'Riztiary Pranacita, S.Pd', role: UserRole.WALI_KELAS, email: 'tiar@sekolah.sch.id', isActive: true },
   { id: 'wk-8-4', username: 'joko', nama: 'Marjoko, S.Pd', role: UserRole.WALI_KELAS, email: 'joko@sekolah.sch.id', isActive: true },
   { id: 'wk-8-5', username: 'danang', nama: 'Danang Bayu Permadi, S.Pd', role: UserRole.WALI_KELAS, email: 'danang@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-6', username: 'annisa', nama: 'Annisa C. Wicikononing, S.Kom', role: UserRole.WALI_KELAS, email: 'annisa@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-6', username: 'sahdiana', nama: 'Sahdiana Tumanggor, S.Pd', role: UserRole.WALI_KELAS, email: 'sahdiana@sekolah.sch.id', isActive: true },
   { id: 'wk-8-7', username: 'haifa', nama: 'Haifa Suryati, S.Pd', role: UserRole.WALI_KELAS, email: 'haifa@sekolah.sch.id', isActive: true },
   { id: 'wk-8-8', username: 'santi', nama: 'Santi Ramadhani, S.Pd', role: UserRole.WALI_KELAS, email: 'santi@sekolah.sch.id', isActive: true },
   { id: 'wk-8-9', username: 'reni', nama: 'Reni Septiati, S.Pd', role: UserRole.WALI_KELAS, email: 'reni@sekolah.sch.id', isActive: true },
   { id: 'wk-8-10', username: 'dewi', nama: 'Dewi Sri Kusumaningrum, S.Pd', role: UserRole.WALI_KELAS, email: 'dewi@sekolah.sch.id', isActive: true },
-  { id: 'wk-8-11', username: 'emi', nama: 'Emi Jamiah, M.Pd', role: UserRole.WALI_KELAS, email: 'emi@sekolah.sch.id', isActive: true },
+  { id: 'wk-8-11', username: 'annisa', nama: 'Annisa C. Wicikononing, S.Kom', role: UserRole.WALI_KELAS, email: 'annisa@sekolah.sch.id', isActive: true },
   { id: 'wk-9-1', username: 'tere', nama: 'Theresia Erni Setyawati, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'tere@sekolah.sch.id', isActive: true },
   { id: 'wk-9-2', username: 'ferry', nama: 'Ferry Ferdiansyah, S.Pd', role: UserRole.WALI_KELAS, email: 'ferry@sekolah.sch.id', isActive: true },
   { id: 'wk-9-3', username: 'sifah', nama: 'Sifah Fauziah, S.Pd', role: UserRole.WALI_KELAS, email: 'sifah@sekolah.sch.id', isActive: true },
   { id: 'wk-9-4', username: 'mia', nama: 'Mia Hardina, S.Pd', role: UserRole.WALI_KELAS, email: 'mia@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-5', username: 'nur', nama: 'Nur Komar, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'nur@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-5', username: 'habib', nama: 'Habib Baehaqi, S.Kom', role: UserRole.WALI_KELAS, email: 'habib@sekolah.sch.id', isActive: true },
   { id: 'wk-9-6', username: 'warsih', nama: 'Suwarsih, S.Pd.MM', role: UserRole.WALI_KELAS, email: 'warsih@sekolah.sch.id', isActive: true },
   { id: 'wk-9-7', username: 'tut', nama: 'Hastutiningsih, S.Pd', role: UserRole.WALI_KELAS, email: 'tut@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-8', username: 'kasrah', nama: 'Dra. Kasrah', role: UserRole.WALI_KELAS, email: 'kasrah@sekolah.sch.id', isActive: true },
-  { id: 'wk-9-9', username: 'habib', nama: 'Habib Baehaqi, S.Kom', role: UserRole.WALI_KELAS, email: 'habib@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-8', username: 'nur', nama: 'Nur Komar, S.Pd,.MM', role: UserRole.WALI_KELAS, email: 'nur@sekolah.sch.id', isActive: true },
+  { id: 'wk-9-9', username: 'emi', nama: 'Emi Jamiah, M.Pd', role: UserRole.WALI_KELAS, email: 'emi@sekolah.sch.id', isActive: true },
   { id: 'wk-9-10', username: 'pendi', nama: 'Pendi, S.Pd', role: UserRole.WALI_KELAS, email: 'pendi@sekolah.sch.id', isActive: true },
   { id: 'wk-9-11', username: 'hadi', nama: 'Hadi Suryadi, S.Pd', role: UserRole.WALI_KELAS, email: 'hadi@sekolah.sch.id', isActive: true }
 ];
@@ -439,10 +439,18 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
 
   listKeys.forEach(key => {
     if (!parsed[key] || !Array.isArray(parsed[key])) {
-      parsed[key] = INITIAL_DATABASE[key as keyof DatabaseState] ? [...(INITIAL_DATABASE[key as keyof DatabaseState] as any[])] : [];
+      parsed[key] = [];
       migrated = true;
     }
   });
+
+  // Check if the parsed database is fundamentally empty (to prevent overwriting real local data with empty remote sheets)
+  const isParsedEmpty = parsed.siswa.length === 0 || parsed.users.length === 0;
+
+  if (isParsedEmpty) {
+    parsed._sanitized_v7 = true;
+    return { sanitized: parsed as DatabaseState, migrated };
+  }
 
   // Self-healing: Check if the new BK users and 33 Wali Kelas exist in database. If not, reset users and kelas arrays to make sure accounts are loaded.
   const hasSulaiman = parsed.users.some((u: any) => u && u.username && u.username.toString().toLowerCase() === 'sulaiman');
@@ -451,10 +459,17 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.kelas = [...INITIAL_DATABASE.kelas];
     migrated = true;
   } else {
-    // Ensure every Wali Kelas user in WALI_KELAS_USERS exists in parsed.users
+    // Ensure every Wali Kelas user in WALI_KELAS_USERS exists and is synchronized in parsed.users
     WALI_KELAS_USERS.forEach((wku) => {
-      const exists = parsed.users.some((u: any) => u && u.username === wku.username);
-      if (!exists) {
+      const localUser = parsed.users.find((u: any) => u && u.id === wku.id);
+      if (localUser) {
+        if (localUser.nama !== wku.nama || localUser.username !== wku.username || localUser.email !== wku.email) {
+          localUser.nama = wku.nama;
+          localUser.username = wku.username;
+          localUser.email = wku.email;
+          migrated = true;
+        }
+      } else {
         parsed.users.push(wku);
         migrated = true;
       }
@@ -849,7 +864,8 @@ function loadLocalDatabase(): DatabaseState {
       console.error('Failed to parse local database, resetting to seed data.', e);
     }
   }
-  const { sanitized } = sanitizeDatabaseState(INITIAL_DATABASE);
+  const clonedInitial = JSON.parse(JSON.stringify(INITIAL_DATABASE));
+  const { sanitized } = sanitizeDatabaseState(clonedInitial);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
   currentDatabase = sanitized;
   return sanitized;
@@ -1087,7 +1103,7 @@ export const apiService = {
       const isGuruPiket = roleStr === 'guru piket' || roleStr === UserRole.GURU_PIKET.toLowerCase();
 
       if (isAdmin) {
-        if (password !== 'admin123') {
+        if (password !== 'admin17') {
           return { success: false, message: 'Password Admin salah.' };
         }
       } else if (isGuruPiket) {
@@ -1211,10 +1227,13 @@ export const apiService = {
     if (getGasApiUrl()) {
       const res = await apiCall<DatabaseState>('getFullDatabase');
       if (res.success && res.data) {
+        // Sanitize the remote data first to filter out empty/invalid rows!
+        const { sanitized, migrated } = sanitizeDatabaseState(res.data);
+
         // Cegah penimpaan data lokal jika database di Google Sheets kosong (belum di-seeding)
         const isEmptyRemote = 
-          (!res.data.users || res.data.users.length === 0) && 
-          (!res.data.siswa || res.data.siswa.length === 0);
+          (!sanitized.users || sanitized.users.length === 0) || 
+          (!sanitized.siswa || sanitized.siswa.length === 0);
 
         if (isEmptyRemote) {
           lastFetchSuccessful = true;
@@ -1227,18 +1246,10 @@ export const apiService = {
           return updated;
         }
 
-        // Update local cache with remote data, preserving the config block and sanitizing it
-        const { sanitized, migrated } = sanitizeDatabaseState(res.data);
+        // Update local cache with remote data, preserving the config block
         const updated = { ...sanitized, config: { ...localDb.config, gasApiUrl: getGasApiUrl() } };
         saveLocalDatabase(updated);
         lastFetchSuccessful = true;
-
-        if (migrated) {
-          console.log('Sinkronisasi data terdeteksi: mengunggah data kelas dan relasi yang diperbaiki kembali ke Google Sheets secara otomatis...');
-          apiCall('uploadFullDatabase', updated).catch((err) => {
-            console.error('Gagal mengunggah pembaruan sinkronisasi ke Google Sheets:', err);
-          });
-        }
 
         return updated;
       } else {
@@ -1254,6 +1265,22 @@ export const apiService = {
       }
     }
     return localDb;
+  },
+
+  resetDatabase: async (): Promise<DatabaseState> => {
+    const currentConfig = currentDatabase?.config || { gasApiUrl: '', spreadsheetId: '' };
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    currentDatabase = null;
+    const restored = loadLocalDatabase();
+    
+    // Selalu pertahankan konfigurasi Google Sheets yang sudah disetel user
+    restored.config = {
+      gasApiUrl: currentConfig.gasApiUrl || restored.config.gasApiUrl,
+      spreadsheetId: currentConfig.spreadsheetId || restored.config.spreadsheetId
+    };
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(restored));
+    currentDatabase = restored;
+    return restored;
   },
 
   // CRUD Operations with dynamic routing (Remote first, else LocalStorage)

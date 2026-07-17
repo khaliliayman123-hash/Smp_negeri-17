@@ -26,7 +26,8 @@ import {
   Trash,
   Loader2,
   Copy,
-  Download
+  Download,
+  RefreshCw
 } from 'lucide-react';
 
 // Sub views
@@ -147,6 +148,14 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isCopyingGas, setIsCopyingGas] = useState(false);
+
+  // Custom dialogs/modals state
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [alertModalConfig, setAlertModalConfig] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setAlertModalConfig({ title, message, type });
+  };
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -519,7 +528,7 @@ export default function App() {
       apiService.setGasUrl('');
       apiService.setSpreadsheetId('');
       setConnStatus('idle');
-      alert('Konfigurasi Google Apps Script dihapus. Aplikasi berjalan kembali dalam Mode Offline Fallback.');
+      showAlert('Konfigurasi Dihapus', 'Konfigurasi Google Apps Script dihapus. Aplikasi berjalan kembali dalam Mode Offline Fallback.', 'info');
       loadDatabase();
       return;
     }
@@ -533,18 +542,18 @@ export default function App() {
       if (res.success) {
         setConnStatus('connected');
         setConnMessage(res.message);
-        alert('🎉 SANGAT AKURAT & BERHASIL!\n\nKoneksi ke Google Apps Script dan Google Spreadsheet berhasil diuji dan berjalan lancar! Sinkronisasi otomatis online kini aktif.');
+        showAlert('🎉 SANGAT AKURAT & BERHASIL!', 'Koneksi ke Google Apps Script dan Google Spreadsheet berhasil diuji dan berjalan lancar! Sinkronisasi otomatis online kini aktif.', 'success');
       } else {
         setConnStatus('failed');
         setConnMessage(res.message);
         setConnCode(res.code || '');
-        alert(`⚠️ PERINGATAN: Konfigurasi disimpan, tetapi GAGAL TERHUBUNG.\n\nDetail Error: ${res.message}\n\nAplikasi sementara berjalan dalam Offline Fallback Mode. Silakan periksa pengaturan Deployment di Google Apps Script Anda.`);
+        showAlert('⚠️ PERINGATAN KONEKSI', `Konfigurasi disimpan, tetapi GAGAL TERHUBUNG.\n\nDetail Error: ${res.message}\n\nAplikasi sementara berjalan dalam Offline Fallback Mode. Silakan periksa pengaturan Deployment di Google Apps Script Anda.`, 'error');
       }
     } catch (err: any) {
       setConnStatus('failed');
       setConnMessage(err.message || 'Error koneksi tidak diketahui.');
       setConnCode('UNKNOWN_ERROR');
-      alert(`⚠️ ERROR KONEKSI: ${err.message || 'Gagal menghubungi server.'}`);
+      showAlert('⚠️ ERROR KONEKSI', `Gagal menghubungi server.\n\nDetail: ${err.message || 'Error tidak diketahui.'}`, 'error');
     }
     loadDatabase();
   };
@@ -558,14 +567,14 @@ export default function App() {
       const res = await apiService.uploadFullDatabase(db);
       if (res.success) {
         showToast('Unggah sukses!', 'success');
-        alert('🎉 SANGAT CEPAT & SUKSES!\n\nSeluruh data lokal Anda telah berhasil diunggah dan disinkronkan ke Google Sheets dalam hitungan detik!');
+        showAlert('🎉 SANGAT CEPAT & SUKSES!', 'Seluruh data lokal Anda telah berhasil diunggah dan disinkronkan ke Google Sheets dalam hitungan detik!', 'success');
       } else {
         showToast('Gagal mengunggah data.', 'error');
-        alert('⚠️ GAGAL MENGUNGGAH DATA:\n\n' + res.message);
+        showAlert('⚠️ GAGAL MENGUNGGAH DATA', res.message || 'Gagal menyimpan ke Google Sheets.', 'error');
       }
     } catch (e: any) {
       showToast('Terjadi kesalahan koneksi.', 'error');
-      alert('⚠️ ERROR SAAT MENGUNGGAH:\n\n' + e.toString());
+      showAlert('⚠️ ERROR SAAT MENGUNGGAH', e.toString(), 'error');
     } finally {
       setIsUploading(false);
     }
@@ -578,16 +587,16 @@ export default function App() {
     try {
       const localUrl = apiService.getGasUrl();
       if (!localUrl) {
-        alert('URL Google Apps Script belum disetel. Silakan isi terlebih dahulu pada form di atas.');
+        showAlert('⚠️ URL BELUM DISETEL', 'URL Google Apps Script belum disetel. Silakan isi terlebih dahulu pada form di atas.', 'error');
         return;
       }
       const res = await apiService.getData(true);
       setDb(res);
       showToast('Tarik data sukses!', 'success');
-      alert('🎉 SUKSES!\n\nData terbaru berhasil diambil dari Google Sheets dan disimpan di browser Anda.');
+      showAlert('🎉 SUKSES!', 'Data terbaru berhasil diambil dari Google Sheets dan disimpan di browser Anda.', 'success');
     } catch (e: any) {
       showToast('Gagal menarik data.', 'error');
-      alert('⚠️ GAGAL MENGAMBIL DATA:\n\n' + e.message);
+      showAlert('⚠️ GAGAL MENGAMBIL DATA', e.message || 'Gagal mengambil data.', 'error');
     } finally {
       setIsDownloading(false);
     }
@@ -603,12 +612,30 @@ export default function App() {
       const code = await res.text();
       await navigator.clipboard.writeText(code);
       showToast('Seluruh kode Google Apps Script berhasil disalin!', 'success');
-      alert('📋 BERHASIL DISALIN!\n\nSeluruh kode terintegrasi dari file "MASTER_CONSOLIDATED_Code.gs" telah berhasil disalin ke clipboard Anda.\n\nSilakan buka editor Google Apps Script, hapus semua kode bawaan, lalu tempelkan (Ctrl+V / Cmd+V) kode tersebut.');
+      showAlert('📋 BERHASIL DISALIN!', 'Seluruh kode terintegrasi dari file "MASTER_CONSOLIDATED_Code.gs" telah berhasil disalin ke clipboard Anda.\n\nSilakan buka editor Google Apps Script, hapus semua kode bawaan, lalu tempelkan (Ctrl+V / Cmd+V) kode tersebut.', 'success');
     } catch (e: any) {
       showToast('Gagal menyalin kode.', 'error');
-      alert('⚠️ GAGAL MENYALIN KODE:\n\n' + e.toString());
+      showAlert('⚠️ GAGAL MENYALIN KODE', e.toString(), 'error');
     } finally {
       setIsCopyingGas(false);
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    setResetModalOpen(true);
+  };
+
+  const executeResetDatabase = async () => {
+    setResetModalOpen(false);
+    try {
+      showToast('Mengatur ulang database lokal...', 'info');
+      const restored = await apiService.resetDatabase();
+      setDb(restored);
+      showToast('Database berhasil direset ke data bawaan!', 'success');
+      showAlert('🎉 SUKSES!', 'Database lokal Anda telah berhasil dikembalikan ke data bawaan sekolah (termasuk 400+ siswa, kelas, prestasi, dan pengaturan bawaan).\n\nAnda dapat memilih "Unggah Data Lokal ke Google Sheets" untuk mengisi kembali Spreadsheet Anda.', 'success');
+    } catch (e: any) {
+      showToast('Gagal mereset database.', 'error');
+      showAlert('⚠️ GAGAL MERESET DATABASE', e.toString(), 'error');
     }
   };
 
@@ -2008,6 +2035,25 @@ export default function App() {
               </div>
             </div>
 
+            {/* RESET DATABASE UTILITIES */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+              <h3 className="font-bold text-red-600 text-sm flex items-center gap-2">
+                <AlertTriangle size={16} />
+                Pemulihan & Atur Ulang Database Lokal (Data Recovery)
+              </h3>
+              <p className="text-slate-500 leading-relaxed text-[11px]">
+                Gunakan tombol di bawah ini untuk mengatur ulang database lokal browser Anda kembali ke struktur sistem bawaan sekolah (termasuk Akun 33 Wali Kelas, Akun Guru BK, & Data Demo Bawaan). <strong className="text-emerald-700">Catatan Pemulihan:</strong> Jika data 400+ siswa Anda terhapus di Google Sheets, Anda dapat memulihkannya dengan mudah melalui menu <strong>File -&gt; Histori Versi</strong> di Google Spreadsheet Anda, lalu klik "Tarik Data Terbaru" di aplikasi ini.
+              </p>
+              <div className="flex justify-start">
+                <button
+                  onClick={handleResetDatabase}
+                  className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition text-[11px]"
+                >
+                  <RefreshCw size={14} /> Atur Ulang ke Database Bawaan (Seed Data)
+                </button>
+              </div>
+            </div>
+
             {/* Step-by-step Indonesian instructions manual */}
             <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
               <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
@@ -2124,6 +2170,72 @@ export default function App() {
           >
             ×
           </button>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform scale-100 transition-all">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <span className="text-xl">⚠️</span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 mb-2">PERINGATAN CRITICAL</h3>
+              <p className="text-xs text-slate-600 leading-relaxed mb-6">
+                Apakah Anda yakin ingin mengatur ulang (reset) database lokal Anda kembali ke data bawaan (Seed Data)?
+                <br /><br />
+                Tindakan ini akan mengatur ulang data lokal ke pengaturan bawaan demo sistem. Seluruh data lokal saat ini akan ditimpa. Opsi ini sangat cocok jika data lokal Anda rusak. Jika Anda ingin memulihkan data 400+ siswa Anda yang sebelumnya ada di Google Sheets, silakan gunakan menu <strong>Histori Versi</strong> di Spreadsheet Anda lalu klik "Tarik Data Terbaru".
+              </p>
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setResetModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={executeResetDatabase}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Ya, Atur Ulang!
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert Modal */}
+      {alertModalConfig && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="p-6">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                alertModalConfig.type === 'success' ? 'bg-emerald-50 text-emerald-600' :
+                alertModalConfig.type === 'error' ? 'bg-rose-50 text-rose-600' : 'bg-cyan-50 text-cyan-600'
+              }`}>
+                <span className="text-xl">
+                  {alertModalConfig.type === 'success' ? '🎉' : alertModalConfig.type === 'error' ? '⚠️' : 'ℹ️'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 mb-2">{alertModalConfig.title}</h3>
+              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap mb-6">
+                {alertModalConfig.message}
+              </p>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setAlertModalConfig(null)}
+                  className={`px-5 py-2 text-white text-xs font-semibold rounded-xl transition cursor-pointer ${
+                    alertModalConfig.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                    alertModalConfig.type === 'error' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-cyan-600 hover:bg-cyan-700'
+                  }`}
+                >
+                  Mengerti
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
