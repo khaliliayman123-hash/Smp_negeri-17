@@ -63,40 +63,51 @@ export default function App() {
 
   const filteredDb = useMemo(() => {
     if (!db) return null;
-    if (!currentUser || currentUser.role !== UserRole.GURU_BK) return db;
+    if (!currentUser) return db;
 
-    const username = currentUser.username || '';
-    
-    // Helper to check if a class is within the counselor's assigned range
-    const isClassAssigned = (className: string): boolean => {
-      const normalized = (className || '').toLowerCase().trim();
-      // Extract numbers like "7-1", "8-10", "11-2"
-      const match = normalized.match(/kelas\s+(\d+)-(\d+)/i) || normalized.match(/(\d+)-(\d+)/);
-      if (!match) return false;
-      const level = parseInt(match[1], 10);
-      const num = parseInt(match[2], 10);
+    const isGuruBk = currentUser.role === UserRole.GURU_BK;
+    const isWaliKelas = currentUser.role === UserRole.WALI_KELAS;
 
-      const u = username.toLowerCase().trim();
-      if (u === 'sulaiman' || u === 'bk-sulaiman') {
-        return level === 8 && num >= 5 && num <= 11;
-      }
-      if (u === 'aulia' || u === 'bk-aulia') {
-        return level === 7 && num >= 1 && num <= 5;
-      }
-      if (u === 'dwi' || u === 'bk-dwi') {
-        return (level === 7 && num >= 6 && num <= 11) || (level === 8 && num === 1);
-      }
-      if (u === 'kholfi' || u === 'bk-kholfi') {
-        return level === 9 && num >= 1 && num <= 7;
-      }
-      if (u === 'novita' || u === 'bk-novita') {
-        return (level === 8 && num >= 2 && num <= 4) || (level === 9 && num >= 8 && num <= 11);
-      }
-      return true; // default to true for other users
-    };
+    if (!isGuruBk && !isWaliKelas) return db;
 
-    // Filter classes
-    const assignedClasses = db.kelas.filter(k => isClassAssigned(k.namaKelas));
+    let assignedClasses = [];
+
+    if (isWaliKelas) {
+      assignedClasses = db.kelas.filter(k => k.waliKelasId === currentUser.id);
+    } else {
+      const username = currentUser.username || '';
+      
+      // Helper to check if a class is within the counselor's assigned range
+      const isClassAssigned = (className: string): boolean => {
+        const normalized = (className || '').toLowerCase().trim();
+        // Extract numbers like "7-1", "8-10", "11-2"
+        const match = normalized.match(/kelas\s+(\d+)-(\d+)/i) || normalized.match(/(\d+)-(\d+)/);
+        if (!match) return false;
+        const level = parseInt(match[1], 10);
+        const num = parseInt(match[2], 10);
+
+        const u = username.toLowerCase().trim();
+        if (u === 'sulaiman' || u === 'bk-sulaiman') {
+          return level === 8 && num >= 5 && num <= 11;
+        }
+        if (u === 'aulia' || u === 'bk-aulia') {
+          return level === 7 && num >= 1 && num <= 5;
+        }
+        if (u === 'dwi' || u === 'bk-dwi') {
+          return (level === 7 && num >= 6 && num <= 11) || (level === 8 && num === 1);
+        }
+        if (u === 'kholfi' || u === 'bk-kholfi') {
+          return level === 9 && num >= 1 && num <= 7;
+        }
+        if (u === 'novita' || u === 'bk-novita') {
+          return (level === 8 && num >= 2 && num <= 4) || (level === 9 && num >= 8 && num <= 11);
+        }
+        return true; // default to true for other users
+      };
+
+      assignedClasses = db.kelas.filter(k => isClassAssigned(k.namaKelas));
+    }
+
     const assignedClassIds = new Set(assignedClasses.map(k => k.id));
     const assignedClassNamesLower = new Set(assignedClasses.map(k => (k.namaKelas || '').toLowerCase().trim()));
 
@@ -218,7 +229,7 @@ export default function App() {
 
   // Enforce Wali Kelas restricted view
   useEffect(() => {
-    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas') {
+    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard') {
       setActiveMenu('walikelas');
     }
     if (currentUser && currentUser.role === UserRole.GURU_PIKET) {
@@ -935,12 +946,20 @@ export default function App() {
                 <BookOpen size={16} /> Profil Saya (HDS)
               </button>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
-              <button 
-                onClick={() => { setActiveMenu('walikelas'); setDeepLinkSiswaId(undefined); }}
-                className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'walikelas' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
-              >
-                <GraduationCap size={16} /> Ruang Wali Kelas
-              </button>
+              <>
+                <button 
+                  onClick={() => { setActiveMenu('dashboard'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'dashboard' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <Users size={16} /> Dashboard Evaluasi
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('walikelas'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'walikelas' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <GraduationCap size={16} /> Ruang Wali Kelas
+                </button>
+              </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
                 <button 
@@ -1143,7 +1162,10 @@ export default function App() {
             {currentUser.role === UserRole.SISWA ? (
               <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Profil Saya (HDS)</button>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
-              <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
+              <>
+                <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
+                <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
+              </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
