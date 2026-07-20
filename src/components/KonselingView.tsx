@@ -692,6 +692,230 @@ export default function KonselingView({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadKonselingDoc = (k: Konseling) => {
+    const siswa = db.siswa.find(s => s.id === k.siswaId);
+    const kelas = db.kelas.find(c => c.id === siswa?.kelasId || c.namaKelas.toLowerCase().trim() === siswa?.kelasId?.toLowerCase().trim());
+    const kelasName = kelas?.namaKelas || siswa?.kelasId || 'Kelas Tidak Terdata';
+    const guruBk = db.users.find(u => u.id === k.guruBkId);
+    const guruBkName = guruBk?.nama || currentUser.nama || 'Guru Bimbingan Konseling';
+
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    let formattedCounselingDate = k.tanggal;
+    try {
+      const d = new Date(k.tanggal);
+      if (!isNaN(d.getTime())) {
+        formattedCounselingDate = d.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+      }
+    } catch (e) {}
+
+    const docHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>Layanan Bimbingan Konseling - ${siswa?.nama || 'Siswa'}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 1.5cm 2cm 1.5cm 2cm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            color: #000000;
+            line-height: 1.5;
+            font-size: 11pt;
+          }
+          .kop-text {
+            text-align: center;
+          }
+          .doc-title {
+            text-align: center;
+            margin-bottom: 25px;
+          }
+          .doc-title h3 {
+            margin: 0;
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-decoration: underline;
+          }
+          .doc-title p {
+            margin: 5px 0 0 0;
+            font-size: 10pt;
+          }
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          .data-table td {
+            padding: 6px 10px;
+            border: 1px solid #000000;
+            font-size: 11pt;
+            vertical-align: top;
+          }
+          .data-table td.label {
+            font-weight: bold;
+            background-color: #f2f2f2;
+            width: 30%;
+          }
+          .section-title {
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #000000;
+            padding-bottom: 3px;
+          }
+          .content-box {
+            padding: 10px;
+            border: 1px solid #000000;
+            background-color: #fafafa;
+            margin-bottom: 15px;
+            min-height: 80px;
+            font-size: 11pt;
+            text-align: justify;
+          }
+          .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 40px;
+          }
+          .sig-table td {
+            width: 50%;
+            text-align: center;
+            vertical-align: top;
+            font-size: 11pt;
+          }
+          .sig-space {
+            height: 70px;
+          }
+          .sig-name {
+            font-weight: bold;
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kop-text" style="border-bottom: 3px double #000000; padding-bottom: 5px; margin-bottom: 20px;">
+          <span style="font-size: 12pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN DAN KEBUDAYAAN</span><br/>
+          <span style="font-size: 13pt; font-weight: bold; text-transform: uppercase;">UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 9pt; font-style: italic;">Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</span>
+        </div>
+
+        <div class="doc-title">
+          <h3>LAPORAN LAYANAN BIMBINGAN KONSELING</h3>
+          <p>Nomor Registrasi BK: ${k.nomorKonseling || '-'}</p>
+        </div>
+
+        <div class="section-title">A. IDENTITAS PESERTA DIDIK</div>
+        <table class="data-table">
+          <tr>
+            <td class="label">Nama Lengkap Siswa</td>
+            <td class="value"><strong>${siswa?.nama || 'Siswa'}</strong></td>
+          </tr>
+          <tr>
+            <td class="label">NIS / NISN</td>
+            <td class="value">${siswa?.nis || '-'} / ${siswa?.nisn || '-'}</td>
+          </tr>
+          <tr>
+            <td class="label">Kelas / Rombel</td>
+            <td class="value"><strong>${kelasName}</strong></td>
+          </tr>
+          <tr>
+            <td class="label">Jenis Kelamin</td>
+            <td class="value">${siswa?.jenisKelamin || '-'}</td>
+          </tr>
+        </table>
+
+        <div class="section-title">B. INFORMASI LAYANAN</div>
+        <table class="data-table">
+          <tr>
+            <td class="label">Tanggal Pelaksanaan</td>
+            <td class="value">${formattedCounselingDate}</td>
+          </tr>
+          <tr>
+            <td class="label">Jenis Layanan Konseling</td>
+            <td class="value"><strong>Bimbingan Konseling ${k.jenis || 'Individu'}</strong></td>
+          </tr>
+          <tr>
+            <td class="label">Konselor / Guru BK</td>
+            <td class="value">${guruBkName}</td>
+          </tr>
+        </table>
+
+        <div class="section-title">C. URAIAN PERMASALAHAN / KELUHAN SISWA</div>
+        <div class="content-box">
+          ${k.permasalahan || '<i>Tidak ada rincian permasalahan yang diisi.</i>'}
+        </div>
+
+        <div class="section-title">D. ANALISIS KASUS DAN DIAGNOSIS BK</div>
+        <div class="content-box">
+          ${k.analisis || '<i>Tidak ada rincian analisis kasus yang diisi.</i>'}
+        </div>
+
+        <div class="section-title">E. ALTERNATIF SOLUSI DAN REKOMENDASI</div>
+        <div class="content-box">
+          ${k.solusi || '<i>Tidak ada solusi/rekomendasi yang diisi.</i>'}
+        </div>
+
+        <div class="section-title">F. HASIL EVALUASI DAN TINDAK LANJUT</div>
+        <table class="data-table">
+          <tr>
+            <td class="label">Hasil Konseling</td>
+            <td class="value">${k.hasil || '-'}</td>
+          </tr>
+          <tr>
+            <td class="label">Tindak Lanjut</td>
+            <td class="value">${k.tindakLanjut || '-'}</td>
+          </tr>
+        </table>
+
+        <table class="sig-table">
+          <tr>
+            <td>
+              <div>Mengetahui,</div>
+              <div>Kepala Sekolah</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">......................................................</div>
+              <div>NIP. .................................................</div>
+            </td>
+            <td>
+              <div>Tangerang Selatan, ${dateTodayStr}</div>
+              <div>Guru Bimbingan Konseling (BK)</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">${guruBkName}</div>
+              <div>NIP. .................................................</div>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + docHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Layanan_Konseling_${siswa?.nama.replace(/\s+/g, '_') || 'Siswa'}_${k.nomorKonseling.replace(/\//g, '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Selected summary details
   const defaultSelectedId = selectedSummarySiswaId || studentPointSummaries[0]?.siswa.id || db.siswa[0]?.id || '';
   const currentSelectedSummary = studentPointSummaries.find(s => s.siswa.id === defaultSelectedId);
@@ -802,6 +1026,7 @@ export default function KonselingView({
                   <th className="py-3 px-4">Tanggal / Jenis</th>
                   <th className="py-3 px-4">Permasalahan</th>
                   <th className="py-3 px-4">Solusi & Hasil</th>
+                  <th className="py-3 px-4 text-center">Format DOC</th>
                   <th className="py-3 px-4 text-center">Aksi</th>
                 </tr>
               </thead>
@@ -825,6 +1050,16 @@ export default function KonselingView({
                           <p className="text-slate-400 text-[10px] italic truncate">H: {k.hasil}</p>
                         </td>
                         <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleDownloadKonselingDoc(k)}
+                            className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 transition rounded px-2 py-1 text-[10px] font-bold cursor-pointer border border-blue-100 shadow-xs"
+                            title="Unduh Laporan Layanan dalam format Word (.doc)"
+                          >
+                            <FileText size={12} />
+                            <span>Unduh .doc</span>
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 text-center">
                           <div className="flex justify-center gap-1.5">
                             {canModify && (
                               <>
@@ -838,7 +1073,7 @@ export default function KonselingView({
                     );
                   })
                 ) : (
-                  <tr><td colSpan={5} className="py-6 text-center text-slate-400">Belum ada data konseling masuk.</td></tr>
+                  <tr><td colSpan={6} className="py-6 text-center text-slate-400">Belum ada data konseling masuk.</td></tr>
                 )}
               </tbody>
             </table>
