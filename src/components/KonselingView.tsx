@@ -23,7 +23,13 @@ import {
   FileText,
   Calculator,
   TrendingDown,
-  FileDown
+  FileDown,
+  BarChart2,
+  PieChart,
+  Users,
+  CheckCircle2,
+  Filter,
+  Download
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
@@ -89,6 +95,8 @@ export default function KonselingView({
                     currentUser.role === UserRole.GURU_BK ||
                     (currentUser.role === UserRole.GURU_PIKET && (activeTab === 'pelanggaran' || activeTab === 'remisi'));
   const [searchQuery, setSearchQuery] = useState('');
+  const [attendanceFilterKelas, setAttendanceFilterKelas] = useState<string>('ALL');
+  const [attendanceFilterBulan, setAttendanceFilterBulan] = useState<string>('ALL');
 
   // State for Remisi and Poin summary dashboard
   const [selectedSummarySiswaId, setSelectedSummarySiswaId] = useState<string>('');
@@ -314,11 +322,29 @@ export default function KonselingView({
         const mingguKe = String(h.mingguKe || '').toLowerCase();
         const bulan = String(h.bulan || '').toLowerCase();
         const keterangan = String(h.keterangan || '').toLowerCase();
-        return (siswaNama.includes(q) || mingguKe.includes(q) || bulan.includes(q) || keterangan.includes(q));
+
+        const matchSearch = (siswaNama.includes(q) || mingguKe.includes(q) || bulan.includes(q) || keterangan.includes(q));
+
+        let matchKelas = true;
+        if (attendanceFilterKelas !== 'ALL') {
+          const targetKelas = db.kelas.find(c => c.id === attendanceFilterKelas);
+          if (targetKelas) {
+            matchKelas = siswa?.kelasId === targetKelas.id || siswa?.kelasId === targetKelas.namaKelas || targetKelas.namaKelas.toLowerCase().trim() === String(siswa?.kelasId).toLowerCase().trim();
+          } else {
+            matchKelas = siswa?.kelasId === attendanceFilterKelas;
+          }
+        }
+
+        let matchBulan = true;
+        if (attendanceFilterBulan !== 'ALL') {
+          matchBulan = String(h.bulan || '').toLowerCase().trim() === attendanceFilterBulan.toLowerCase().trim();
+        }
+
+        return matchSearch && matchKelas && matchBulan;
       });
     }
     return [];
-  }, [db, activeTab, searchQuery]);
+  }, [db, activeTab, searchQuery, attendanceFilterKelas, attendanceFilterBulan]);
 
   // Memoized calculations for students who have violations or remissions
   const studentPointSummaries = useMemo(() => {
@@ -916,6 +942,624 @@ export default function KonselingView({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadKehadiranSiswaDoc = (siswaId: string) => {
+    const siswa = db.siswa.find(s => s.id === siswaId);
+    if (!siswa) return;
+
+    const kelas = db.kelas.find(c => c.id === siswa.kelasId || c.namaKelas.toLowerCase().trim() === siswa.kelasId?.toLowerCase().trim());
+    const kelasName = kelas?.namaKelas || siswa.kelasId || 'Kelas Tidak Terdata';
+    const waliKelas = db.users.find(u => u.id === kelas?.waliKelasId);
+    const waliKelasName = waliKelas?.nama || 'Wali Kelas';
+    const guruBk = db.users.find(u => u.role === UserRole.GURU_BK) || currentUser;
+    const guruBkName = guruBk?.nama || currentUser.nama || 'Guru Bimbingan Konseling';
+
+    const list = (db.kehadiran || []).filter(k => k.siswaId === siswaId);
+    
+    let totalHadir = 0;
+    let totalSakit = 0;
+    let totalIzin = 0;
+    let totalAlfa = 0;
+
+    list.forEach(item => {
+      totalHadir += Number(item.hadir || 0);
+      totalSakit += Number(item.sakit || 0);
+      totalIzin += Number(item.izin || (item as any).ijin || 0);
+      totalAlfa += Number(item.alfa || 0);
+    });
+
+    const totalHari = totalHadir + totalSakit + totalIzin + totalAlfa;
+    const persentaseHadir = totalHari > 0 ? Math.round((totalHadir / totalHari) * 100) : 100;
+
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    let statusKehadiran = 'SANGAT BAIK';
+    let rekomendasiBk = 'Siswa memiliki tingkat disiplin presensi yang sangat baik. Diharapkan untuk terus mempertahankan tingkat kehadiran terpuji.';
+    if (persentaseHadir < 75 || totalAlfa >= 3) {
+      statusKehadiran = 'PERLU PERHATIAN KHUSUS (PEMBINAAN BK)';
+      rekomendasiBk = 'Siswa memiliki tingkat ketidakhadiran tinggi / alfa berturut-turut. Diperlukan pemanggilan orang tua dan bimbingan konseling terstruktur.';
+    } else if (persentaseHadir < 85 || totalAlfa > 0) {
+      statusKehadiran = 'CUKUP (DIPERLUKAN PEMANTAUAN)';
+      rekomendasiBk = 'Siswa memerlukan pemantauan kehadiran secara berkala oleh Wali Kelas dan Guru BK.';
+    }
+
+    const tableRowsHtml = list.length > 0 ? list.map((item, idx) => {
+      const h = Number(item.hadir || 0);
+      const s = Number(item.sakit || 0);
+      const i = Number(item.izin || (item as any).ijin || 0);
+      const a = Number(item.alfa || 0);
+      const tot = h + s + i + a;
+      const pct = tot > 0 ? Math.round((h / tot) * 100) : 100;
+      return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td style="text-align: center;"><b>${item.mingguKe}</b><br/><span style="font-size: 9pt; color: #555;">${item.bulan} ${item.tahun}</span></td>
+          <td style="text-align: center; color: #047857; font-weight: bold;">${h} Hari</td>
+          <td style="text-align: center; color: #0284c7;">${s} Hari</td>
+          <td style="text-align: center; color: #d97706;">${i} Hari</td>
+          <td style="text-align: center; color: #dc2626; font-weight: bold;">${a} Hari</td>
+          <td style="text-align: center; font-weight: bold;">${pct}%</td>
+          <td>${item.keterangan || '-'}</td>
+        </tr>
+      `;
+    }).join('') : `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 15px; color: #888;">Belum ada rekap catatan kehadiran terdaftar untuk siswa ini.</td>
+      </tr>
+    `;
+
+    const docHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>Laporan Kehadiran Siswa - ${siswa.nama}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 1.5cm 2cm 1.5cm 2cm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            color: #000000;
+            line-height: 1.5;
+            font-size: 11pt;
+          }
+          .kop-text {
+            text-align: center;
+          }
+          .doc-title {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .doc-title h3 {
+            margin: 0;
+            font-size: 13pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-decoration: underline;
+          }
+          .doc-title p {
+            margin: 4px 0 0 0;
+            font-size: 10pt;
+          }
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 18px;
+          }
+          .data-table td, .data-table th {
+            padding: 6px 8px;
+            border: 1px solid #000000;
+            font-size: 10.5pt;
+            vertical-align: middle;
+          }
+          .data-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9.5pt;
+          }
+          .data-table td.label {
+            font-weight: bold;
+            background-color: #fafafa;
+            width: 32%;
+          }
+          .section-title {
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #000000;
+            padding-bottom: 3px;
+          }
+          .stat-box {
+            border: 1px solid #000000;
+            background-color: #f8fafc;
+            padding: 10px;
+            margin-bottom: 15px;
+          }
+          .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 35px;
+          }
+          .sig-table td {
+            width: 50%;
+            text-align: center;
+            vertical-align: top;
+            font-size: 11pt;
+          }
+          .sig-space {
+            height: 65px;
+          }
+          .sig-name {
+            font-weight: bold;
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kop-text" style="border-bottom: 3px double #000000; padding-bottom: 5px; margin-bottom: 20px;">
+          <span style="font-size: 12pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN DAN KEBUDAYAAN</span><br/>
+          <span style="font-size: 13pt; font-weight: bold; text-transform: uppercase;">UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 9pt; font-style: italic;">Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</span>
+        </div>
+
+        <div class="doc-title">
+          <h3>LAPORAN REKAPITULASI KEHADIRAN INDIVIDUAL SISWA</h3>
+          <p>Tahun Pelajaran 2025/2026 - Layanan Bimbingan Konseling & Kedisiplinan</p>
+        </div>
+
+        <div class="section-title">A. IDENTITAS PESERTA DIDIK</div>
+        <table class="data-table">
+          <tr>
+            <td class="label">Nama Lengkap Siswa</td>
+            <td><strong>${siswa.nama}</strong></td>
+          </tr>
+          <tr>
+            <td class="label">NIS / NISN</td>
+            <td>${siswa.nis || '-'} / ${siswa.nisn || '-'}</td>
+          </tr>
+          <tr>
+            <td class="label">Kelas / Rombel</td>
+            <td><strong>${kelasName}</strong></td>
+          </tr>
+          <tr>
+            <td class="label">Wali Kelas</td>
+            <td>${waliKelasName}</td>
+          </tr>
+        </table>
+
+        <div class="section-title">B. RINGKASAN AKUMULASI PRESENSI SISWA</div>
+        <div class="stat-box">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Tingkat Kehadiran</span><br/>
+                <span style="font-size: 16pt; font-weight: bold; color: #047857;">${persentaseHadir}%</span>
+              </td>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Hadir</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #047857;">${totalHadir} Hari</span>
+              </td>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Sakit</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #0284c7;">${totalSakit} Hari</span>
+              </td>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Izin</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #d97706;">${totalIzin} Hari</span>
+              </td>
+              <td style="width: 20%; text-align: center;">
+                <span style="font-size: 9pt; color: #555;">Alfa</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #dc2626;">${totalAlfa} Hari</span>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section-title">C. RINCIAN CATATAN KEHADIRAN PER MINGGU / BULAN</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 5%;">No</th>
+              <th style="width: 20%;">Periode</th>
+              <th style="width: 10%;">Hadir</th>
+              <th style="width: 10%;">Sakit</th>
+              <th style="width: 10%;">Izin</th>
+              <th style="width: 10%;">Alfa</th>
+              <th style="width: 10%;">% Hadir</th>
+              <th style="width: 25%;">Keterangan / Catatan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRowsHtml}
+          </tbody>
+        </table>
+
+        <div class="section-title">D. EVALUASI DAN CATATAN BIMBINGAN KONSELING</div>
+        <table class="data-table">
+          <tr>
+            <td class="label">Status Presensi Siswa</td>
+            <td><strong>${statusKehadiran}</strong></td>
+          </tr>
+          <tr>
+            <td class="label">Rekomendasi Bimbingan</td>
+            <td>${rekomendasiBk}</td>
+          </tr>
+        </table>
+
+        <table class="sig-table">
+          <tr>
+            <td>
+              <div>Mengetahui,</div>
+              <div>Kepala Sekolah</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">......................................................</div>
+              <div>NIP. .................................................</div>
+            </td>
+            <td>
+              <div>Tangerang Selatan, ${dateTodayStr}</div>
+              <div>Guru Bimbingan Konseling (BK)</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">${guruBkName}</div>
+              <div>NIP. .................................................</div>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + docHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Laporan_Kehadiran_Siswa_${siswa.nama.replace(/\s+/g, '_')}_${kelasName.replace(/\s+/g, '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadKehadiranKelasDoc = (targetKelasId: string) => {
+    let targetKelas = db.kelas.find(c => c.id === targetKelasId || c.namaKelas.toLowerCase().trim() === targetKelasId.toLowerCase().trim());
+    if (!targetKelas && targetKelasId !== 'ALL' && db.kelas.length > 0) {
+      targetKelas = db.kelas[0];
+    }
+
+    const namaKelas = targetKelas?.namaKelas || (targetKelasId === 'ALL' ? 'Seluruh Kelas' : targetKelasId);
+    
+    // Students in this class
+    const siswaListInKelas = (targetKelasId === 'ALL' || !targetKelas) 
+      ? db.siswa 
+      : db.siswa.filter(s => s.kelasId === targetKelas.id || s.kelasId === targetKelas.namaKelas || targetKelas.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
+
+    const waliKelas = db.users.find(u => u.id === targetKelas?.waliKelasId);
+    const waliKelasName = waliKelas?.nama || 'Wali Kelas';
+    const guruBk = db.users.find(u => u.role === UserRole.GURU_BK) || currentUser;
+    const guruBkName = guruBk?.nama || currentUser.nama || 'Guru Bimbingan Konseling';
+
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    let totalHadirKelas = 0;
+    let totalSakitKelas = 0;
+    let totalIzinKelas = 0;
+    let totalAlfaKelas = 0;
+
+    const studentRowsHtml = siswaListInKelas.length > 0 ? siswaListInKelas.map((s, idx) => {
+      const list = (db.kehadiran || []).filter(k => k.siswaId === s.id);
+      let h = 0, sk = 0, iz = 0, al = 0;
+      list.forEach(item => {
+        h += Number(item.hadir || 0);
+        sk += Number(item.sakit || 0);
+        iz += Number(item.izin || (item as any).ijin || 0);
+        al += Number(item.alfa || 0);
+      });
+      totalHadirKelas += h;
+      totalSakitKelas += sk;
+      totalIzinKelas += iz;
+      totalAlfaKelas += al;
+
+      const tot = h + sk + iz + al;
+      const pct = tot > 0 ? Math.round((h / tot) * 100) : 100;
+
+      let statusBadge = '<span style="color: #047857; font-weight: bold;">Sangat Baik</span>';
+      if (pct < 75 || al >= 3) {
+        statusBadge = '<span style="color: #dc2626; font-weight: bold;">Pembinaan BK</span>';
+      } else if (pct < 85 || al > 0) {
+        statusBadge = '<span style="color: #d97706; font-weight: bold;">Perlu Perhatian</span>';
+      }
+
+      return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td><b>${s.nama}</b></td>
+          <td style="text-align: center;">${s.nisn || s.nis || '-'}</td>
+          <td style="text-align: center; color: #047857; font-weight: bold;">${h} Hari</td>
+          <td style="text-align: center; color: #0284c7;">${sk} Hari</td>
+          <td style="text-align: center; color: #d97706;">${iz} Hari</td>
+          <td style="text-align: center; color: #dc2626; font-weight: bold;">${al} Hari</td>
+          <td style="text-align: center; font-weight: bold;">${pct}%</td>
+          <td style="text-align: center;">${statusBadge}</td>
+        </tr>
+      `;
+    }).join('') : `
+      <tr>
+        <td colspan="9" style="text-align: center; padding: 15px; color: #888;">Belum ada data siswa terdaftar di kelas ini.</td>
+      </tr>
+    `;
+
+    const totalHariKelas = totalHadirKelas + totalSakitKelas + totalIzinKelas + totalAlfaKelas;
+    const persentaseHadirKelas = totalHariKelas > 0 ? Math.round((totalHadirKelas / totalHariKelas) * 100) : 100;
+
+    const docHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>Laporan Rekapitulasi Kehadiran Kelas ${namaKelas}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 1.5cm 1.5cm 1.5cm 1.5cm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            color: #000000;
+            line-height: 1.4;
+            font-size: 10.5pt;
+          }
+          .kop-text {
+            text-align: center;
+          }
+          .doc-title {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .doc-title h3 {
+            margin: 0;
+            font-size: 13pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-decoration: underline;
+          }
+          .doc-title p {
+            margin: 4px 0 0 0;
+            font-size: 10pt;
+          }
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 18px;
+          }
+          .data-table td, .data-table th {
+            padding: 5px 7px;
+            border: 1px solid #000000;
+            font-size: 10pt;
+            vertical-align: middle;
+          }
+          .data-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+          }
+          .section-title {
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #000000;
+            padding-bottom: 3px;
+          }
+          .stat-box {
+            border: 1px solid #000000;
+            background-color: #f8fafc;
+            padding: 10px;
+            margin-bottom: 15px;
+          }
+          .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 35px;
+          }
+          .sig-table td {
+            width: 33%;
+            text-align: center;
+            vertical-align: top;
+            font-size: 10.5pt;
+          }
+          .sig-space {
+            height: 60px;
+          }
+          .sig-name {
+            font-weight: bold;
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kop-text" style="border-bottom: 3px double #000000; padding-bottom: 5px; margin-bottom: 15px;">
+          <span style="font-size: 12pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN DAN KEBUDAYAAN</span><br/>
+          <span style="font-size: 13pt; font-weight: bold; text-transform: uppercase;">UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 9pt; font-style: italic;">Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</span>
+        </div>
+
+        <div class="doc-title">
+          <h3>LAPORAN REKAPITULASI KEHADIRAN SISWA PER-KELAS</h3>
+          <p>Rombongan Belajar: <strong>${namaKelas}</strong> | Wali Kelas: <strong>${waliKelasName}</strong> | Tahun Pelajaran 2025/2026</p>
+        </div>
+
+        <div class="stat-box">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Rata-rata Kelas</span><br/>
+                <span style="font-size: 16pt; font-weight: bold; color: #047857;">${persentaseHadirKelas}%</span>
+              </td>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Total Hadir Kelas</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #047857;">${totalHadirKelas} Hari</span>
+              </td>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Total Sakit Kelas</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #0284c7;">${totalSakitKelas} Hari</span>
+              </td>
+              <td style="width: 20%; text-align: center; border-right: 1px solid #ccc;">
+                <span style="font-size: 9pt; color: #555;">Total Izin Kelas</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #d97706;">${totalIzinKelas} Hari</span>
+              </td>
+              <td style="width: 20%; text-align: center;">
+                <span style="font-size: 9pt; color: #555;">Total Alfa Kelas</span><br/>
+                <span style="font-size: 14pt; font-weight: bold; color: #dc2626;">${totalAlfaKelas} Hari</span>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section-title">DAFTAR PRESENSI DAN REKAPITULASI SISWA (${namaKelas})</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 4%;">No</th>
+              <th style="width: 25%;">Nama Siswa</th>
+              <th style="width: 12%;">NISN / NIS</th>
+              <th style="width: 9%;">Hadir</th>
+              <th style="width: 9%;">Sakit</th>
+              <th style="width: 9%;">Izin</th>
+              <th style="width: 9%;">Alfa</th>
+              <th style="width: 10%;">% Kehadiran</th>
+              <th style="width: 13%;">Catatan Presensi</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${studentRowsHtml}
+          </tbody>
+        </table>
+
+        <table class="sig-table">
+          <tr>
+            <td>
+              <div>Mengetahui,</div>
+              <div>Kepala Sekolah</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">......................................................</div>
+              <div>NIP. .................................................</div>
+            </td>
+            <td>
+              <div>Mengetahui,</div>
+              <div>Wali Kelas ${namaKelas}</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">${waliKelasName}</div>
+              <div>NIP. .................................................</div>
+            </td>
+            <td>
+              <div>Tangerang Selatan, ${dateTodayStr}</div>
+              <div>Guru Bimbingan Konseling (BK)</div>
+              <div class="sig-space"></div>
+              <div class="sig-name">${guruBkName}</div>
+              <div>NIP. .................................................</div>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + docHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Laporan_Kehadiran_Kelas_${namaKelas.replace(/\s+/g, '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const overallAttendanceStats = useMemo(() => {
+    const list = db.kehadiran || [];
+    let totalHadir = 0;
+    let totalSakit = 0;
+    let totalIzin = 0;
+    let totalAlfa = 0;
+
+    list.forEach(k => {
+      totalHadir += Number(k.hadir || 0);
+      totalSakit += Number(k.sakit || 0);
+      totalIzin += Number(k.izin || (k as any).ijin || 0);
+      totalAlfa += Number(k.alfa || 0);
+    });
+
+    const totalHari = totalHadir + totalSakit + totalIzin + totalAlfa;
+    const percentage = totalHari > 0 ? Math.round((totalHadir / totalHari) * 100) : 100;
+
+    return {
+      totalHadir,
+      totalSakit,
+      totalIzin,
+      totalAlfa,
+      totalHari,
+      percentage
+    };
+  }, [db.kehadiran]);
+
+  const classAttendanceStats = useMemo(() => {
+    return (db.kelas || []).map(cls => {
+      const classStudents = (db.siswa || []).filter(s => 
+        s.kelasId === cls.id || s.kelasId === cls.namaKelas || cls.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim()
+      );
+      const studentIds = new Set(classStudents.map(s => s.id));
+
+      const classKehadiran = (db.kehadiran || []).filter(k => studentIds.has(k.siswaId));
+
+      let totalHadir = 0;
+      let totalSakit = 0;
+      let totalIzin = 0;
+      let totalAlfa = 0;
+
+      classKehadiran.forEach(k => {
+        totalHadir += Number(k.hadir || 0);
+        totalSakit += Number(k.sakit || 0);
+        totalIzin += Number(k.izin || (k as any).ijin || 0);
+        totalAlfa += Number(k.alfa || 0);
+      });
+
+      const totalHari = totalHadir + totalSakit + totalIzin + totalAlfa;
+      const percentage = totalHari > 0 ? Math.round((totalHadir / totalHari) * 100) : 100;
+
+      const waliKelas = (db.users || []).find(u => u.id === cls.waliKelasId);
+
+      return {
+        classId: cls.id,
+        className: cls.namaKelas,
+        studentCount: classStudents.length,
+        waliKelasName: waliKelas?.nama || 'Wali Kelas',
+        totalHadir,
+        totalSakit,
+        totalIzin,
+        totalAlfa,
+        totalHari,
+        percentage
+      };
+    });
+  }, [db.kelas, db.siswa, db.kehadiran, db.users]);
+
   // Selected summary details
   const defaultSelectedId = selectedSummarySiswaId || studentPointSummaries[0]?.siswa.id || db.siswa[0]?.id || '';
   const currentSelectedSummary = studentPointSummaries.find(s => s.siswa.id === defaultSelectedId);
@@ -1000,18 +1644,140 @@ export default function KonselingView({
         )}
       </div>
 
+      {/* Attendance Charts and Analytics Dashboard */}
+      {activeTab === 'kehadiran' && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <BarChart2 className="text-emerald-600" size={18} />
+                Grafik & Analytics Rekap Kehadiran Siswa
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Visualisasi statistik presensi keseluruhan dan per-rombongan belajar
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleDownloadKehadiranKelasDoc(attendanceFilterKelas)}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+              >
+                <Download size={14} />
+                Unduh Doc Kelas ({attendanceFilterKelas === 'ALL' ? 'Semua Kelas' : (db.kelas.find(c => c.id === attendanceFilterKelas)?.namaKelas || attendanceFilterKelas)})
+              </button>
+            </div>
+          </div>
+
+          {/* Key KPI Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-100">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Tingkat Kehadiran</span>
+              <span className="text-xl font-extrabold text-emerald-800 mt-1 block">{overallAttendanceStats.percentage}%</span>
+              <span className="text-[10px] text-emerald-600 font-medium">Rata-rata Sekolah</span>
+            </div>
+            <div className="bg-emerald-50/40 p-3.5 rounded-xl border border-emerald-100/60">
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Total Hadir</span>
+              <span className="text-xl font-extrabold text-emerald-900 mt-1 block">{overallAttendanceStats.totalHadir} Hari</span>
+              <span className="text-[10px] text-emerald-600 font-medium">Presensi Masuk</span>
+            </div>
+            <div className="bg-sky-50/60 p-3.5 rounded-xl border border-sky-100">
+              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider block">Total Sakit</span>
+              <span className="text-xl font-extrabold text-sky-800 mt-1 block">{overallAttendanceStats.totalSakit} Hari</span>
+              <span className="text-[10px] text-sky-600 font-medium">Dengan Surat Dokter/Keterangan</span>
+            </div>
+            <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-100">
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Total Izin</span>
+              <span className="text-xl font-extrabold text-amber-800 mt-1 block">{overallAttendanceStats.totalIzin} Hari</span>
+              <span className="text-[10px] text-amber-600 font-medium">Keperluan Keluarga/Izin Resmi</span>
+            </div>
+            <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-100 col-span-2 md:col-span-1">
+              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">Total Tanpa Keterangan (Alfa)</span>
+              <span className="text-xl font-extrabold text-rose-800 mt-1 block">{overallAttendanceStats.totalAlfa} Hari</span>
+              <span className="text-[10px] text-rose-600 font-medium">Perlu Tindak Lanjut BK</span>
+            </div>
+          </div>
+
+          {/* Bar Chart Visualization per Class */}
+          <div className="space-y-3 pt-2">
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <PieChart size={14} className="text-emerald-600" />
+              Persentase Kehadiran per Rombongan Belajar / Kelas
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {classAttendanceStats.map(cls => (
+                <div key={cls.classId} className="bg-slate-50/60 p-3.5 rounded-xl border border-slate-100 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-800">{cls.className}</span>
+                    <span className="font-extrabold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded text-[11px]">{cls.percentage}% Hadir</span>
+                  </div>
+                  <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex">
+                    <div style={{ width: `${cls.percentage}%` }} className="bg-emerald-500 h-full transition-all duration-500" />
+                    <div style={{ width: `${100 - cls.percentage}%` }} className="bg-rose-400 h-full transition-all duration-500" />
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5">
+                    <span>{cls.studentCount} Siswa | Wali: {cls.waliKelasName}</span>
+                    <div className="flex gap-2">
+                      <span className="text-emerald-700 font-semibold">H: {cls.totalHadir}</span>
+                      <span className="text-sky-700 font-semibold">S: {cls.totalSakit}</span>
+                      <span className="text-amber-700 font-semibold">I: {cls.totalIzin}</span>
+                      <span className="text-rose-700 font-semibold">A: {cls.totalAlfa}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main search and content list */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Search header bar */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center relative">
-          <Search size={16} className="absolute left-7 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder={`Cari di tabel ${activeTab.toUpperCase()} berdasarkan nama siswa / kata kunci...`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full max-w-md focus:outline-none focus:border-slate-400"
-          />
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder={`Cari di tabel ${activeTab.toUpperCase()} berdasarkan nama siswa / kata kunci...`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-slate-400"
+            />
+          </div>
+
+          {activeTab === 'kehadiran' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs text-slate-600">
+                <Filter size={13} className="text-slate-400" />
+                <span className="font-semibold text-slate-500">Kelas:</span>
+                <select
+                  value={attendanceFilterKelas}
+                  onChange={(e) => setAttendanceFilterKelas(e.target.value)}
+                  className="bg-transparent font-bold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Kelas</option>
+                  {db.kelas.map(c => (
+                    <option key={c.id} value={c.id}>{c.namaKelas}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs text-slate-600">
+                <Calendar size={13} className="text-slate-400" />
+                <span className="font-semibold text-slate-500">Bulan:</span>
+                <select
+                  value={attendanceFilterBulan}
+                  onChange={(e) => setAttendanceFilterBulan(e.target.value)}
+                  className="bg-transparent font-bold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Bulan</option>
+                  {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Conditional Lists based on activeTab */}
@@ -1473,6 +2239,8 @@ export default function KonselingView({
                   <th className="py-3 px-4 text-center">Ijin</th>
                   <th className="py-3 px-4 text-center">Alfa</th>
                   <th className="py-3 px-4">Keterangan</th>
+                  <th className="py-3 px-4 text-center">Unduh Doc Siswa</th>
+                  <th className="py-3 px-4 text-center">Unduh Doc Kelas</th>
                   <th className="py-3 px-4 text-center">Aksi</th>
                 </tr>
               </thead>
@@ -1480,9 +2248,16 @@ export default function KonselingView({
                 {filteredList.length > 0 ? (
                   filteredList.map((att: any) => {
                     const siswa = db.siswa.find(s => s.id === att.siswaId);
+                    const kelasId = siswa?.kelasId || 'ALL';
+                    const kelas = db.kelas.find(c => c.id === kelasId || c.namaKelas.toLowerCase().trim() === String(kelasId).toLowerCase().trim());
+                    const namaKelasDisplay = kelas?.namaKelas || siswa?.kelasId || 'Kelas';
+
                     return (
                       <tr key={att.id} className="hover:bg-slate-50/30">
-                        <td className="py-3 px-4 font-bold text-slate-800">{siswa?.nama || 'Siswa'}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800">
+                          <p>{siswa?.nama || 'Siswa'}</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Kelas: {namaKelasDisplay}</p>
+                        </td>
                         <td className="py-3 px-4">
                           <p className="font-semibold text-slate-700">{att.mingguKe}</p>
                           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{att.bulan} {att.tahun}</p>
@@ -1511,11 +2286,31 @@ export default function KonselingView({
                           {att.keterangan || '-'}
                         </td>
                         <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleDownloadKehadiranSiswaDoc(att.siswaId)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-bold transition shadow-xs"
+                            title="Unduh Laporan Kehadiran Persiswa (Format DOC)"
+                          >
+                            <FileDown size={13} />
+                            Doc Siswa
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => handleDownloadKehadiranKelasDoc(kelas?.id || kelasId)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold transition shadow-xs"
+                            title="Unduh Laporan Kehadiran Perkelas (Format DOC)"
+                          >
+                            <FileText size={13} />
+                            Doc Kelas
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 text-center">
                           <div className="flex justify-center gap-1.5">
                             {canModify && (
                               <>
-                                <button onClick={() => openEditor(att)} className="p-1 text-slate-500 hover:text-slate-800"><Edit3 size={14} /></button>
-                                <button onClick={() => handleDelete(att.id)} className="p-1 text-rose-500 hover:text-rose-700"><Trash2 size={14} /></button>
+                                <button onClick={() => openEditor(att)} className="p-1 text-slate-500 hover:text-slate-800" title="Edit"><Edit3 size={14} /></button>
+                                <button onClick={() => handleDelete(att.id)} className="p-1 text-rose-500 hover:text-rose-700" title="Hapus"><Trash2 size={14} /></button>
                               </>
                             )}
                           </div>
@@ -1524,7 +2319,7 @@ export default function KonselingView({
                     );
                   })
                 ) : (
-                  <tr><td colSpan={8} className="py-6 text-center text-slate-400">Belum ada rekap kehadiran terdaftar.</td></tr>
+                  <tr><td colSpan={10} className="py-6 text-center text-slate-400">Belum ada rekap kehadiran terdaftar.</td></tr>
                 )}
               </tbody>
             </table>
