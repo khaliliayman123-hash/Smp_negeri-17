@@ -124,7 +124,7 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadP
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-400 font-semibold">Agama</p>
-                      <p className="font-bold text-slate-700 mt-0.5">{siswa.agama}</p>
+                      <p className="font-bold text-slate-700 mt-0.5">{siswa.agama && siswa.agama !== '-' ? siswa.agama : 'Islam'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-400 font-semibold">No. HP / Kontak</p>
@@ -137,7 +137,7 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadP
                     <div className="col-span-2">
                       <p className="text-[10px] text-slate-400 font-semibold">Alamat Lengkap</p>
                       <p className="font-bold text-slate-700 mt-0.5 leading-normal">
-                        {siswa.alamat}, Desa {siswa.desa}, Kec. {siswa.kecamatan}, {siswa.kabupaten}, {siswa.provinsi}
+                        {siswa.alamat || '-'}
                       </p>
                     </div>
                   </div>
@@ -150,10 +150,28 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadP
                   </h3>
                   {hds.ortu ? (
                     <div className="space-y-3">
+                      {/* BIODATA AYAH */}
                       <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <div className="col-span-2 border-b border-slate-200/50 pb-1.5">
-                          <p className="text-[10px] font-bold text-slate-500">BIODATA AYAH</p>
-                          <p className="font-bold text-slate-800 mt-1">{hds.ortu.namaAyah || '-'}</p>
+                        <div className="col-span-2 border-b border-slate-200/50 pb-1.5 flex justify-between items-center">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-500">BIODATA AYAH</p>
+                            <p className="font-bold text-slate-800 mt-1">{hds.ortu.namaAyah || '-'}</p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            hds.ortu.statusAyah === 'Meninggal' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {hds.ortu.statusAyah || 'Hidup'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-semibold">Agama Ayah</p>
+                          <p className="font-bold text-slate-700 mt-0.5">
+                            {hds.ortu.agamaAyah && hds.ortu.agamaAyah !== '-' ? hds.ortu.agamaAyah : (siswa.agama && siswa.agama !== '-' ? siswa.agama : 'Islam')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-semibold">Pendidikan Ayah</p>
+                          <p className="font-bold text-slate-700 mt-0.5">{hds.ortu.pendidikanAyah || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-slate-400 font-semibold">Pekerjaan Ayah</p>
@@ -164,10 +182,29 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadP
                           <p className="font-bold text-slate-700 mt-0.5">{hds.ortu.noHpAyah || '-'}</p>
                         </div>
                       </div>
+
+                      {/* BIODATA IBU */}
                       <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <div className="col-span-2 border-b border-slate-200/50 pb-1.5">
-                          <p className="text-[10px] font-bold text-slate-500">BIODATA IBU</p>
-                          <p className="font-bold text-slate-800 mt-1">{hds.ortu.namaIbu || '-'}</p>
+                        <div className="col-span-2 border-b border-slate-200/50 pb-1.5 flex justify-between items-center">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-500">BIODATA IBU</p>
+                            <p className="font-bold text-slate-800 mt-1">{hds.ortu.namaIbu || '-'}</p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            hds.ortu.statusIbu === 'Meninggal' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                          }`}>
+                            {hds.ortu.statusIbu || 'Hidup'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-semibold">Agama Ibu</p>
+                          <p className="font-bold text-slate-700 mt-0.5">
+                            {hds.ortu.agamaIbu && hds.ortu.agamaIbu !== '-' ? hds.ortu.agamaIbu : (siswa.agama && siswa.agama !== '-' ? siswa.agama : 'Islam')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-semibold">Pendidikan Ibu</p>
+                          <p className="font-bold text-slate-700 mt-0.5">{hds.ortu.pendidikanIbu || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-slate-400 font-semibold">Pekerjaan Ibu</p>
@@ -178,6 +215,33 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadP
                           <p className="font-bold text-slate-700 mt-0.5">{hds.ortu.noHpIbu || '-'}</p>
                         </div>
                       </div>
+
+                      {/* BIODATA WALI (IF ANY) */}
+                      {hds.ortu.wali && (
+                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <div className="col-span-2 border-b border-slate-200/50 pb-1.5 flex justify-between items-center">
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-500">BIODATA WALI</p>
+                              <p className="font-bold text-slate-800 mt-1">{hds.ortu.wali}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              hds.ortu.statusWali === 'Meninggal' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {hds.ortu.statusWali || 'Hidup'}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-semibold">Agama Wali</p>
+                            <p className="font-bold text-slate-700 mt-0.5">
+                              {hds.ortu.agamaWali && hds.ortu.agamaWali !== '-' ? hds.ortu.agamaWali : (siswa.agama && siswa.agama !== '-' ? siswa.agama : 'Islam')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-semibold">Pekerjaan Wali</p>
+                            <p className="font-bold text-slate-700 mt-0.5">{hds.ortu.pekerjaanWali || '-'}</p>
+                          </div>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-3 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100/50">
                         <div>
                           <p className="text-[10px] text-emerald-600/80 font-bold">Pendidikan Terakhir Ortu</p>
@@ -2491,7 +2555,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                               <td className="p-3 text-center font-bold text-slate-400">{idx + 1}</td>
                               <td className="p-3">
                                 <p className="font-bold text-slate-800">{s.nama}</p>
-                                <p className="text-[10px] text-slate-400">Agama: {s.agama || '-'}</p>
+                                <p className="text-[10px] text-slate-400">Agama: {s.agama || 'Islam'}</p>
                               </td>
                               <td className="p-3 font-mono text-[11px]">
                                 <p className="text-slate-700 font-semibold">{s.nis || '-'}</p>

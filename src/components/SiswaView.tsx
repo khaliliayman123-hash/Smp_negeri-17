@@ -1019,7 +1019,7 @@ export default function SiswaView({
         gender: s.jenisKelamin || '-',
         tempatLahir: s.tempatLahir || '-',
         tanggalLahir: s.tanggalLahir || '-',
-        agama: s.agama || '-',
+        agama: s.agama || 'Islam',
         noHp: s.nomorHp || '-',
         email: s.email || '-',
         alamat: s.alamat || '-',
@@ -1626,7 +1626,7 @@ export default function SiswaView({
                         </div>
                         <div>
                           <p className="text-[10px] text-slate-400 uppercase font-semibold">Agama</p>
-                          <p className="font-medium text-slate-700">{viewingSiswa.agama}</p>
+                          <p className="font-medium text-slate-700">{viewingSiswa.agama || 'Islam'}</p>
                         </div>
                       </div>
                       <div>
@@ -1664,7 +1664,7 @@ export default function SiswaView({
                             </div>
                             <div>
                               <p className="text-[9px] text-slate-400 font-semibold uppercase">Agama</p>
-                              <p className="font-medium text-slate-700">{ot?.agamaAyah || '-'}</p>
+                              <p className="font-medium text-slate-700">{ot?.agamaAyah || viewingSiswa.agama || 'Islam'}</p>
                             </div>
                             <div>
                               <p className="text-[9px] text-slate-400 font-semibold uppercase">Pendidikan Terakhir</p>
@@ -1706,7 +1706,7 @@ export default function SiswaView({
                             </div>
                             <div>
                               <p className="text-[9px] text-slate-400 font-semibold uppercase">Agama</p>
-                              <p className="font-medium text-slate-700">{ot?.agamaIbu || '-'}</p>
+                              <p className="font-medium text-slate-700">{ot?.agamaIbu || viewingSiswa.agama || 'Islam'}</p>
                             </div>
                             <div>
                               <p className="text-[9px] text-slate-400 font-semibold uppercase">Pendidikan Terakhir</p>
@@ -1749,7 +1749,7 @@ export default function SiswaView({
                               </div>
                               <div>
                                 <p className="text-[9px] text-slate-400 font-semibold uppercase">Agama</p>
-                                <p className="font-medium text-slate-700">{ot?.agamaWali || '-'}</p>
+                                <p className="font-medium text-slate-700">{ot?.agamaWali || viewingSiswa.agama || 'Islam'}</p>
                               </div>
                               <div>
                                 <p className="text-[9px] text-slate-400 font-semibold uppercase">Pendidikan Terakhir</p>
