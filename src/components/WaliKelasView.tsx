@@ -31,7 +31,8 @@ import {
   Download,
   BarChart2,
   PieChart,
-  FileDown
+  FileDown,
+  Eye
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian } from '../types';
 
@@ -51,9 +52,10 @@ interface HdsDetailDrawerProps {
   };
   onClose: () => void;
   getStudentClassName: (s: Siswa) => string;
+  onDownloadPdf?: (s: Siswa) => void;
 }
 
-function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName }: HdsDetailDrawerProps) {
+function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadPdf }: HdsDetailDrawerProps) {
   if (!siswa || !hds) return null;
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
@@ -67,16 +69,26 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName }: HdsDetail
                 <button onClick={onClose} className="absolute right-4 top-4 text-slate-400 hover:text-white transition p-1 bg-slate-800/50 rounded-lg">
                   <X size={18} />
                 </button>
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 bg-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-base shadow-sm">
-                    {siswa.nama.charAt(0)}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 bg-emerald-500 text-white rounded-full flex items-center justify-center font-bold text-base shadow-sm">
+                      {siswa.nama.charAt(0)}
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold tracking-tight">{siswa.nama}</h2>
+                      <p className="text-[10px] text-slate-300 mt-0.5">
+                        NIS: {siswa.nis} | NISN: {siswa.nisn} | {getStudentClassName(siswa)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-sm font-bold tracking-tight">{siswa.nama}</h2>
-                    <p className="text-[10px] text-slate-300 mt-0.5">
-                      NIS: {siswa.nis} | NISN: {siswa.nisn} | {getStudentClassName(siswa)}
-                    </p>
-                  </div>
+                  {onDownloadPdf && (
+                    <button
+                      onClick={() => onDownloadPdf(siswa)}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+                    >
+                      <FileDown size={14} /> Unduh PDF HDS
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-800 text-center">
                   <div className="bg-slate-800/50 p-2 rounded-lg">
@@ -908,6 +920,418 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadHdsPdf = (siswa: Siswa) => {
+    if (!db) return;
+    
+    const id = siswa.id;
+    const kelasName = getStudentClassName(siswa);
+    const ortu = db.orangTua?.find(o => o.id === id);
+    const kes = db.kesehatan?.find(k => k.id === id);
+    const eko = db.ekonomi?.find(e => e.id === id);
+    const psi = db.psikologi?.find(p => p.id === id);
+    const sos = db.sosial?.find(s => s.id === id);
+    const aka = db.akademik?.find(a => a.id === id);
+    const ase = db.asesmen?.find(a => a.siswaId === id);
+
+    let points = 0;
+    if (db.pelanggaran) {
+      db.pelanggaran.filter(p => p.siswaId === id).forEach(p => {
+        points += Number(p.poin);
+      });
+    }
+    if (db.remisiPoin) {
+      db.remisiPoin.filter(r => r.siswaId === id).forEach(r => {
+        points = Math.max(0, points - Number(r.poin));
+      });
+    }
+
+    const counselingCount = db.konseling?.filter(k => k.siswaId === id).length || 0;
+    const achievementsCount = db.prestasi?.filter(p => p.siswaId === id).length || 0;
+
+    const kelasObj = db.kelas.find(c => c.id === siswa.kelasId || c.namaKelas.toLowerCase().trim() === siswa.kelasId?.toLowerCase().trim());
+    const waliKelasUser = db.users.find(u => u.id === kelasObj?.waliKelasId) || currentUser;
+    const waliKelasName = waliKelasUser?.nama || currentUser.nama || 'Wali Kelas';
+    const guruBk = db.users.find(u => u.role === UserRole.GURU_BK);
+    const guruBkName = guruBk?.nama || 'Guru Bimbingan Konseling';
+
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const docHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>HDS PDF - ${siswa.nama} (${kelasName})</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 1.2cm 1.5cm 1.2cm 1.5cm;
+          }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1e293b;
+            line-height: 1.4;
+            font-size: 9.5pt;
+            background-color: #ffffff;
+            margin: 0;
+          }
+          .kop-container {
+            text-align: center;
+            border-bottom: 3px double #0f172a;
+            padding-bottom: 8px;
+            margin-bottom: 14px;
+          }
+          .kop-container h1 {
+            margin: 0;
+            font-size: 11pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #0f172a;
+          }
+          .kop-container h2 {
+            margin: 2px 0 0 0;
+            font-size: 10pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #334155;
+          }
+          .kop-container h3 {
+            margin: 2px 0 0 0;
+            font-size: 12pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #047857;
+          }
+          .kop-container p {
+            margin: 4px 0 0 0;
+            font-size: 8pt;
+            color: #64748b;
+            font-style: italic;
+          }
+          .title-box {
+            text-align: center;
+            margin-bottom: 14px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+            border-radius: 6px;
+          }
+          .title-box h4 {
+            margin: 0;
+            font-size: 11pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #0f172a;
+            letter-spacing: 0.5px;
+          }
+          .title-box p {
+            margin: 3px 0 0 0;
+            font-size: 8.5pt;
+            color: #64748b;
+            font-weight: 600;
+          }
+          .sec-header {
+            font-size: 8.5pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 4px 8px;
+            margin-top: 12px;
+            margin-bottom: 6px;
+            border-radius: 4px;
+          }
+          .grid-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+          }
+          .grid-table td {
+            padding: 5px 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 9pt;
+            vertical-align: top;
+          }
+          .grid-table td.lbl {
+            font-weight: 700;
+            background-color: #f1f5f9;
+            width: 25%;
+            color: #334155;
+          }
+          .grid-table td.val {
+            color: #0f172a;
+            font-weight: 500;
+            width: 25%;
+          }
+          .stat-summary {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+          }
+          .stat-summary td {
+            width: 33.33%;
+            text-align: center;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            background-color: #f8fafc;
+          }
+          .stat-summary .stat-title {
+            font-size: 7.5pt;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: #64748b;
+          }
+          .stat-summary .stat-val {
+            font-size: 12pt;
+            font-weight: 800;
+            margin-top: 2px;
+          }
+          .sig-container {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+            page-break-inside: avoid;
+          }
+          .sig-container td {
+            width: 33.33%;
+            text-align: center;
+            vertical-align: top;
+            font-size: 8.5pt;
+          }
+          .sig-space {
+            height: 48px;
+          }
+          .sig-name {
+            font-weight: 700;
+            text-decoration: underline;
+          }
+          .no-print-bar {
+            background-color: #0f172a;
+            color: white;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 9999;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          }
+          .btn-print {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+          }
+          .btn-close {
+            background-color: #475569;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+          }
+          @media print {
+            .no-print-bar { display: none !important; }
+            body { background: white; margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print-bar">
+          <div style="font-weight: bold; font-size: 13px;">
+            📄 Dokumen Himpunan Data Siswa (HDS) Format PDF - ${siswa.nama}
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-print" onclick="window.print()">🖨️ Simpan sebagai PDF / Cetak</button>
+            <button class="btn-close" onclick="window.close()">Tutup</button>
+          </div>
+        </div>
+
+        <div style="padding: 15px;">
+          <div class="kop-container">
+            <h1>PEMERINTAH KOTA TANGERANG SELATAN</h1>
+            <h2>DINAS PENDIDIKAN DAN KEBUDAYAAN</h2>
+            <h3>UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</h3>
+            <p>Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</p>
+          </div>
+
+          <div class="title-box">
+            <h4>DOKUMEN HIMPUNAN DATA SISWA (HDS) KOMPREHENSIF</h4>
+            <p>Tahun Pelajaran 2025/2026 - Rombongan Belajar: ${kelasName}</p>
+          </div>
+
+          <table class="stat-summary">
+            <tr>
+              <td>
+                <div class="stat-title">Poin Disiplin Active</div>
+                <div class="stat-val" style="color: ${points > 50 ? '#dc2626' : '#d97706'};">${points} Pts</div>
+              </td>
+              <td>
+                <div class="stat-title">Layanan Konseling BK</div>
+                <div class="stat-val" style="color: #0284c7;">${counselingCount} Kali</div>
+              </td>
+              <td>
+                <div class="stat-title">Rekam Prestasi</div>
+                <div class="stat-val" style="color: #059669;">${achievementsCount} Log</div>
+              </td>
+            </tr>
+          </table>
+
+          <div class="sec-header">1. BIODATA & IDENTITAS SISWA</div>
+          <table class="grid-table">
+            <tr>
+              <td class="lbl">Nama Lengkap Siswa</td>
+              <td class="val" style="font-size: 9.5pt; font-weight: bold;">${siswa.nama}</td>
+              <td class="lbl">Jenis Kelamin</td>
+              <td class="val">${siswa.jenisKelamin}</td>
+            </tr>
+            <tr>
+              <td class="lbl">NIS / NISN</td>
+              <td class="val">${siswa.nis || '-'} / ${siswa.nisn || '-'}</td>
+              <td class="lbl">Kelas / Rombel</td>
+              <td class="val"><b>${kelasName}</b></td>
+            </tr>
+            <tr>
+              <td class="lbl">Tempat, Tanggal Lahir</td>
+              <td class="val">${siswa.tempatLahir || '-'}, ${siswa.tanggalLahir || '-'}</td>
+              <td class="lbl">Agama</td>
+              <td class="val">${siswa.agama || '-'}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Nomor HP / Kontak</td>
+              <td class="val">${siswa.nomorHp || '-'}</td>
+              <td class="lbl">Alamat Lengkap</td>
+              <td class="val">${siswa.alamat || '-'}</td>
+            </tr>
+          </table>
+
+          <div class="sec-header">2. DATA ORANG TUA / WALI</div>
+          <table class="grid-table">
+            <tr>
+              <td class="lbl">Nama Ayah Kandung</td>
+              <td class="val"><b>${ortu?.namaAyah || '-'}</b></td>
+              <td class="lbl">Pekerjaan Ayah</td>
+              <td class="val">${ortu?.pekerjaanAyah || '-'}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Nama Ibu Kandung</td>
+              <td class="val"><b>${ortu?.namaIbu || '-'}</b></td>
+              <td class="lbl">Pekerjaan Ibu</td>
+              <td class="val">${ortu?.pekerjaanIbu || '-'}</td>
+            </tr>
+            <tr>
+              <td class="lbl">No. HP Orang Tua</td>
+              <td class="val">${ortu?.noHpAyah || ortu?.noHpIbu || '-'}</td>
+              <td class="lbl">Pendidikan / Penghasilan</td>
+              <td class="val">${ortu?.pendidikanOrangTua || '-'} / ${ortu?.penghasilan || '-'}</td>
+            </tr>
+          </table>
+
+          <div class="sec-header">3. KESEHATAN & PROFIL EKONOMI</div>
+          <table class="grid-table">
+            <tr>
+              <td class="lbl">Fisik (Tinggi / Berat / GolDarah)</td>
+              <td class="val">${kes?.tinggiBadan || '-'} cm / ${kes?.beratBadan || '-'} kg / Gol: ${kes?.golonganDarah || '-'}</td>
+              <td class="lbl">Riwayat Penyakit / Alergi</td>
+              <td class="val">${kes?.penyakit || 'Tidak ada'} / ${kes?.alergi || 'Tidak ada'}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Status Rumah & Kendaraan</td>
+              <td class="val">${eko?.statusRumah || '-'} / ${eko?.kendaraan || '-'}</td>
+              <td class="lbl">Penerima Bantuan Sosial</td>
+              <td class="val">
+                PIP: ${eko?.pip ? 'Ya' : 'Tidak'} | PKH: ${eko?.pkh ? 'Ya' : 'Tidak'} | KIP: ${eko?.kip ? 'Ya' : 'Tidak'}
+              </td>
+            </tr>
+          </table>
+
+          <div class="sec-header">4. PROFIL PSIKOLOGI, SOSIAL & ASESMEN</div>
+          <table class="grid-table">
+            <tr>
+              <td class="lbl">Gaya Belajar & Cita-cita</td>
+              <td class="val">${psi?.gayaBelajar || '-'} / ${psi?.citaCita || '-'}</td>
+              <td class="lbl">Minat, Hobi & Bakat</td>
+              <td class="val">${psi?.minat || '-'}, ${psi?.hobi || '-'} / Bakat: ${psi?.bakat || '-'}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Skor IQ / Asesmen DCM</td>
+              <td class="val">IQ: ${ase?.iq || '-'} | DCM: ${ase?.dcm || '-'}</td>
+              <td class="lbl">Hasil AKPD & AUM</td>
+              <td class="val">AKPD: ${ase?.akpd || '-'} | AUM: ${ase?.aum || '-'}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Nilai Rapor & Catatan Wali Kelas</td>
+              <td class="val" colspan="3">
+                Rata-Rata Rapor: <b>${aka?.rataRataRaport || '-'}</b> | Catatan: ${aka?.catatanWaliKelas || '-'}
+              </td>
+            </tr>
+          </table>
+
+          <table class="sig-container">
+            <tr>
+              <td>
+                <div>Mengetahui,</div>
+                <div>Kepala UPTD SMPN 17 Tangsel</div>
+                <div class="sig-space"></div>
+                <div class="sig-name">...................................................</div>
+                <div style="font-size: 8pt; color: #64748b; margin-top: 2px;">NIP. ...............................................</div>
+              </td>
+              <td>
+                <div>Wali Kelas ${kelasName}</div>
+                <div class="sig-space"></div>
+                <div class="sig-name">${waliKelasName}</div>
+                <div style="font-size: 8pt; color: #64748b; margin-top: 2px;">NIP. ...............................................</div>
+              </td>
+              <td>
+                <div>Tangerang Selatan, ${dateTodayStr}</div>
+                <div>Guru Bimbingan Konseling (BK)</div>
+                <div class="sig-space"></div>
+                <div class="sig-name">${guruBkName}</div>
+                <div style="font-size: 8pt; color: #64748b; margin-top: 2px;">NIP. ...............................................</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 600);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(docHtml);
+      win.document.close();
+    } else {
+      const blob = new Blob([docHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HDS_Lengkap_${siswa.nama.replace(/\s+/g, '_')}_${kelasName.replace(/\s+/g, '_')}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   };
 
   const handleDownloadKehadiranSiswaDoc = (siswaId: string) => {
@@ -1820,8 +2244,8 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
       {/* Main Tabs - Levels 7, 8, 9 */}
       <div className="grid grid-cols-3 bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-sm max-w-xl">
         {(['7', '8', '9'] as ClassLevel[]).map((level) => {
-          let isLocked = allowedClassLevel !== null && allowedClassLevel !== level;
-          if (currentUser.role === UserRole.GURU_BK && db && db.kelas) {
+          let isLocked = false;
+          if (currentUser.role === UserRole.GURU_BK && db && db.kelas && db.kelas.length > 0) {
             isLocked = !db.kelas.some(k => k.namaKelas.startsWith(`Kelas ${level}`));
           }
           return (
@@ -1851,14 +2275,19 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
 
       {/* Classroom Tabs - X-1 to X-11 */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
-        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-          Pilih Rombongan Belajar Kelas {activeLevel}:
+        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+          <span>Pilih Rombongan Belajar Kelas {activeLevel}:</span>
+          {allowedClassName && (
+            <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md">
+              Akses Semua Sub-Rombel (Wali Kelas Utama: {allowedClassName})
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {Array.from({ length: 11 }, (_, i) => `Kelas ${activeLevel}-${i + 1}`).map((cls) => {
             const isActive = currentClassName === cls;
-            let isLocked = allowedClassName !== null && allowedClassName !== cls;
-            if (currentUser.role === UserRole.GURU_BK && db && db.kelas) {
+            let isLocked = false;
+            if (currentUser.role === UserRole.GURU_BK && db && db.kelas && db.kelas.length > 0) {
               isLocked = !db.kelas.some(k => k.namaKelas === cls);
             }
             return (
@@ -2025,12 +2454,14 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
             </div>
           )}
 
-          {/* TAB 1: Himpunan Data Siswa (HDS) - READ ONLY */}
+          {/* TAB 1: Himpunan Data Siswa (HDS) */}
           {activeSubFeature === 'hds' && (
             <div className="space-y-4">
-              <div className="bg-indigo-50/50 border border-indigo-100/30 p-3 rounded-xl flex items-center gap-2.5 text-[11px] text-indigo-800 font-medium">
-                <Info size={14} className="shrink-0" />
-                <span>Mode Lihat Saja. Anda dapat mengeksplorasi Himpunan Data Siswa (HDS) lengkap tanpa hak modifikasi.</span>
+              <div className="bg-indigo-50/50 border border-indigo-100/30 p-3 rounded-xl flex items-center justify-between gap-2.5 text-[11px] text-indigo-800 font-medium">
+                <div className="flex items-center gap-2">
+                  <Info size={14} className="shrink-0 text-indigo-600" />
+                  <span>Fitur Himpunan Data Siswa (HDS) kelas {currentClassName}. Anda dapat melihat detail biodata & mengunduh berkas format PDF per-siswa.</span>
+                </div>
               </div>
 
               {filteredStudents.length === 0 ? (
@@ -2038,26 +2469,68 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                   <p className="text-xs text-slate-400 font-bold">Tidak ada data siswa ditemukan</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredStudents.map((s) => (
-                    <div key={s.id} className="bg-white rounded-xl border border-slate-100 p-4 shadow-2xs hover:border-indigo-100 transition flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-black text-xs uppercase">
-                          {s.nama.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800 text-xs">{s.nama}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 font-mono">NIS: {s.nis} | NISN: {s.nisn}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setSelectedSiswaId(s.id)}
-                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-black transition cursor-pointer"
-                      >
-                        🔍 Detail HDS
-                      </button>
-                    </div>
-                  ))}
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                          <th className="p-3 text-center w-10">No</th>
+                          <th className="p-3">Nama Siswa</th>
+                          <th className="p-3">NIS / NISN</th>
+                          <th className="p-3">Jenis Kelamin</th>
+                          <th className="p-3">Kontak / Ortu</th>
+                          <th className="p-3 text-center">Detail HDS</th>
+                          <th className="p-3 text-center bg-indigo-50/60 text-indigo-900">Unduh Format PDF</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                        {filteredStudents.map((s, idx) => {
+                          const ortu = db?.orangTua?.find(o => o.id === s.id);
+                          return (
+                            <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                              <td className="p-3">
+                                <p className="font-bold text-slate-800">{s.nama}</p>
+                                <p className="text-[10px] text-slate-400">Agama: {s.agama || '-'}</p>
+                              </td>
+                              <td className="p-3 font-mono text-[11px]">
+                                <p className="text-slate-700 font-semibold">{s.nis || '-'}</p>
+                                <p className="text-[9px] text-slate-400">{s.nisn || '-'}</p>
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                  s.jenisKelamin === 'Laki-laki' ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-rose-50 text-rose-700 border border-rose-100'
+                                }`}>
+                                  {s.jenisKelamin}
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-600">
+                                <p className="font-semibold">{s.nomorHp || '-'}</p>
+                                <p className="text-[10px] text-slate-400">Ortu: {ortu?.namaAyah || ortu?.namaIbu || '-'}</p>
+                              </td>
+                              <td className="p-3 text-center">
+                                <button
+                                  onClick={() => setSelectedSiswaId(s.id)}
+                                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-black transition cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  <Eye size={12} /> Detail HDS
+                                </button>
+                              </td>
+                              <td className="p-3 text-center bg-indigo-50/20">
+                                <button
+                                  onClick={() => handleDownloadHdsPdf(s)}
+                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                                  title="Unduh HDS format PDF lengkap"
+                                >
+                                  <FileDown size={13} /> Unduh Format PDF
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -2757,6 +3230,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
           hds={viewingSiswaHds}
           onClose={() => setSelectedSiswaId(null)}
           getStudentClassName={getStudentClassName}
+          onDownloadPdf={handleDownloadHdsPdf}
         />
       )}
 

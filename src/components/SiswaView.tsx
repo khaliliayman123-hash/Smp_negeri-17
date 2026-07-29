@@ -310,6 +310,161 @@ export default function SiswaView({
     XLSX.writeFile(wb, 'template_hds_siswa_excel.xlsx');
   };
 
+  const handleDownloadHdsPdf = (siswa: Siswa) => {
+    if (!db) return;
+    const id = siswa.id;
+    const kelasObj = db.kelas.find(k => k.id === siswa.kelasId || k.namaKelas.toLowerCase().trim() === siswa.kelasId?.toLowerCase().trim());
+    const kelasName = kelasObj?.namaKelas || siswa.kelasId || 'Kelas';
+    const ortu = db.orangTua?.find(o => o.id === id);
+    const kes = db.kesehatan?.find(k => k.id === id);
+    const eko = db.ekonomi?.find(e => e.id === id);
+    const psi = db.psikologi?.find(p => p.id === id);
+    const aka = db.akademik?.find(a => a.id === id);
+    const ase = db.asesmen?.find(a => a.siswaId === id);
+
+    let points = 0;
+    if (db.pelanggaran) {
+      db.pelanggaran.filter(p => p.siswaId === id).forEach(p => {
+        points += Number(p.poin);
+      });
+    }
+    if (db.remisiPoin) {
+      db.remisiPoin.filter(r => r.siswaId === id).forEach(r => {
+        points = Math.max(0, points - Number(r.poin));
+      });
+    }
+
+    const counselingCount = db.konseling?.filter(k => k.siswaId === id).length || 0;
+    const achievementsCount = db.prestasi?.filter(p => p.siswaId === id).length || 0;
+
+    const waliKelasUser = db.users.find(u => u.id === kelasObj?.waliKelasId);
+    const waliKelasName = waliKelasUser?.nama || 'Wali Kelas';
+    const guruBk = db.users.find(u => u.role === UserRole.GURU_BK);
+    const guruBkName = guruBk?.nama || 'Guru Bimbingan Konseling';
+
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const docHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>HDS PDF - ${siswa.nama} (${kelasName})</title>
+        <style>
+          @page { size: A4; margin: 1.2cm 1.5cm 1.2cm 1.5cm; }
+          body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; line-height: 1.4; font-size: 9.5pt; background: #fff; margin: 0; }
+          .kop { text-align: center; border-bottom: 3px double #0f172a; padding-bottom: 8px; margin-bottom: 14px; }
+          .kop h1 { margin:0; font-size: 11pt; font-weight: 800; text-transform: uppercase; color: #0f172a; }
+          .kop h2 { margin:2px 0 0; font-size: 10pt; font-weight: 700; text-transform: uppercase; color: #334155; }
+          .kop h3 { margin:2px 0 0; font-size: 12pt; font-weight: 900; text-transform: uppercase; color: #047857; }
+          .kop p { margin:4px 0 0; font-size: 8pt; color: #64748b; font-style: italic; }
+          .title-box { text-align: center; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; }
+          .title-box h4 { margin:0; font-size: 11pt; font-weight: 800; text-transform: uppercase; color: #0f172a; }
+          .title-box p { margin:3px 0 0; font-size: 8.5pt; color: #64748b; font-weight: 600; }
+          .sec-header { font-size: 8.5pt; font-weight: 800; text-transform: uppercase; background: #0f172a; color: #fff; padding: 4px 8px; margin-top: 12px; margin-bottom: 6px; border-radius: 4px; }
+          .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+          .grid-table td { padding: 5px 8px; border: 1px solid #cbd5e1; font-size: 9pt; vertical-align: top; }
+          .grid-table td.lbl { font-weight: 700; background: #f1f5f9; width: 25%; color: #334155; }
+          .grid-table td.val { color: #0f172a; font-weight: 500; width: 25%; }
+          .stat-summary { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+          .stat-summary td { width: 33.33%; text-align: center; padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; }
+          .stat-summary .stat-title { font-size: 7.5pt; text-transform: uppercase; font-weight: 700; color: #64748b; }
+          .stat-summary .stat-val { font-size: 12pt; font-weight: 800; margin-top: 2px; }
+          .sig-container { width: 100%; border-collapse: collapse; margin-top: 25px; page-break-inside: avoid; }
+          .sig-container td { width: 33.33%; text-align: center; vertical-align: top; font-size: 8.5pt; }
+          .sig-space { height: 48px; }
+          .sig-name { font-weight: 700; text-decoration: underline; }
+          .no-print-bar { background: #0f172a; color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 9999; }
+          .btn-print { background: #10b981; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer; }
+          .btn-close { background: #475569; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+          @media print { .no-print-bar { display: none !important; } body { margin: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="no-print-bar">
+          <div style="font-weight: bold; font-size: 13px;">📄 Dokumen HDS Format PDF - ${siswa.nama}</div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-print" onclick="window.print()">🖨️ Simpan sebagai PDF / Cetak</button>
+            <button class="btn-close" onclick="window.close()">Tutup</button>
+          </div>
+        </div>
+        <div style="padding: 15px;">
+          <div class="kop">
+            <h1>PEMERINTAH KOTA TANGERANG SELATAN</h1>
+            <h2>DINAS PENDIDIKAN DAN KEBUDAYAAN</h2>
+            <h3>UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</h3>
+            <p>Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</p>
+          </div>
+          <div class="title-box">
+            <h4>DOKUMEN HIMPUNAN DATA SISWA (HDS) KOMPREHENSIF</h4>
+            <p>Tahun Pelajaran 2025/2026 - Rombongan Belajar: ${kelasName}</p>
+          </div>
+          <table class="stat-summary">
+            <tr>
+              <td><div class="stat-title">Poin Disiplin Active</div><div class="stat-val" style="color:${points > 50 ? '#dc2626':'#d97706'}">${points} Pts</div></td>
+              <td><div class="stat-title">Layanan Konseling BK</div><div class="stat-val" style="color:#0284c7">${counselingCount} Kali</div></td>
+              <td><div class="stat-title">Rekam Prestasi</div><div class="stat-val" style="color:#059669">${achievementsCount} Log</div></td>
+            </tr>
+          </table>
+          <div class="sec-header">1. BIODATA & IDENTITAS SISWA</div>
+          <table class="grid-table">
+            <tr><td class="lbl">Nama Lengkap Siswa</td><td class="val"><b>${siswa.nama}</b></td><td class="lbl">Jenis Kelamin</td><td class="val">${siswa.jenisKelamin}</td></tr>
+            <tr><td class="lbl">NIS / NISN</td><td class="val">${siswa.nis || '-'} / ${siswa.nisn || '-'}</td><td class="lbl">Kelas / Rombel</td><td class="val"><b>${kelasName}</b></td></tr>
+            <tr><td class="lbl">Tempat, Tanggal Lahir</td><td class="val">${siswa.tempatLahir || '-'}, ${siswa.tanggalLahir || '-'}</td><td class="lbl">Agama</td><td class="val">${siswa.agama || '-'}</td></tr>
+            <tr><td class="lbl">Nomor HP / Kontak</td><td class="val">${siswa.nomorHp || '-'}</td><td class="lbl">Alamat Lengkap</td><td class="val">${siswa.alamat || '-'}</td></tr>
+          </table>
+          <div class="sec-header">2. DATA ORANG TUA / WALI</div>
+          <table class="grid-table">
+            <tr><td class="lbl">Nama Ayah Kandung</td><td class="val"><b>${ortu?.namaAyah || '-'}</b></td><td class="lbl">Pekerjaan Ayah</td><td class="val">${ortu?.pekerjaanAyah || '-'}</td></tr>
+            <tr><td class="lbl">Nama Ibu Kandung</td><td class="val"><b>${ortu?.namaIbu || '-'}</b></td><td class="lbl">Pekerjaan Ibu</td><td class="val">${ortu?.pekerjaanIbu || '-'}</td></tr>
+            <tr><td class="lbl">No. HP Orang Tua</td><td class="val">${ortu?.noHpAyah || ortu?.noHpIbu || '-'}</td><td class="lbl">Pendidikan / Penghasilan</td><td class="val">${ortu?.pendidikanOrangTua || '-'} / ${ortu?.penghasilan || '-'}</td></tr>
+          </table>
+          <div class="sec-header">3. KESEHATAN & PROFIL EKONOMI</div>
+          <table class="grid-table">
+            <tr><td class="lbl">Fisik (Tinggi / Berat / GolDarah)</td><td class="val">${kes?.tinggiBadan || '-'} cm / ${kes?.beratBadan || '-'} kg / Gol: ${kes?.golonganDarah || '-'}</td><td class="lbl">Riwayat Penyakit / Alergi</td><td class="val">${kes?.penyakit || 'Tidak ada'} / ${kes?.alergi || 'Tidak ada'}</td></tr>
+            <tr><td class="lbl">Status Rumah & Kendaraan</td><td class="val">${eko?.statusRumah || '-'} / ${eko?.kendaraan || '-'}</td><td class="lbl">Penerima Bantuan Sosial</td><td class="val">PIP: ${eko?.pip ? 'Ya':'Tidak'} | PKH: ${eko?.pkh ? 'Ya':'Tidak'} | KIP: ${eko?.kip ? 'Ya':'Tidak'}</td></tr>
+          </table>
+          <div class="sec-header">4. PROFIL PSIKOLOGI, SOSIAL & ASESMEN</div>
+          <table class="grid-table">
+            <tr><td class="lbl">Gaya Belajar & Cita-cita</td><td class="val">${psi?.gayaBelajar || '-'} / ${psi?.citaCita || '-'}</td><td class="lbl">Minat, Hobi & Bakat</td><td class="val">${psi?.minat || '-'}, ${psi?.hobi || '-'} / Bakat: ${psi?.bakat || '-'}</td></tr>
+            <tr><td class="lbl">Skor IQ / Asesmen DCM</td><td class="val">IQ: ${ase?.iq || '-'} | DCM: ${ase?.dcm || '-'}</td><td class="lbl">Hasil AKPD & AUM</td><td class="val">AKPD: ${ase?.akpd || '-'} | AUM: ${ase?.aum || '-'}</td></tr>
+            <tr><td class="lbl">Nilai Rapor & Catatan Wali Kelas</td><td class="val" colspan="3">Rata-Rata Rapor: <b>${aka?.rataRataRaport || '-'}</b> | Catatan: ${aka?.catatanWaliKelas || '-'}</td></tr>
+          </table>
+          <table class="sig-container">
+            <tr>
+              <td><div>Mengetahui,</div><div>Kepala UPTD SMPN 17 Tangsel</div><div class="sig-space"></div><div class="sig-name">...................................................</div><div style="font-size:8pt;color:#64748b;margin-top:2px;">NIP. ...............................................</div></td>
+              <td><div>Wali Kelas ${kelasName}</div><div class="sig-space"></div><div class="sig-name">${waliKelasName}</div><div style="font-size:8pt;color:#64748b;margin-top:2px;">NIP. ...............................................</div></td>
+              <td><div>Tangerang Selatan, ${dateTodayStr}</div><div>Guru Bimbingan Konseling (BK)</div><div class="sig-space"></div><div class="sig-name">${guruBkName}</div><div style="font-size:8pt;color:#64748b;margin-top:2px;">NIP. ...............................................</div></td>
+            </tr>
+          </table>
+        </div>
+        <script>window.onload = function() { setTimeout(function() { window.print(); }, 600); };</script>
+      </body>
+      </html>
+    `;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(docHtml);
+      win.document.close();
+    } else {
+      const blob = new Blob([docHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HDS_Lengkap_${siswa.nama.replace(/\s+/g, '_')}_${kelasName.replace(/\s+/g, '_')}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
   // Read, validate, and bulk-import student records from Excel (XLSX/XLS) or CSV
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1198,6 +1353,7 @@ export default function SiswaView({
                     <th className="py-3 px-4">NIS / NISN</th>
                     <th className="py-3 px-4">Kelas / Rombel</th>
                     <th className="py-3 px-4">Gender</th>
+                    <th className="py-3 px-4 text-center bg-indigo-50/60 text-indigo-900">Unduh Format PDF</th>
                     <th className="py-3 px-4 text-center">Aksi</th>
                   </tr>
                 </thead>
@@ -1237,6 +1393,15 @@ export default function SiswaView({
                             }`}>
                               {s.jenisKelamin}
                             </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center bg-indigo-50/20">
+                            <button
+                              onClick={() => handleDownloadHdsPdf(s)}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                              title="Unduh HDS format PDF lengkap"
+                            >
+                              <FileDown size={14} /> Unduh PDF
+                            </button>
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             <div className="flex justify-center items-center gap-1.5">
@@ -1326,6 +1491,15 @@ export default function SiswaView({
                     <span>Ubah Data HDS</span>
                   </button>
                 )}
+
+                <button
+                  onClick={() => handleDownloadHdsPdf(viewingSiswa)}
+                  className={`absolute ${(isStudent || canModify) ? 'left-36' : 'left-3'} top-3 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-xl transition duration-200 flex items-center gap-1.5 cursor-pointer shadow-xs border border-indigo-400/30`}
+                  title="Unduh HDS format PDF"
+                >
+                  <FileDown size={12} />
+                  <span>Unduh PDF HDS</span>
+                </button>
                 
                 {!isStudent && (
                   <button 

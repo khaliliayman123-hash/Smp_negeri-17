@@ -69,6 +69,148 @@ export const WALI_KELAS_USERS: User[] = [
   { id: 'wk-9-11', username: 'hadi', nama: 'Hadi Suryadi, S.Pd', role: UserRole.WALI_KELAS, email: 'hadi@sekolah.sch.id', isActive: true }
 ];
 
+const MOCK_FIRST_NAMES_MALE = ['Aditya', 'Ahmad', 'Budi', 'Candra', 'Dimas', 'Eka', 'Farhan', 'Gilang', 'Hafiz', 'Irfan', 'Jonathan', 'Kenzie', 'Luqman', 'Muhammad', 'Naufal', 'Oktavian', 'Pratama', 'Rizky', 'Satria', 'Taufik', 'Utama', 'Vino', 'Wahyu', 'Yusuf', 'Zainal'];
+const MOCK_FIRST_NAMES_FEMALE = ['Amanda', 'Bella', 'Citra', 'Dhea', 'Elvira', 'Fitri', 'Grace', 'Hana', 'Indah', 'Jihan', 'Kirana', 'Larasati', 'Maya', 'Nabila', 'Olivia', 'Putri', 'Qonita', 'Rania', 'Siti', 'Tania', 'Ufa', 'Vina', 'Winda', 'Yasmin', 'Zahra'];
+const MOCK_LAST_NAMES = ['Pratama', 'Lestari', 'Wijaya', 'Saputra', 'Hidayat', 'Ramadhan', 'Salsabila', 'Maulana', 'Alfarizi', 'Kurniawan', 'Santoso', 'Permata', 'Handayani', 'Anggara', 'Putra', 'Kusuma', 'Nugraha', 'Wibowo', 'Riyadi', 'Utami'];
+
+export const generateAllSampleStudents = (): Siswa[] => {
+  const list: Siswa[] = [
+    {
+      id: 'sis-1',
+      nis: '23241001',
+      nisn: '0071234561',
+      nama: 'Aditya Pratama',
+      jenisKelamin: 'Laki-laki',
+      tempatLahir: 'Tangerang Selatan',
+      tanggalLahir: '2013-05-12',
+      agama: 'Islam',
+      alamat: 'Jl. Raya Ciater No. 12, Serpong',
+      desa: 'Ciater',
+      kecamatan: 'Serpong',
+      kabupaten: 'Kota Tangerang Selatan',
+      provinsi: 'Banten',
+      nomorHp: '081234567890',
+      email: 'aditya.pratama@student.sch.id',
+      kelasId: 'kl-1',
+      jurusanId: '',
+      tahunMasuk: '2025',
+      tahunPelajaran: '2025/2026',
+    },
+    {
+      id: 'sis-2',
+      nis: '23241002',
+      nisn: '0071234562',
+      nama: 'Bella Amanda',
+      jenisKelamin: 'Perempuan',
+      tempatLahir: 'Tangerang Selatan',
+      tanggalLahir: '2013-09-21',
+      agama: 'Islam',
+      alamat: 'Jl. Pamulang Raya No. 45',
+      desa: 'Pamulang Barat',
+      kecamatan: 'Pamulang',
+      kabupaten: 'Kota Tangerang Selatan',
+      provinsi: 'Banten',
+      nomorHp: '082345678901',
+      email: 'bella.amanda@student.sch.id',
+      kelasId: 'kl-2',
+      jurusanId: '',
+      tahunMasuk: '2025',
+      tahunPelajaran: '2025/2026',
+    },
+    {
+      id: 'sis-3',
+      nis: '23241003',
+      nisn: '0071234563',
+      nama: 'Candra Wijaya',
+      jenisKelamin: 'Laki-laki',
+      tempatLahir: 'Tangerang Selatan',
+      tanggalLahir: '2012-11-03',
+      agama: 'Islam',
+      alamat: 'Jl. Bintaro Utama 3',
+      desa: 'Pondok Karya',
+      kecamatan: 'Pondok Aren',
+      kabupaten: 'Kota Tangerang Selatan',
+      provinsi: 'Banten',
+      nomorHp: '083456789012',
+      email: 'candra.wijaya@student.sch.id',
+      kelasId: 'kl-12',
+      jurusanId: '',
+      tahunMasuk: '2024',
+      tahunPelajaran: '2024/2025',
+    },
+    {
+      id: 'sis-4',
+      nis: '23241004',
+      nisn: '0071234564',
+      nama: 'Dian Lestari',
+      jenisKelamin: 'Perempuan',
+      tempatLahir: 'Tangerang Selatan',
+      tanggalLahir: '2011-03-15',
+      agama: 'Islam',
+      alamat: 'Jl. Ciputat Raya No. 8',
+      desa: 'Ciputat',
+      kecamatan: 'Ciputat',
+      kabupaten: 'Kota Tangerang Selatan',
+      provinsi: 'Banten',
+      nomorHp: '084567890123',
+      email: 'dian.lestari@student.sch.id',
+      kelasId: 'kl-13',
+      jurusanId: '',
+      tahunMasuk: '2023',
+      tahunPelajaran: '2023/2024',
+    },
+  ];
+
+  for (let level = 7; level <= 9; level++) {
+    const baseKl = level === 7 ? 1 : level === 8 ? 12 : 23;
+    const yearIn = level === 7 ? '2025' : level === 8 ? '2024' : '2023';
+    const tp = level === 7 ? '2025/2026' : level === 8 ? '2024/2025' : '2023/2024';
+
+    for (let rombel = 1; rombel <= 11; rombel++) {
+      const klId = `kl-${baseKl + rombel - 1}`;
+      const existingInClass = list.filter(s => s.kelasId === klId);
+      const need = 2 - existingInClass.length;
+
+      for (let i = 1; i <= need; i++) {
+        const isMale = (rombel + i) % 2 === 0;
+        const firstName = isMale 
+          ? MOCK_FIRST_NAMES_MALE[(level * 11 + rombel * 2 + i) % MOCK_FIRST_NAMES_MALE.length]
+          : MOCK_FIRST_NAMES_FEMALE[(level * 11 + rombel * 2 + i) % MOCK_FIRST_NAMES_FEMALE.length];
+        const lastName = MOCK_LAST_NAMES[(level * 7 + rombel * 3 + i) % MOCK_LAST_NAMES.length];
+        const fullName = `${firstName} ${lastName}`;
+        const nisCode = `${level}${rombel < 10 ? '0' + rombel : rombel}${i}`;
+        const nis = `2425${nisCode}`;
+        const nisn = `00${level}123${nisCode}`;
+        const sId = `sis-sample-${level}-${rombel}-${i}`;
+
+        list.push({
+          id: sId,
+          nis: nis,
+          nisn: nisn,
+          nama: fullName,
+          jenisKelamin: isMale ? 'Laki-laki' : 'Perempuan',
+          tempatLahir: 'Tangerang Selatan',
+          tanggalLahir: `${2020 - level}-0${(rombel % 9) + 1}-1${i}`,
+          agama: 'Islam',
+          alamat: `Jl. BSD Boulevard Utama No. ${rombel * 5 + i}, Serpong`,
+          desa: 'Lengkong Gudang',
+          kecamatan: 'Serpong',
+          kabupaten: 'Kota Tangerang Selatan',
+          provinsi: 'Banten',
+          nomorHp: `0812${level}${rombel}${i}789`,
+          email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.sch.id`,
+          kelasId: klId,
+          jurusanId: '',
+          tahunMasuk: yearIn,
+          tahunPelajaran: tp,
+        });
+      }
+    }
+  }
+
+  return list;
+};
+
 // Seed data to make the dashboard charts and widgets look spectacular and complete right away
 const INITIAL_DATABASE: DatabaseState = {
   config: {
@@ -130,92 +272,7 @@ const INITIAL_DATABASE: DatabaseState = {
     { id: 'kl-32', namaKelas: 'Kelas 9-10', waliKelasId: 'wk-9-10' },
     { id: 'kl-33', namaKelas: 'Kelas 9-11', waliKelasId: 'wk-9-11' },
   ],
-  siswa: [
-    {
-      id: 'sis-1',
-      nis: '23241001',
-      nisn: '0071234561',
-      nama: 'Aditya Pratama',
-      jenisKelamin: 'Laki-laki',
-      tempatLahir: 'Jakarta',
-      tanggalLahir: '2013-05-12',
-      agama: 'Islam',
-      alamat: 'Jl. Merdeka No. 45, Kebon Jeruk',
-      desa: 'Kebon Jeruk',
-      kecamatan: 'Kebon Jeruk',
-      kabupaten: 'Jakarta Barat',
-      provinsi: 'DKI Jakarta',
-      nomorHp: '081234567890',
-      email: 'aditya.pratama@student.sch.id',
-      kelasId: 'kl-1',
-      jurusanId: '',
-      tahunMasuk: '2025',
-      tahunPelajaran: '2025/2026',
-    },
-    {
-      id: 'sis-2',
-      nis: '23241002',
-      nisn: '0071234562',
-      nama: 'Bella Amanda',
-      jenisKelamin: 'Perempuan',
-      tempatLahir: 'Bandung',
-      tanggalLahir: '2013-09-21',
-      agama: 'Kristen',
-      alamat: 'Perum Gading Indah Blok C/12',
-      desa: 'Pasirjati',
-      kecamatan: 'Ujung Berung',
-      kabupaten: 'Bandung',
-      provinsi: 'Jawa Barat',
-      nomorHp: '082345678901',
-      email: 'bella.amanda@student.sch.id',
-      kelasId: 'kl-2',
-      jurusanId: '',
-      tahunMasuk: '2025',
-      tahunPelajaran: '2025/2026',
-    },
-    {
-      id: 'sis-3',
-      nis: '23241003',
-      nisn: '0071234563',
-      nama: 'Candra Wijaya',
-      jenisKelamin: 'Laki-laki',
-      tempatLahir: 'Surabaya',
-      tanggalLahir: '2012-11-03',
-      agama: 'Islam',
-      alamat: 'Jl. Diponegoro Gg. 3 No. 9',
-      desa: 'Sawahan',
-      kecamatan: 'Sawahan',
-      kabupaten: 'Surabaya',
-      provinsi: 'Jawa Timur',
-      nomorHp: '083456789012',
-      email: 'candra.wijaya@student.sch.id',
-      kelasId: 'kl-12',
-      jurusanId: '',
-      tahunMasuk: '2024',
-      tahunPelajaran: '2024/2025',
-    },
-    {
-      id: 'sis-4',
-      nis: '23241004',
-      nisn: '0071234564',
-      nama: 'Dian Lestari',
-      jenisKelamin: 'Perempuan',
-      tempatLahir: 'Yogyakarta',
-      tanggalLahir: '2011-03-15',
-      agama: 'Islam',
-      alamat: 'Kampung Sastrodirjan GT II/412',
-      desa: 'Sosromenduran',
-      kecamatan: 'Gedongtengen',
-      kabupaten: 'Yogyakarta',
-      provinsi: 'DI Yogyakarta',
-      nomorHp: '084567890123',
-      email: 'dian.lestari@student.sch.id',
-      kelasId: 'kl-13',
-      jurusanId: '',
-      tahunMasuk: '2023',
-      tahunPelajaran: '2023/2024',
-    },
-  ],
+  siswa: generateAllSampleStudents(),
   orangTua: [
     {
       id: 'sis-1',
@@ -810,6 +867,29 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     return s;
   }).filter(Boolean);
 
+  // Self-healing: Ensure every class in parsed.kelas has students populated
+  const allSampleStudents = generateAllSampleStudents();
+  parsed.kelas.forEach((c: any) => {
+    if (!c || !c.id) return;
+    const cNameNorm = normalizeClassName(c.namaKelas || c.id);
+    const hasStudentInClass = parsed.siswa.some((s: any) => {
+      if (!s) return false;
+      const sKl = (s.kelasId || '').toString().trim();
+      return sKl === c.id || sKl === c.namaKelas || normalizeClassName(sKl) === cNameNorm;
+    });
+
+    if (!hasStudentInClass) {
+      const samplesForClass = allSampleStudents.filter((s: any) => {
+        const sKl = (s.kelasId || '').toString().trim();
+        return sKl === c.id || sKl === c.namaKelas || normalizeClassName(sKl) === cNameNorm;
+      });
+      if (samplesForClass.length > 0) {
+        parsed.siswa.push(...samplesForClass);
+        migrated = true;
+      }
+    }
+  });
+
   // Double check that all mock siswa records have expanded parent fields initialized
   parsed.orangTua = parsed.orangTua.map((ot: any) => {
     if (!ot) return ot;
@@ -1142,6 +1222,7 @@ export const apiService = {
           tiar: 'tiar123',
           joko: 'joko123',
           danang: 'danang123',
+          sahdiana: 'ana123',
           annisa: 'annisa123',
           haifa: 'haifa123',
           santi: 'santi123',

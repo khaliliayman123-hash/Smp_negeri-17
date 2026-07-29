@@ -229,7 +229,7 @@ export default function App() {
 
   // Enforce Wali Kelas restricted view
   useEffect(() => {
-    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard') {
+    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard' && activeMenu !== 'siswa') {
       setActiveMenu('walikelas');
     }
     if (currentUser && currentUser.role === UserRole.GURU_PIKET) {
@@ -865,21 +865,49 @@ export default function App() {
                   <option value="">
                     {selectedSiswaKelasId ? '-- Pilih Nama Siswa --' : 'Pilih Kelas Terlebih Dahulu'}
                   </option>
-                  {selectedSiswaKelasId && (db?.siswa || [])
-                    .filter((s) => {
-                      const kId = (s.kelasId || '').toLowerCase().trim();
-                      const selectedKelas = db?.kelas.find((k) => k.id === selectedSiswaKelasId);
-                      const classNameLower = selectedKelas ? (selectedKelas.namaKelas || '').toLowerCase().trim() : '';
-                      return kId === selectedSiswaKelasId.toLowerCase().trim() || 
-                             (classNameLower && kId === classNameLower);
-                    })
-                    .sort((a, b) => (a.nama || '').localeCompare(b.nama || ''))
-                    .map((s) => (
+                  {selectedSiswaKelasId && (() => {
+                    const selectedKelasObj = (db?.kelas || []).find(k => k.id === selectedSiswaKelasId || k.namaKelas === selectedSiswaKelasId);
+                    const targetId = (selectedKelasObj?.id || selectedSiswaKelasId).toLowerCase().trim();
+                    const targetName = (selectedKelasObj?.namaKelas || selectedSiswaKelasId).toLowerCase().trim();
+                    const matchTarget = targetName.match(/([789])\s*[-.]\s*([1-9]|1[01])/);
+                    const targetRombel = matchTarget ? `${matchTarget[1]}-${matchTarget[2]}` : '';
+
+                    const filteredSiswa = (db?.siswa || []).filter((s) => {
+                      if (!s) return false;
+                      const sKlRaw = (s.kelasId || '').toString().trim();
+                      const sKlLower = sKlRaw.toLowerCase();
+
+                      if (sKlLower === targetId || sKlLower === targetName) return true;
+
+                      const sClassObj = (db?.kelas || []).find(k => k.id.toLowerCase() === sKlLower || k.namaKelas.toLowerCase() === sKlLower);
+                      if (sClassObj && (sClassObj.id.toLowerCase() === targetId || sClassObj.namaKelas.toLowerCase() === targetName)) {
+                        return true;
+                      }
+
+                      if (targetRombel) {
+                        const matchS = sKlRaw.match(/([789])\s*[-.]\s*([1-9]|1[01])/);
+                        if (matchS && `${matchS[1]}-${matchS[2]}` === targetRombel) {
+                          return true;
+                        }
+                      }
+
+                      return false;
+                    }).sort((a, b) => (a.nama || '').localeCompare(b.nama || ''));
+
+                    if (filteredSiswa.length === 0) {
+                      return (
+                        <option value="" disabled>
+                          -- Belum Ada Data Siswa Terdaftar di Kelas Ini --
+                        </option>
+                      );
+                    }
+
+                    return filteredSiswa.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.nama}
                       </option>
-                    ))
-                  }
+                    ));
+                  })()}
                 </select>
               </div>
 
@@ -958,6 +986,12 @@ export default function App() {
                   className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'walikelas' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
                   <GraduationCap size={16} /> Ruang Wali Kelas
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('siswa'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'siswa' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <BookOpen size={16} /> Direktori Siswa (HDS)
                 </button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
@@ -1165,6 +1199,7 @@ export default function App() {
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
+                <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
