@@ -1271,17 +1271,21 @@ export const apiService = {
         return { success: false, message: 'Password wajib diisi.' };
       }
 
-      // Password must match student's NIS or NISN (case-insensitive)
+      // Password can match student's NIS, NISN, or default password '123456' (also supports 123, 1234, 12345)
       const pLower = (password || '').toString().trim().toLowerCase();
       const sNis = s.nis ? s.nis.toString().trim().toLowerCase() : '';
       const sNisn = s.nisn ? s.nisn.toString().trim().toLowerCase() : '';
 
       const validPassword = 
+        pLower === '123456' ||
+        pLower === '12345' ||
+        pLower === '1234' ||
+        pLower === '123' ||
         (sNis && pLower === sNis) ||
         (sNisn && pLower === sNisn);
 
       if (!validPassword) {
-        return { success: false, message: 'Password salah. Masukkan NIS atau NISN Anda.' };
+        return { success: false, message: 'Password salah. Masukkan NIS, NISN, atau password 123456.' };
       }
 
       const studentUser: User = {

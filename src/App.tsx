@@ -911,18 +911,18 @@ export default function App() {
                 </select>
               </div>
 
-              {/* Password (NIS / NISN) */}
+              {/* Password (NIS / NISN / 123456) */}
               <div className="space-y-1.5 text-xs">
-                <label className="block font-semibold text-slate-600">Password (NIS / NISN)</label>
+                <label className="block font-semibold text-slate-600">Password (NIS / NISN / 123456)</label>
                 <input 
                   type="password"
-                  placeholder="Masukkan nomor NIS atau NISN Anda..."
+                  placeholder="Masukkan password (123456 atau NIS/NISN)..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium"
                 />
                 <p className="text-[9px] text-slate-400 mt-1">
-                  *Gunakan nomor <strong>NIS</strong> atau <strong>NISN</strong> resmi Anda sebagai password untuk melakukan verifikasi masuk.
+                  *Gunakan password <strong>123456</strong> atau nomor <strong>NIS / NISN</strong> resmi Anda untuk masuk.
                 </p>
               </div>
 
