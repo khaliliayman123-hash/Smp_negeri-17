@@ -911,18 +911,18 @@ export default function App() {
                 </select>
               </div>
 
-              {/* Password (NIS / NISN / 123456) */}
+              {/* Password (NIS / NISN) */}
               <div className="space-y-1.5 text-xs">
-                <label className="block font-semibold text-slate-600">Password (NIS / NISN / 123456)</label>
+                <label className="block font-semibold text-slate-600">Password (NIS / NISN)</label>
                 <input 
                   type="password"
-                  placeholder="Masukkan password (123456 atau NIS/NISN)..."
+                  placeholder="Masukkan NIS / NISN siswa..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium"
                 />
                 <p className="text-[9px] text-slate-400 mt-1">
-                  *Gunakan password <strong>123456</strong> atau nomor <strong>NIS / NISN</strong> resmi Anda untuk masuk.
+                  *Gunakan nomor <strong>NIS</strong> atau <strong>NISN</strong> resmi Anda sebagai password untuk masuk.
                 </p>
               </div>
 
@@ -1479,6 +1479,114 @@ export default function App() {
                 showToast('Gagal menghapus laporan kejadian.', 'error');
                 return false;
               }
+            }}
+            onSavePelanggaran={async (p, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const list = isNew 
+                  ? [...prev.pelanggaran, p] 
+                  : prev.pelanggaran.map(item => item.id === p.id ? p : item);
+                return { ...prev, pelanggaran: list };
+              });
+              apiService.savePelanggaran(p, isNew).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menyimpan data Pelanggaran.', 'error');
+              });
+              return true;
+            }}
+            onDeletePelanggaran={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return { ...prev, pelanggaran: prev.pelanggaran.filter(item => item.id !== id) };
+              });
+              apiService.deletePelanggaran(id).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menghapus data Pelanggaran.', 'error');
+              });
+              return true;
+            }}
+            onSaveRemisiPoin={async (r, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const list = isNew 
+                  ? [...prev.remisiPoin, r] 
+                  : prev.remisiPoin.map(item => item.id === r.id ? r : item);
+                return { ...prev, remisiPoin: list };
+              });
+              apiService.saveRemisiPoin(r, isNew).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menyimpan data Remisi Poin.', 'error');
+              });
+              return true;
+            }}
+            onDeleteRemisiPoin={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return { ...prev, remisiPoin: prev.remisiPoin.filter(item => item.id !== id) };
+              });
+              apiService.deleteRemisiPoin(id).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menghapus data Remisi Poin.', 'error');
+              });
+              return true;
+            }}
+            onSavePrestasi={async (p, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const list = isNew 
+                  ? [...prev.prestasi, p] 
+                  : prev.prestasi.map(item => item.id === p.id ? p : item);
+                return { ...prev, prestasi: list };
+              });
+              apiService.savePrestasi(p, isNew).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menyimpan data Prestasi.', 'error');
+              });
+              return true;
+            }}
+            onDeletePrestasi={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return { ...prev, prestasi: prev.prestasi.filter(item => item.id !== id) };
+              });
+              apiService.deletePrestasi(id).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menghapus data Prestasi.', 'error');
+              });
+              return true;
+            }}
+            onSaveKehadiran={async (k, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const list = isNew 
+                  ? [...(prev.kehadiran || []), k] 
+                  : (prev.kehadiran || []).map(item => item.id === k.id ? k : item);
+                return { ...prev, kehadiran: list };
+              });
+              apiService.saveKehadiran(k, isNew).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menyimpan data Kehadiran.', 'error');
+              });
+              return true;
+            }}
+            onDeleteKehadiran={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return { ...prev, kehadiran: (prev.kehadiran || []).filter(item => item.id !== id) };
+              });
+              apiService.deleteKehadiran(id).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menghapus data Kehadiran.', 'error');
+              });
+              return true;
             }}
           />
         )}

@@ -32,9 +32,17 @@ import {
   BarChart2,
   PieChart,
   FileDown,
-  Eye
+  Eye,
+  Plus,
+  Edit,
+  Trash2,
+  Star,
+  Check,
+  CheckCircle2,
+  Medal,
+  Save
 } from 'lucide-react';
-import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian } from '../types';
+import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran } from '../types';
 
 interface HdsDetailDrawerProps {
   siswa: Siswa;
@@ -420,11 +428,33 @@ interface WaliKelasViewProps {
   onNavigateToSiswa: (siswaId: string, subTab: string) => void;
   onSaveLaporanKejadian?: (l: LaporanKejadian, isNew: boolean) => Promise<boolean>;
   onDeleteLaporanKejadian?: (id: string) => Promise<boolean>;
+  onSavePelanggaran?: (p: Pelanggaran, isNew: boolean) => Promise<boolean>;
+  onDeletePelanggaran?: (id: string) => Promise<boolean>;
+  onSaveRemisiPoin?: (r: RemisiPoin, isNew: boolean) => Promise<boolean>;
+  onDeleteRemisiPoin?: (id: string) => Promise<boolean>;
+  onSavePrestasi?: (p: Prestasi, isNew: boolean) => Promise<boolean>;
+  onDeletePrestasi?: (id: string) => Promise<boolean>;
+  onSaveKehadiran?: (k: Kehadiran, isNew: boolean) => Promise<boolean>;
+  onDeleteKehadiran?: (id: string) => Promise<boolean>;
 }
 
 type ClassLevel = '7' | '8' | '9';
 
-export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSaveLaporanKejadian, onDeleteLaporanKejadian }: WaliKelasViewProps) {
+export default function WaliKelasView({ 
+  db, 
+  currentUser, 
+  onNavigateToSiswa, 
+  onSaveLaporanKejadian, 
+  onDeleteLaporanKejadian,
+  onSavePelanggaran,
+  onDeletePelanggaran,
+  onSaveRemisiPoin,
+  onDeleteRemisiPoin,
+  onSavePrestasi,
+  onDeletePrestasi,
+  onSaveKehadiran,
+  onDeleteKehadiran
+}: WaliKelasViewProps) {
   // Allowed class lookup for each Wali Kelas
   const allowedClassName = useMemo(() => {
     if (currentUser.role !== UserRole.WALI_KELAS) return null;
@@ -616,8 +646,63 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
   const [selectedSiswaId, setSelectedSiswaId] = useState<string | null>(null);
 
   // Integrated sub-feature tabs and chart hover state
-  const [activeSubFeature, setActiveSubFeature] = useState<'hds' | 'kedisiplinan' | 'remisi' | 'rekap_grafik' | 'prestasi' | 'kehadiran' | 'laporan'>('rekap_grafik');
+  const [activeSubFeature, setActiveSubFeature] = useState<'hds' | 'kedisiplinan' | 'remisi' | 'ringkasan_remisi' | 'rekap_grafik' | 'prestasi' | 'kehadiran' | 'laporan'>('rekap_grafik');
   const [hoveredBar, setHoveredBar] = useState<{ month: string; value: number; x: number; y: number } | null>(null);
+
+  // Filters for Ringkasan Remisi Poin
+  const [filterRemisiClass, setFilterRemisiClass] = useState<string>('ALL');
+  const [filterRemisiSiswaId, setFilterRemisiSiswaId] = useState<string>('ALL');
+
+  // Modal State & Forms for Full Access CRUD
+  const [showPelanggaranModal, setShowPelanggaranModal] = useState(false);
+  const [editingPelanggaran, setEditingPelanggaran] = useState<Pelanggaran | null>(null);
+  const [formPelanggaran, setFormPelanggaran] = useState({
+    siswaId: '',
+    tanggal: new Date().toISOString().split('T')[0],
+    jenisPelanggaran: '',
+    kategori: 'Ringan',
+    poin: 5,
+    guruPelapor: currentUser.nama || 'Wali Kelas',
+    tindakLanjut: 'Pembinaan Wali Kelas',
+    status: 'Selesai' as 'Selesai' | 'Proses' | 'Belum Ditindak'
+  });
+
+  const [showRemisiModal, setShowRemisiModal] = useState(false);
+  const [editingRemisi, setEditingRemisi] = useState<RemisiPoin | null>(null);
+  const [formRemisi, setFormRemisi] = useState({
+    siswaId: '',
+    tanggal: new Date().toISOString().split('T')[0],
+    jenisRemisi: '',
+    kategori: 'Karakter Baik',
+    poin: 10,
+    guruPemberi: currentUser.nama || 'Wali Kelas',
+    keterangan: ''
+  });
+
+  const [showPrestasiModal, setShowPrestasiModal] = useState(false);
+  const [editingPrestasi, setEditingPrestasi] = useState<Prestasi | null>(null);
+  const [formPrestasi, setFormPrestasi] = useState({
+    siswaId: '',
+    namaPrestasi: '',
+    tingkat: 'Sekolah',
+    tahun: new Date().getFullYear().toString(),
+    juara: 'Juara 1',
+    kategori: 'Akademik' as 'Akademik' | 'Non Akademik',
+    sertifikat: ''
+  });
+
+  const [showKehadiranModal, setShowKehadiranModal] = useState(false);
+  const [editingKehadiran, setEditingKehadiran] = useState<Kehadiran | null>(null);
+  const [formKehadiran, setFormKehadiran] = useState({
+    siswaId: '',
+    bulan: 'Juli',
+    mingguKe: 'Minggu 1',
+    tahun: '2026',
+    hadir: 5,
+    sakit: 0,
+    izin: 0,
+    alfa: 0
+  });
 
   // Determine currently selected full class name based on active level
   const currentClassName = useMemo(() => {
@@ -2471,6 +2556,14 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
             🌱 Log Remisi Poin
           </button>
           <button
+            onClick={() => { setActiveSubFeature('ringkasan_remisi'); setSearchQuery(''); }}
+            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+              activeSubFeature === 'ringkasan_remisi' ? 'bg-amber-500 text-slate-950 shadow-xs border border-amber-400 font-black' : 'bg-amber-50/60 text-amber-800 hover:bg-amber-100/80 border border-amber-200/50'
+            }`}
+          >
+            ⭐ Ringkasan Remisi Poin
+          </button>
+          <button
             onClick={() => { setActiveSubFeature('prestasi'); setSearchQuery(''); }}
             className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
               activeSubFeature === 'prestasi' ? 'bg-white text-indigo-700 shadow-xs border border-slate-100 font-black' : 'text-slate-500 hover:text-slate-800'
@@ -2600,12 +2693,33 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
             </div>
           )}
 
-          {/* TAB 2: Catatan Kedisiplinan - READ ONLY */}
+          {/* TAB 2: Catatan Kedisiplinan - FULL ACCESS (TAMBAH, EDIT, HAPUS) */}
           {activeSubFeature === 'kedisiplinan' && (
             <div className="space-y-4">
-              <div className="bg-amber-50/50 border border-amber-100/30 p-3 rounded-xl flex items-center gap-2.5 text-[11px] text-amber-800 font-medium">
-                <Info size={14} className="shrink-0" />
-                <span>Mode Lihat Saja. Daftar rekam riwayat kasus pelanggaran disiplin siswa di kelas {currentClassName}.</span>
+              <div className="bg-rose-50 border border-rose-100 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 text-xs text-rose-900 font-semibold">
+                  <ShieldAlert size={18} className="text-rose-600 shrink-0" />
+                  <span>Akses Penuh Wali Kelas: Anda dapat melihat, menambah, mengedit, dan menghapus catatan kedisiplinan & poin siswa kelas <b>{currentClassName}</b>.</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingPelanggaran(null);
+                    setFormPelanggaran({
+                      siswaId: filteredStudents[0]?.id || '',
+                      tanggal: new Date().toISOString().split('T')[0],
+                      jenisPelanggaran: '',
+                      kategori: 'Ringan',
+                      poin: 5,
+                      guruPelapor: currentUser.nama || 'Wali Kelas',
+                      tindakLanjut: 'Pembinaan Wali Kelas',
+                      status: 'Selesai'
+                    });
+                    setShowPelanggaranModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Plus size={14} /> Tambah Catatan Kedisiplinan
+                </button>
               </div>
 
               {filteredViolations.length === 0 ? (
@@ -2623,6 +2737,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                         <th className="p-3">Kategori</th>
                         <th className="p-3 text-center">Poin</th>
                         <th className="p-3">Pelapor</th>
+                        <th className="p-3 text-center">Aksi (Ubah & Hapus)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2640,6 +2755,41 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                             </td>
                             <td className="p-3 text-center font-extrabold text-rose-600">+{p.poin} pts</td>
                             <td className="p-3 text-slate-500">{p.guruPelapor || '-'}</td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingPelanggaran(p);
+                                    setFormPelanggaran({
+                                      siswaId: p.siswaId,
+                                      tanggal: p.tanggal,
+                                      jenisPelanggaran: p.jenisPelanggaran,
+                                      kategori: p.kategori,
+                                      poin: p.poin,
+                                      guruPelapor: p.guruPelapor || currentUser.nama || 'Wali Kelas',
+                                      tindakLanjut: p.tindakLanjut || 'Pembinaan Wali Kelas',
+                                      status: p.status || 'Selesai'
+                                    });
+                                    setShowPelanggaranModal(true);
+                                  }}
+                                  className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition cursor-pointer"
+                                  title="Ubah / Edit Data"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (confirm('Apakah Anda yakin ingin menghapus catatan pelanggaran ini?')) {
+                                      if (onDeletePelanggaran) await onDeletePelanggaran(p.id);
+                                    }
+                                  }}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition cursor-pointer"
+                                  title="Hapus Data"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}
@@ -2650,12 +2800,32 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
             </div>
           )}
 
-          {/* TAB 3: Log Remisi Poin - READ ONLY */}
+          {/* TAB 3: Log Remisi Poin - FULL ACCESS (TAMBAH, EDIT, HAPUS) */}
           {activeSubFeature === 'remisi' && (
             <div className="space-y-4">
-              <div className="bg-emerald-50/50 border border-emerald-100/30 p-3 rounded-xl flex items-center gap-2.5 text-[11px] text-emerald-800 font-medium">
-                <Info size={14} className="shrink-0" />
-                <span>Mode Lihat Saja. Riwayat pemberian remisi poin untuk siswa di kelas {currentClassName}.</span>
+              <div className="bg-emerald-50 border border-emerald-100 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 text-xs text-emerald-900 font-semibold">
+                  <Sparkles size={18} className="text-emerald-600 shrink-0" />
+                  <span>Akses Penuh Wali Kelas: Anda dapat melihat, menambah, mengedit, dan menghapus log remisi poin siswa kelas <b>{currentClassName}</b>.</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingRemisi(null);
+                    setFormRemisi({
+                      siswaId: filteredStudents[0]?.id || '',
+                      tanggal: new Date().toISOString().split('T')[0],
+                      jenisRemisi: '',
+                      kategori: 'Karakter Baik',
+                      poin: 10,
+                      guruPemberi: currentUser.nama || 'Wali Kelas',
+                      keterangan: ''
+                    });
+                    setShowRemisiModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Plus size={14} /> Tambah Log Remisi Poin
+                </button>
               </div>
 
               {filteredRemisi.length === 0 ? (
@@ -2669,10 +2839,11 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                       <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
                         <th className="p-3">Tanggal</th>
                         <th className="p-3">Nama Siswa</th>
-                        <th className="p-3">Bentuk Pembinaan / Remisi</th>
+                        <th className="p-3">Bentuk Pembinaan / Perilaku Baik</th>
                         <th className="p-3">Kategori</th>
-                        <th className="p-3 text-center">Poin</th>
-                        <th className="p-3">Guru BK / Wali Kelas</th>
+                        <th className="p-3 text-center">Poin Remisi</th>
+                        <th className="p-3">Guru Pemberi</th>
+                        <th className="p-3 text-center">Aksi (Ubah & Hapus)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2686,6 +2857,40 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                             <td className="p-3 text-slate-500">{r.kategori}</td>
                             <td className="p-3 text-center font-extrabold text-emerald-600">-{r.poin} pts</td>
                             <td className="p-3 text-slate-500">{r.guruPemberi || '-'}</td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingRemisi(r);
+                                    setFormRemisi({
+                                      siswaId: r.siswaId,
+                                      tanggal: r.tanggal,
+                                      jenisRemisi: r.jenisRemisi,
+                                      kategori: r.kategori,
+                                      poin: r.poin,
+                                      guruPemberi: r.guruPemberi || currentUser.nama || 'Wali Kelas',
+                                      keterangan: r.keterangan || ''
+                                    });
+                                    setShowRemisiModal(true);
+                                  }}
+                                  className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition cursor-pointer"
+                                  title="Ubah / Edit Data"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (confirm('Apakah Anda yakin ingin menghapus log remisi poin ini?')) {
+                                      if (onDeleteRemisiPoin) await onDeleteRemisiPoin(r.id);
+                                    }
+                                  }}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition cursor-pointer"
+                                  title="Hapus Data"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}
@@ -2696,12 +2901,287 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
             </div>
           )}
 
-          {/* TAB: Rekam Prestasi - READ ONLY */}
+          {/* TAB 4: ⭐ Ringkasan Remisi Poin Siswa (Semua Kelas 7-1 s.d. 9-11) */}
+          {activeSubFeature === 'ringkasan_remisi' && (
+            <div className="space-y-6">
+              {/* Golden Star Appreciation Banner */}
+              <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 rounded-2xl p-5 text-slate-950 shadow-md relative overflow-hidden border border-amber-300">
+                <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-white/20 rounded-full blur-xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-1 text-amber-950 font-black text-xs uppercase tracking-wider mb-1">
+                      <Star size={16} className="fill-slate-950 text-slate-950" />
+                      <Star size={16} className="fill-slate-950 text-slate-950" />
+                      <Star size={16} className="fill-slate-950 text-slate-950" />
+                      <span className="ml-1 bg-slate-950 text-amber-400 px-2.5 py-0.5 rounded-full text-[10px]">APRESIASI BEHAVIOR & KARAKTER POSITIF</span>
+                    </div>
+                    <h3 className="text-xl font-black text-slate-950 flex items-center gap-2">
+                      ⭐ Ringkasan Remisi Poin Siswa (Apresiasi Disiplin Positif)
+                    </h3>
+                    <p className="text-xs text-slate-900 font-medium mt-1 leading-relaxed max-w-3xl">
+                      Menampilkan rekapitulasi siswa yang mendapatkan pengurangan poin pelanggaran (remisi) melalui pembinaan, kegiatan positif, serta perilaku terpuji di seluruh kelas 7-1 s.d. 9-11.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1.5 bg-slate-950/90 text-amber-300 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-sm border border-amber-400/30">
+                      <Sparkles size={14} className="text-amber-400" /> Pengurang Poin Aktif
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dropdown Search Controls Bar */}
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs space-y-3">
+                <div className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                  <Search size={15} className="text-amber-600" />
+                  <span>Filter Pencarian Ringkasan Remisi Poin:</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Dropdown Filter Kelas */}
+                  <div>
+                    <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1">
+                      Pilih Kelas (Dropdown)
+                    </label>
+                    <select
+                      value={filterRemisiClass}
+                      onChange={(e) => {
+                        setFilterRemisiClass(e.target.value);
+                        setFilterRemisiSiswaId('ALL'); // Reset student filter when class changes
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-amber-50/30 border border-amber-200 focus:border-amber-500 focus:bg-white rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                    >
+                      <option value="ALL">🌟 Semua Kelas (Kelas 7-1 s.d. 9-11)</option>
+                      {['7', '8', '9'].map(level => (
+                        Array.from({ length: 11 }, (_, i) => `Kelas ${level}-${i + 1}`).map(clsName => (
+                          <option key={clsName} value={clsName}>{clsName}</option>
+                        ))
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Dropdown Filter Nama Siswa */}
+                  <div>
+                    <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1">
+                      Pilih Nama Siswa (Dropdown)
+                    </label>
+                    <select
+                      value={filterRemisiSiswaId}
+                      onChange={(e) => setFilterRemisiSiswaId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-amber-50/30 border border-amber-200 focus:border-amber-500 focus:bg-white rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                    >
+                      <option value="ALL">👤 Semua Siswa Penerima Remisi</option>
+                      {db?.siswa
+                        ?.filter(s => {
+                          if (filterRemisiClass === 'ALL') return true;
+                          return getStudentClassName(s).toLowerCase().trim() === filterRemisiClass.toLowerCase().trim();
+                        })
+                        .sort((a, b) => a.nama.localeCompare(b.nama))
+                        .map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.nama} ({getStudentClassName(s)} - NIS: {s.nis || '-'})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Data Calculations */}
+              {(() => {
+                const allRemisi = db?.remisiPoin || [];
+                const matchingRemisi = allRemisi.filter(r => {
+                  const student = db?.siswa.find(s => s.id === r.siswaId);
+                  if (!student) return false;
+
+                  const studentClass = getStudentClassName(student);
+
+                  if (filterRemisiClass !== 'ALL' && studentClass.toLowerCase().trim() !== filterRemisiClass.toLowerCase().trim()) {
+                    return false;
+                  }
+
+                  if (filterRemisiSiswaId !== 'ALL' && r.siswaId !== filterRemisiSiswaId) {
+                    return false;
+                  }
+
+                  return true;
+                });
+
+                const studentRemisiMap = new Map<string, { student: Siswa; totalRemisiPoints: number; records: RemisiPoin[] }>();
+
+                matchingRemisi.forEach(r => {
+                  const student = db?.siswa.find(s => s.id === r.siswaId);
+                  if (!student) return;
+
+                  if (!studentRemisiMap.has(student.id)) {
+                    studentRemisiMap.set(student.id, {
+                      student,
+                      totalRemisiPoints: 0,
+                      records: []
+                    });
+                  }
+                  const entry = studentRemisiMap.get(student.id)!;
+                  entry.totalRemisiPoints += (r.poin || 0);
+                  entry.records.push(r);
+                });
+
+                const studentSummaries = Array.from(studentRemisiMap.values())
+                  .sort((a, b) => b.totalRemisiPoints - a.totalRemisiPoints);
+
+                const totalPointsGranted = matchingRemisi.reduce((sum, r) => sum + (r.poin || 0), 0);
+
+                return (
+                  <div className="space-y-6">
+                    {/* Metrics Summary */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 p-4 rounded-2xl flex items-center gap-3">
+                        <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-slate-950 font-black shadow-xs shrink-0">
+                          <Star size={20} className="fill-slate-950 text-slate-950" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider">Total Siswa Apresiasi</p>
+                          <p className="text-xl font-black text-slate-900">{studentSummaries.length} Siswa</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/80 p-4 rounded-2xl flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-black shadow-xs shrink-0">
+                          <Sparkles size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider">Total Capaian Poin Remisi</p>
+                          <p className="text-xl font-black text-emerald-700">-{totalPointsGranted} Poin</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-indigo-50 to-sky-50 border border-indigo-200/80 p-4 rounded-2xl flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black shadow-xs shrink-0">
+                          <Award size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold text-indigo-800 uppercase tracking-wider">Total Catatan Log</p>
+                          <p className="text-xl font-black text-indigo-900">{matchingRemisi.length} Log Kegiatan</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Student Summaries List */}
+                    {studentSummaries.length === 0 ? (
+                      <div className="py-14 text-center bg-white border border-dashed border-amber-200 rounded-2xl text-slate-400 text-xs space-y-2">
+                        <Star size={32} className="mx-auto text-amber-300 animate-bounce" />
+                        <p className="font-semibold text-slate-600">Tidak ada data ringkasan remisi poin untuk filter pilihan saat ini.</p>
+                        <p className="text-[11px] text-slate-400">Silakan ubah dropdown kelas atau nama siswa di atas.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {studentSummaries.map(({ student, totalRemisiPoints, records }) => {
+                          const clsName = getStudentClassName(student);
+                          return (
+                            <div key={student.id} className="bg-white rounded-2xl border border-amber-200 shadow-xs overflow-hidden transition hover:shadow-md">
+                              {/* Header Card with Star Decorations */}
+                              <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 p-4 border-b border-amber-300 flex flex-wrap items-center justify-between gap-3 text-slate-950">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-slate-950 text-amber-400 rounded-xl flex items-center justify-center font-black text-sm shadow-xs border border-amber-400/40 shrink-0">
+                                    ⭐
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <h4 className="text-sm font-extrabold text-slate-950">{student.nama}</h4>
+                                      <span className="px-2 py-0.5 bg-slate-950 text-amber-300 rounded-md text-[10px] font-black uppercase tracking-wider">
+                                        {clsName}
+                                      </span>
+                                      <span className="text-[10px] font-mono text-slate-900 font-bold">
+                                        NIS: {student.nis || '-'} | NISN: {student.nisn || '-'}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-900 font-medium mt-0.5 flex items-center gap-1">
+                                      <span>Apresiasi Perilaku Positif & Disiplin Baik</span>
+                                      <span className="text-amber-950">⭐⭐⭐⭐⭐</span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="bg-slate-950 text-emerald-400 px-3.5 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-sm border border-emerald-400/30">
+                                  <Sparkles size={14} className="text-emerald-400" />
+                                  <span>Capaian Poin Remisi: -{totalRemisiPoints} Poin</span>
+                                </div>
+                              </div>
+
+                              {/* Detailed Breakdown List */}
+                              <div className="p-4 bg-slate-50/50">
+                                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1">
+                                  <CheckCircle2 size={12} className="text-emerald-600" /> Rincian Log Remisi Poin Siswa:
+                                </p>
+
+                                <div className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-2xs">
+                                  <table className="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-extrabold text-[10px] uppercase tracking-wider">
+                                        <th className="p-2.5">Tanggal</th>
+                                        <th className="p-2.5">Kategori Remisi</th>
+                                        <th className="p-2.5">Bentuk Perilaku Baik / Kegiatan Positif</th>
+                                        <th className="p-2.5 text-center">Capaian Poin Remisi</th>
+                                        <th className="p-2.5">Guru Pemberi Remisi</th>
+                                        <th className="p-2.5">Keterangan / Catatan Tambahan</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                      {records.map((r) => (
+                                        <tr key={r.id} className="hover:bg-amber-50/30">
+                                          <td className="p-2.5 font-mono text-[10px] text-slate-500 whitespace-nowrap">{r.tanggal}</td>
+                                          <td className="p-2.5">
+                                            <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                                              {r.kategori || 'Karakter Baik'}
+                                            </span>
+                                          </td>
+                                          <td className="p-2.5 font-bold text-slate-800">{r.jenisRemisi}</td>
+                                          <td className="p-2.5 text-center font-extrabold text-emerald-600 whitespace-nowrap">
+                                            -{r.poin} pts ⭐
+                                          </td>
+                                          <td className="p-2.5 text-slate-600 font-medium">{r.guruPemberi || '-'}</td>
+                                          <td className="p-2.5 text-slate-500 text-[11px]">{r.keterangan || '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* TAB 5: Rekam Prestasi - FULL ACCESS (TAMBAH, EDIT, HAPUS) */}
           {activeSubFeature === 'prestasi' && (
             <div className="space-y-4">
-              <div className="bg-amber-50/50 border border-amber-100/30 p-3 rounded-xl flex items-center gap-2.5 text-[11px] text-amber-800 font-medium">
-                <Info size={14} className="shrink-0" />
-                <span>Mode Lihat Saja. Daftar rekam riwayat prestasi siswa di kelas {currentClassName}.</span>
+              <div className="bg-amber-50 border border-amber-100 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 text-xs text-amber-900 font-semibold">
+                  <Award size={18} className="text-amber-600 shrink-0" />
+                  <span>Akses Penuh Wali Kelas: Anda dapat melihat, menambah, mengedit, dan menghapus rekam prestasi siswa kelas <b>{currentClassName}</b>.</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingPrestasi(null);
+                    setFormPrestasi({
+                      siswaId: filteredStudents[0]?.id || '',
+                      namaPrestasi: '',
+                      tingkat: 'Sekolah',
+                      tahun: new Date().getFullYear().toString(),
+                      juara: 'Juara 1',
+                      kategori: 'Akademik',
+                      sertifikat: ''
+                    });
+                    setShowPrestasiModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Plus size={14} /> Tambah Rekam Prestasi
+                </button>
               </div>
 
               {filteredPrestasi.length === 0 ? (
@@ -2719,6 +3199,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                         <th className="p-3">Tingkat</th>
                         <th className="p-3">Tahun</th>
                         <th className="p-3">Kategori</th>
+                        <th className="p-3 text-center">Aksi (Ubah & Hapus)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2739,6 +3220,40 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                               <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-600">
                                 {p.kategori || 'Akademik'}
                               </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingPrestasi(p);
+                                    setFormPrestasi({
+                                      siswaId: p.siswaId,
+                                      namaPrestasi: p.namaPrestasi,
+                                      tingkat: p.tingkat,
+                                      tahun: p.tahun,
+                                      juara: p.juara,
+                                      kategori: p.kategori || 'Akademik',
+                                      sertifikat: p.sertifikat || ''
+                                    });
+                                    setShowPrestasiModal(true);
+                                  }}
+                                  className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition cursor-pointer"
+                                  title="Ubah / Edit Data"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (confirm('Apakah Anda yakin ingin menghapus rekam prestasi ini?')) {
+                                      if (onDeletePrestasi) await onDeletePrestasi(p.id);
+                                    }
+                                  }}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition cursor-pointer"
+                                  title="Hapus Data"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2813,14 +3328,14 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                 </div>
               </div>
 
-              {/* Filter Bar */}
+              {/* Filter Bar with Tambah Button */}
               <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-semibold">
                   <Info size={15} className="text-emerald-600 shrink-0" />
-                  <span>Daftar rekapitulasi presensi siswa kelas <b>{currentClassName}</b>. Gunakan filter untuk membatasi tampilan.</span>
+                  <span>Daftar rekapitulasi presensi siswa kelas <b>{currentClassName}</b>. Anda dapat melihat, menambah, mengedit, dan menghapus catatan presensi.</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-500">Bulan:</span>
                   <select
                     value={attendanceFilterBulan}
@@ -2841,6 +3356,26 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                     <option value="November">November</option>
                     <option value="Desember">Desember</option>
                   </select>
+
+                  <button
+                    onClick={() => {
+                      setEditingKehadiran(null);
+                      setFormKehadiran({
+                        siswaId: filteredStudents[0]?.id || '',
+                        bulan: 'Juli',
+                        mingguKe: 'Minggu 1',
+                        tahun: '2026',
+                        hadir: 5,
+                        sakit: 0,
+                        izin: 0,
+                        alfa: 0
+                      });
+                      setShowKehadiranModal(true);
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                  >
+                    <Plus size={13} /> Input Presensi
+                  </button>
                 </div>
               </div>
 
@@ -2864,6 +3399,7 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                           <th className="p-3">Keterangan</th>
                           <th className="p-3 text-center bg-emerald-50/50 text-emerald-800">Unduh DOC Siswa</th>
                           <th className="p-3 text-center bg-teal-50/50 text-teal-800">Unduh DOC Kelas</th>
+                          <th className="p-3 text-center">Aksi (Ubah & Hapus)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2920,6 +3456,41 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
                                 >
                                   <FileDown size={12} /> Doc Kelas
                                 </button>
+                              </td>
+                              <td className="p-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      setEditingKehadiran(att);
+                                      setFormKehadiran({
+                                        siswaId: att.siswaId,
+                                        bulan: att.bulan || 'Juli',
+                                        mingguKe: att.mingguKe || 'Minggu 1',
+                                        tahun: att.tahun || '2026',
+                                        hadir: att.hadir,
+                                        sakit: att.sakit,
+                                        izin: att.izin,
+                                        alfa: att.alfa
+                                      });
+                                      setShowKehadiranModal(true);
+                                    }}
+                                    className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition cursor-pointer"
+                                    title="Ubah / Edit Data"
+                                  >
+                                    <Edit size={13} />
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm('Apakah Anda yakin ingin menghapus catatan presensi ini?')) {
+                                        if (onDeleteKehadiran) await onDeleteKehadiran(att.id);
+                                      }
+                                    }}
+                                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition cursor-pointer"
+                                    title="Hapus Data"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -3286,6 +3857,625 @@ export default function WaliKelasView({ db, currentUser, onNavigateToSiswa, onSa
 
         </div>
       </div>
+
+      {/* MODAL 1: Pelanggaran / Kedisiplinan (Tambah & Edit) */}
+      {showPelanggaranModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-rose-50 text-rose-600 rounded-xl font-bold">
+                  <ShieldAlert size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    {editingPelanggaran ? 'Ubah Catatan Kedisiplinan' : 'Tambah Catatan Kedisiplinan'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500">Kelas {currentClassName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPelanggaranModal(false)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 rounded-xl transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!onSavePelanggaran) return;
+                const payload: any = {
+                  ...(editingPelanggaran ? { id: editingPelanggaran.id } : {}),
+                  ...formPelanggaran
+                };
+                await onSavePelanggaran(payload, !editingPelanggaran);
+                setShowPelanggaranModal(false);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Pilih Siswa
+                </label>
+                <select
+                  value={formPelanggaran.siswaId}
+                  onChange={(e) => setFormPelanggaran({ ...formPelanggaran, siswaId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-rose-500"
+                  required
+                >
+                  {filteredStudents.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Tanggal
+                  </label>
+                  <input
+                    type="date"
+                    value={formPelanggaran.tanggal}
+                    onChange={(e) => setFormPelanggaran({ ...formPelanggaran, tanggal: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-rose-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Kategori
+                  </label>
+                  <select
+                    value={formPelanggaran.kategori}
+                    onChange={(e) => setFormPelanggaran({ ...formPelanggaran, kategori: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="Ringan">Ringan</option>
+                    <option value="Sedang">Sedang</option>
+                    <option value="Berat">Berat</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Jenis Pelanggaran / Keterangan Kasus
+                </label>
+                <input
+                  type="text"
+                  placeholder="Misal: Datang terlambat ke sekolah, atribut tidak lengkap"
+                  value={formPelanggaran.jenisPelanggaran}
+                  onChange={(e) => setFormPelanggaran({ ...formPelanggaran, jenisPelanggaran: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-rose-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Poin Pelanggaran (+)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formPelanggaran.poin}
+                    onChange={(e) => setFormPelanggaran({ ...formPelanggaran, poin: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-rose-600 focus:outline-none focus:border-rose-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Guru Pelapor
+                  </label>
+                  <input
+                    type="text"
+                    value={formPelanggaran.guruPelapor}
+                    onChange={(e) => setFormPelanggaran({ ...formPelanggaran, guruPelapor: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPelanggaranModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Save size={14} /> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Log Remisi Poin (Tambah & Edit) */}
+      {showRemisiModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    {editingRemisi ? 'Ubah Log Remisi Poin' : 'Tambah Log Remisi Poin'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500">Kelas {currentClassName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRemisiModal(false)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 rounded-xl transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!onSaveRemisiPoin) return;
+                const payload: any = {
+                  ...(editingRemisi ? { id: editingRemisi.id } : {}),
+                  ...formRemisi
+                };
+                await onSaveRemisiPoin(payload, !editingRemisi);
+                setShowRemisiModal(false);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Pilih Siswa
+                </label>
+                <select
+                  value={formRemisi.siswaId}
+                  onChange={(e) => setFormRemisi({ ...formRemisi, siswaId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  required
+                >
+                  {filteredStudents.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Tanggal
+                  </label>
+                  <input
+                    type="date"
+                    value={formRemisi.tanggal}
+                    onChange={(e) => setFormRemisi({ ...formRemisi, tanggal: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Kategori Remisi
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Misal: Karakter Baik, Pembinaan Lanjutan"
+                    value={formRemisi.kategori}
+                    onChange={(e) => setFormRemisi({ ...formRemisi, kategori: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Bentuk Pembinaan / Perilaku Baik
+                </label>
+                <input
+                  type="text"
+                  placeholder="Misal: Melakukan aksi kebersihan lingkungan, mengikuti pembinaan sholat/doa"
+                  value={formRemisi.jenisRemisi}
+                  onChange={(e) => setFormRemisi({ ...formRemisi, jenisRemisi: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Besar Poin Remisi (-)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formRemisi.poin}
+                    onChange={(e) => setFormRemisi({ ...formRemisi, poin: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600 focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Guru Pemberi Remisi
+                  </label>
+                  <input
+                    type="text"
+                    value={formRemisi.guruPemberi}
+                    onChange={(e) => setFormRemisi({ ...formRemisi, guruPemberi: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Catatan Tambahan
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Catatan perkembangan atau rekomendasi wali kelas..."
+                  value={formRemisi.keterangan}
+                  onChange={(e) => setFormRemisi({ ...formRemisi, keterangan: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowRemisiModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Save size={14} /> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Rekam Prestasi (Tambah & Edit) */}
+      {showPrestasiModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-xl font-bold">
+                  <Award size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    {editingPrestasi ? 'Ubah Rekam Prestasi' : 'Tambah Rekam Prestasi'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500">Kelas {currentClassName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPrestasiModal(false)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 rounded-xl transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!onSavePrestasi) return;
+                const payload: any = {
+                  ...(editingPrestasi ? { id: editingPrestasi.id } : {}),
+                  ...formPrestasi
+                };
+                await onSavePrestasi(payload, !editingPrestasi);
+                setShowPrestasiModal(false);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Pilih Siswa
+                </label>
+                <select
+                  value={formPrestasi.siswaId}
+                  onChange={(e) => setFormPrestasi({ ...formPrestasi, siswaId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+                  required
+                >
+                  {filteredStudents.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Nama Prestasi / Perlombaan
+                </label>
+                <input
+                  type="text"
+                  placeholder="Misal: Olimpiade Matematika, Lomba Pidato Bahasa Inggris"
+                  value={formPrestasi.namaPrestasi}
+                  onChange={(e) => setFormPrestasi({ ...formPrestasi, namaPrestasi: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Capaian / Juara
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Misal: Juara 1, Harapan 2, Peserta Terbaik"
+                    value={formPrestasi.juara}
+                    onChange={(e) => setFormPrestasi({ ...formPrestasi, juara: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Tingkat
+                  </label>
+                  <select
+                    value={formPrestasi.tingkat}
+                    onChange={(e) => setFormPrestasi({ ...formPrestasi, tingkat: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="Sekolah">Sekolah</option>
+                    <option value="Kecamatan">Kecamatan</option>
+                    <option value="Kota/Kabupaten">Kota/Kabupaten</option>
+                    <option value="Provinsi">Provinsi</option>
+                    <option value="Nasional">Nasional</option>
+                    <option value="Internasional">Internasional</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Kategori
+                  </label>
+                  <select
+                    value={formPrestasi.kategori}
+                    onChange={(e) => setFormPrestasi({ ...formPrestasi, kategori: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="Akademik">Akademik</option>
+                    <option value="Non-Akademik">Non-Akademik</option>
+                    <option value="Seni & Budaya">Seni & Budaya</option>
+                    <option value="Olahraga">Olahraga</option>
+                    <option value="Keagamaan">Keagamaan</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Tahun
+                  </label>
+                  <input
+                    type="text"
+                    value={formPrestasi.tahun}
+                    onChange={(e) => setFormPrestasi({ ...formPrestasi, tahun: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPrestasiModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Save size={14} /> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Kehadiran / Presensi (Tambah & Edit) */}
+      {showKehadiranModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold">
+                  <Calendar size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    {editingKehadiran ? 'Ubah Rekap Presensi' : 'Input Rekap Presensi'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500">Kelas {currentClassName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowKehadiranModal(false)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 rounded-xl transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!onSaveKehadiran) return;
+                const payload: any = {
+                  ...(editingKehadiran ? { id: editingKehadiran.id } : {}),
+                  ...formKehadiran
+                };
+                await onSaveKehadiran(payload, !editingKehadiran);
+                setShowKehadiranModal(false);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Pilih Siswa
+                </label>
+                <select
+                  value={formKehadiran.siswaId}
+                  onChange={(e) => setFormKehadiran({ ...formKehadiran, siswaId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  required
+                >
+                  {filteredStudents.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Bulan
+                  </label>
+                  <select
+                    value={formKehadiran.bulan}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, bulan: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  >
+                    {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Minggu Ke
+                  </label>
+                  <select
+                    value={formKehadiran.mingguKe}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, mingguKe: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-emerald-500"
+                  >
+                    {['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'].map(w => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Tahun
+                  </label>
+                  <input
+                    type="text"
+                    value={formKehadiran.tahun}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, tahun: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <label className="text-[9px] font-bold text-emerald-700 uppercase block mb-1">
+                    Hadir
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formKehadiran.hadir}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, hadir: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold text-emerald-700"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-sky-700 uppercase block mb-1">
+                    Sakit
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formKehadiran.sakit}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, sakit: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold text-sky-700"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-amber-700 uppercase block mb-1">
+                    Izin
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formKehadiran.izin}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, izin: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold text-amber-700"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-rose-700 uppercase block mb-1">
+                    Alfa
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formKehadiran.alfa}
+                    onChange={(e) => setFormKehadiran({ ...formKehadiran, alfa: Number(e.target.value) })}
+                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold text-rose-700"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowKehadiranModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Save size={14} /> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Render modular detail drawer */}
       {selectedSiswaId && viewingSiswa && viewingSiswaHds && (
