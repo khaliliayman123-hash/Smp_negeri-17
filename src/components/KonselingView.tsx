@@ -29,13 +29,16 @@ import {
   Users,
   CheckCircle2,
   Filter,
-  Download
+  Download,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
   DatabaseState, 
   User as AppUser, 
   UserRole,
+  Siswa,
   Konseling,
   Pelanggaran,
   RemisiPoin,
@@ -97,6 +100,7 @@ export default function KonselingView({
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceFilterKelas, setAttendanceFilterKelas] = useState<string>('ALL');
   const [attendanceFilterBulan, setAttendanceFilterBulan] = useState<string>('ALL');
+  const [disiplinFilterKelas, setDisiplinFilterKelas] = useState<string>('ALL');
 
   // State for Remisi and Poin summary dashboard
   const [selectedSummarySiswaId, setSelectedSummarySiswaId] = useState<string>('');
@@ -1492,6 +1496,487 @@ export default function KonselingView({
     URL.revokeObjectURL(url);
   };
 
+  const getStudentClassName = (siswaId: string): string => {
+    const siswa = db.siswa.find(s => s.id === siswaId);
+    if (!siswa) return 'Kelas -';
+    const foundKelas = db.kelas.find(c => c.id === siswa.kelasId || c.namaKelas.toLowerCase().trim() === String(siswa.kelasId).toLowerCase().trim());
+    if (foundKelas) return foundKelas.namaKelas;
+    if (siswa.kelasId) return siswa.kelasId;
+    return 'Kelas -';
+  };
+
+  const handleDownloadDisiplinPiketDoc = (targetKelasId: string) => {
+    let targetKelas = db.kelas.find(c => c.id === targetKelasId || c.namaKelas.toLowerCase().trim() === targetKelasId.toLowerCase().trim());
+    const isAll = targetKelasId === 'ALL' || !targetKelasId;
+    const targetKelasLabel = isAll ? 'Semua Rombongan Belajar (Kelas 7, 8, & 9)' : (targetKelas?.namaKelas || targetKelasId);
+
+    const matchesClass = (siswaId: string): boolean => {
+      if (isAll) return true;
+      const s = db.siswa.find(x => x.id === siswaId);
+      if (!s) return false;
+      if (targetKelas) {
+        return s.kelasId === targetKelas.id || s.kelasId === targetKelas.namaKelas || targetKelas.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim();
+      }
+      return String(s.kelasId).toLowerCase().trim() === targetKelasId.toLowerCase().trim();
+    };
+
+    const filteredPelanggaranList = (db.pelanggaran || []).filter(p => matchesClass(p.siswaId));
+    const filteredRemisiList = (db.remisiPoin || []).filter(r => matchesClass(r.siswaId));
+
+    const totalCases = filteredPelanggaranList.length;
+    const totalViolPoin = filteredPelanggaranList.reduce((sum, p) => sum + Number(p.poin || 0), 0);
+    const totalRemisiCases = filteredRemisiList.length;
+    const totalRemisiPoin = filteredRemisiList.reduce((sum, r) => sum + Number(r.poin || 0), 0);
+    const netPoinDisiplin = Math.max(0, totalViolPoin - totalRemisiPoin);
+
+    const guruPiketName = currentUser.nama || 'Guru Piket / Petugas Disiplin';
+    const kepalaSekolahName = 'Drs. H. M. Syarif, M.Pd';
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const pelanggaranRowsHtml = filteredPelanggaranList.length > 0 ? filteredPelanggaranList.map((p, idx) => {
+      const s = db.siswa.find(x => x.id === p.siswaId);
+      const kelasName = getStudentClassName(p.siswaId);
+      const pelaporUser = db.users.find(u => u.id === (p as any).pelaporId);
+      const pelaporNama = pelaporUser?.nama || (p as any).guruPelapor || (p as any).pelaporId || 'Guru Piket';
+
+      let catColor = '#0284c7';
+      if (p.kategori === 'Sedang') catColor = '#d97706';
+      if (p.kategori === 'Berat') catColor = '#dc2626';
+
+      return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td style="text-align: center;">${p.tanggal || '-'}</td>
+          <td><b>${s?.nama || 'Siswa'}</b></td>
+          <td style="text-align: center;">${s?.nisn || s?.nis || '-'}</td>
+          <td style="text-align: center; font-weight: bold;">${kelasName}</td>
+          <td>${p.jenisPelanggaran || (p as any).deskripsi || '-'}</td>
+          <td style="text-align: center; font-weight: bold; color: ${catColor};">${p.kategori || 'Ringan'}</td>
+          <td style="text-align: center; font-weight: bold; color: #dc2626;">+${p.poin || 0} Pts</td>
+          <td>${pelaporNama}</td>
+          <td>${p.tindakLanjut || (p as any).status || 'Tercatat'}</td>
+        </tr>
+      `;
+    }).join('') : `
+      <tr>
+        <td colspan="10" style="text-align: center; padding: 12px; color: #777;">Belum ada data catatan pelanggaran disiplin terdaftar.</td>
+      </tr>
+    `;
+
+    const remisiRowsHtml = filteredRemisiList.length > 0 ? filteredRemisiList.map((r, idx) => {
+      const s = db.siswa.find(x => x.id === r.siswaId);
+      const kelasName = getStudentClassName(r.siswaId);
+      const pemberiUser = db.users.find(u => u.id === (r as any).pemberiId);
+      const pemberiNama = pemberiUser?.nama || (r as any).guruPemberi || (r as any).pemberiId || 'Guru BK / Wali Kelas';
+
+      return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td style="text-align: center;">${r.tanggal || '-'}</td>
+          <td><b>${s?.nama || 'Siswa'}</b></td>
+          <td style="text-align: center;">${s?.nisn || s?.nis || '-'}</td>
+          <td style="text-align: center; font-weight: bold;">${kelasName}</td>
+          <td>${r.jenisRemisi || (r as any).bentukPembinaan || '-'}</td>
+          <td style="text-align: center; font-weight: bold; color: #0284c7;">${r.kategori || 'Sikap Positif'}</td>
+          <td style="text-align: center; font-weight: bold; color: #047857;">-${r.poin || 0} Pts</td>
+          <td>${pemberiNama}</td>
+          <td>${r.keterangan || 'Remisi Disetujui'}</td>
+        </tr>
+      `;
+    }).join('') : `
+      <tr>
+        <td colspan="10" style="text-align: center; padding: 12px; color: #777;">Belum ada data log remisi poin terdaftar.</td>
+      </tr>
+    `;
+
+    const classSummaryRowsHtml = db.kelas.map((cls, idx) => {
+      const classStudents = db.siswa.filter(s => s.kelasId === cls.id || s.kelasId === cls.namaKelas || cls.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
+      const studentIds = new Set(classStudents.map(s => s.id));
+
+      const classPelanggaran = (db.pelanggaran || []).filter(p => studentIds.has(p.siswaId));
+      const classPelPoin = classPelanggaran.reduce((s, p) => s + Number(p.poin || 0), 0);
+
+      const classRemisi = (db.remisiPoin || []).filter(r => studentIds.has(r.siswaId));
+      const classRemPoin = classRemisi.reduce((s, r) => s + Number(r.poin || 0), 0);
+
+      const netClassPoin = Math.max(0, classPelPoin - classRemPoin);
+
+      let statusKelas = '<span style="color: #047857; font-weight: bold;">Tertib</span>';
+      if (netClassPoin > 100) {
+        statusKelas = '<span style="color: #dc2626; font-weight: bold;">Atensi Khusus</span>';
+      } else if (netClassPoin > 40) {
+        statusKelas = '<span style="color: #d97706; font-weight: bold;">Perlu Monitoring</span>';
+      }
+
+      return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td><b>${cls.namaKelas}</b></td>
+          <td style="text-align: center;">${classStudents.length} Siswa</td>
+          <td style="text-align: center; font-weight: bold; color: #dc2626;">${classPelanggaran.length} Kasus</td>
+          <td style="text-align: center; font-weight: bold; color: #dc2626;">+${classPelPoin}</td>
+          <td style="text-align: center; font-weight: bold; color: #047857;">${classRemisi.length} Log</td>
+          <td style="text-align: center; font-weight: bold; color: #047857;">-${classRemPoin}</td>
+          <td style="text-align: center; font-weight: bold;">${netClassPoin} Pts</td>
+          <td style="text-align: center;">${statusKelas}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const docHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>Laporan Disiplin Guru Piket - ${targetKelasLabel}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 1.2cm 1.5cm 1.2cm 1.5cm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            color: #000000;
+            line-height: 1.4;
+            font-size: 10pt;
+          }
+          .kop-text {
+            text-align: center;
+          }
+          .doc-title {
+            text-align: center;
+            margin-bottom: 18px;
+          }
+          .doc-title h3 {
+            margin: 0;
+            font-size: 13pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-decoration: underline;
+          }
+          .doc-title p {
+            margin: 4px 0 0 0;
+            font-size: 10pt;
+          }
+          .kpi-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+          }
+          .kpi-table td {
+            padding: 8px;
+            border: 1px solid #333333;
+            text-align: center;
+            background-color: #f8fafc;
+          }
+          .kpi-label {
+            font-size: 8.5pt;
+            font-weight: bold;
+            color: #475569;
+            text-transform: uppercase;
+          }
+          .kpi-value {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 3px;
+          }
+          .section-title {
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            background-color: #1e293b;
+            color: #ffffff;
+            padding: 6px 10px;
+          }
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 9.5pt;
+          }
+          .data-table th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8.5pt;
+            padding: 6px 8px;
+            border: 1px solid #000000;
+            text-align: center;
+          }
+          .data-table td {
+            padding: 5px 8px;
+            border: 1px solid #000000;
+            vertical-align: middle;
+          }
+          .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+            page-break-inside: avoid;
+          }
+          .sig-table td {
+            width: 50%;
+            text-align: center;
+            vertical-align: top;
+            font-size: 10pt;
+          }
+          .sig-space {
+            height: 60px;
+          }
+          .sig-name {
+            font-weight: bold;
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kop-text" style="border-bottom: 3px double #000000; padding-bottom: 5px; margin-bottom: 15px;">
+          <span style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 10.5pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN DAN KEBUDAYAAN</span><br/>
+          <span style="font-size: 13pt; font-weight: bold; text-transform: uppercase;">UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 8.5pt; font-style: italic;">Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</span>
+        </div>
+
+        <div class="doc-title">
+          <h3>LAPORAN REKAPITULASI LAYANAN DISIPLIN, PELANGGARAN & REMISI POIN SISWA</h3>
+          <p><b>PETUGAS GURU PIKET SEKOLAH &ndash; TARGET: ${targetKelasLabel.toUpperCase()}</b></p>
+          <p style="font-size: 9pt; color: #555;">Tanggal Cetak Laporan: ${dateTodayStr}</p>
+        </div>
+
+        <table class="kpi-table">
+          <tr>
+            <td>
+              <div class="kpi-label">Total Pelanggaran</div>
+              <div class="kpi-value" style="color: #dc2626;">${totalCases} Kasus</div>
+            </td>
+            <td>
+              <div class="kpi-label">Akumulasi Poin Pelanggaran</div>
+              <div class="kpi-value" style="color: #dc2626;">+${totalViolPoin} Pts</div>
+            </td>
+            <td>
+              <div class="kpi-label">Total Log Remisi</div>
+              <div class="kpi-value" style="color: #047857;">${totalRemisiCases} Log</div>
+            </td>
+            <td>
+              <div class="kpi-label">Pengurangan Poin Remisi</div>
+              <div class="kpi-value" style="color: #047857;">-${totalRemisiPoin} Pts</div>
+            </td>
+            <td>
+              <div class="kpi-label">Net Poin Disiplin Sisa</div>
+              <div class="kpi-value" style="color: #1e293b;">${netPoinDisiplin} Pts</div>
+            </td>
+          </tr>
+        </table>
+
+        <div class="section-title">BAGIAN I: REKAPITULASI CATATAN PELANGGARAN SISWA</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 4%;">No</th>
+              <th style="width: 10%;">Tanggal</th>
+              <th style="width: 18%;">Nama Siswa</th>
+              <th style="width: 10%;">NIS / NISN</th>
+              <th style="width: 8%;">Kelas</th>
+              <th style="width: 20%;">Jenis / Deskripsi Pelanggaran</th>
+              <th style="width: 8%;">Kategori</th>
+              <th style="width: 8%;">Poin</th>
+              <th style="width: 14%;">Guru Pelapor</th>
+              <th style="width: 10%;">Status / Tindak Lanjut</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pelanggaranRowsHtml}
+          </tbody>
+        </table>
+
+        <div class="section-title">BAGIAN II: REKAPITULASI LOG REMISI POIN SISWA (PERILAKU POSITIF & PEMBINAAN)</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 4%;">No</th>
+              <th style="width: 10%;">Tanggal</th>
+              <th style="width: 18%;">Nama Siswa</th>
+              <th style="width: 10%;">NIS / NISN</th>
+              <th style="width: 8%;">Kelas</th>
+              <th style="width: 20%;">Bentuk Pembinaan / Perilaku Baik</th>
+              <th style="width: 8%;">Kategori</th>
+              <th style="width: 8%;">Remisi Poin</th>
+              <th style="width: 14%;">Guru Pemberi</th>
+              <th style="width: 10%;">Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${remisiRowsHtml}
+          </tbody>
+        </table>
+
+        <div class="section-title">BAGIAN III: REKAPITULASI AKUMULASI POIN DISIPLIN PER KELAS / ROMBEL</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 5%;">No</th>
+              <th style="width: 15%;">Nama Rombongan Belajar</th>
+              <th style="width: 12%;">Jumlah Siswa</th>
+              <th style="width: 12%;">Kasus Pelanggaran</th>
+              <th style="width: 11%;">Total Poin (+)</th>
+              <th style="width: 11%;">Log Remisi</th>
+              <th style="width: 11%;">Total Remisi (-)</th>
+              <th style="width: 11%;">Net Poin Sisa</th>
+              <th style="width: 12%;">Status Kepatuhan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${classSummaryRowsHtml}
+          </tbody>
+        </table>
+
+        <table class="sig-table">
+          <tr>
+            <td>
+              Mengetahui,<br/>
+              <b>Kepala Sekolah</b>
+              <div class="sig-space"></div>
+              <span class="sig-name">${kepalaSekolahName}</span><br/>
+              NIP. 19680512 199412 1 002
+            </td>
+            <td>
+              Tangerang Selatan, ${dateTodayStr}<br/>
+              <b>Guru Piket / Petugas Disiplin</b>
+              <div class="sig-space"></div>
+              <span class="sig-name">${guruPiketName}</span><br/>
+              NIP. - / Petugas Disiplin Piket
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + docHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeKelasName = targetKelasLabel.replace(/[^a-zA-Z0-9]/g, '_');
+    link.download = `Laporan_Disiplin_Guru_Piket_${safeKelasName}_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredDisiplinPelanggaran = useMemo(() => {
+    return (db.pelanggaran || []).filter(p => {
+      if (disiplinFilterKelas === 'ALL') return true;
+      const s = db.siswa.find(x => x.id === p.siswaId);
+      if (!s) return false;
+      const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
+      const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
+      return s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+    });
+  }, [db.pelanggaran, db.siswa, db.kelas, disiplinFilterKelas]);
+
+  const filteredDisiplinRemisi = useMemo(() => {
+    return (db.remisiPoin || []).filter(r => {
+      if (disiplinFilterKelas === 'ALL') return true;
+      const s = db.siswa.find(x => x.id === r.siswaId);
+      if (!s) return false;
+      const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
+      const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
+      return s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+    });
+  }, [db.remisiPoin, db.siswa, db.kelas, disiplinFilterKelas]);
+
+  const disiplinStats = useMemo(() => {
+    const totalPelanggaran = filteredDisiplinPelanggaran.length;
+    const totalPoinPelanggaran = filteredDisiplinPelanggaran.reduce((sum, p) => sum + Number(p.poin || 0), 0);
+    const totalRemisi = filteredDisiplinRemisi.length;
+    const totalPoinRemisi = filteredDisiplinRemisi.reduce((sum, r) => sum + Number(r.poin || 0), 0);
+    const netPoin = Math.max(0, totalPoinPelanggaran - totalPoinRemisi);
+
+    const ringan = filteredDisiplinPelanggaran.filter(p => p.kategori === 'Ringan' || !p.kategori);
+    const sedang = filteredDisiplinPelanggaran.filter(p => p.kategori === 'Sedang');
+    const berat = filteredDisiplinPelanggaran.filter(p => p.kategori === 'Berat');
+
+    const classStats = (db.kelas || []).map(cls => {
+      const classStudents = (db.siswa || []).filter(s => s.kelasId === cls.id || s.kelasId === cls.namaKelas || cls.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
+      const studentIds = new Set(classStudents.map(s => s.id));
+
+      const classPel = (db.pelanggaran || []).filter(p => studentIds.has(p.siswaId));
+      const classPelPoin = classPel.reduce((s, p) => s + Number(p.poin || 0), 0);
+
+      const classRem = (db.remisiPoin || []).filter(r => studentIds.has(r.siswaId));
+      const classRemPoin = classRem.reduce((s, r) => s + Number(r.poin || 0), 0);
+
+      const classNet = Math.max(0, classPelPoin - classRemPoin);
+
+      return {
+        classId: cls.id,
+        className: cls.namaKelas,
+        studentCount: classStudents.length,
+        pelanggaranCount: classPel.length,
+        pelanggaranPoin: classPelPoin,
+        remisiCount: classRem.length,
+        remisiPoin: classRemPoin,
+        netPoin: classNet
+      };
+    });
+
+    const studentPointsMap = new Map<string, { siswa: Siswa; pelPoin: number; remPoin: number; netPoin: number; pelCount: number }>();
+    
+    (db.siswa || []).forEach(s => {
+      if (disiplinFilterKelas !== 'ALL') {
+        const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
+        const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
+        const match = s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+        if (!match) return;
+      }
+      const studentPel = (db.pelanggaran || []).filter(p => p.siswaId === s.id);
+      const pPoin = studentPel.reduce((sum, p) => sum + Number(p.poin || 0), 0);
+
+      const studentRem = (db.remisiPoin || []).filter(r => r.siswaId === s.id);
+      const rPoin = studentRem.reduce((sum, r) => sum + Number(r.poin || 0), 0);
+
+      if (pPoin > 0 || rPoin > 0) {
+        studentPointsMap.set(s.id, {
+          siswa: s,
+          pelPoin: pPoin,
+          remPoin: rPoin,
+          netPoin: Math.max(0, pPoin - rPoin),
+          pelCount: studentPel.length
+        });
+      }
+    });
+
+    const studentList = Array.from(studentPointsMap.values());
+    const topViolators = [...studentList].sort((a, b) => b.netPoin - a.netPoin).slice(0, 5);
+    const topRemisi = [...studentList].filter(s => s.remPoin > 0).sort((a, b) => b.remPoin - a.remPoin).slice(0, 5);
+
+    return {
+      totalPelanggaran,
+      totalPoinPelanggaran,
+      totalRemisi,
+      totalPoinRemisi,
+      netPoin,
+      ringanCount: ringan.length,
+      ringanPoin: ringan.reduce((s, p) => s + Number(p.poin || 0), 0),
+      sedangCount: sedang.length,
+      sedangPoin: sedang.reduce((s, p) => s + Number(p.poin || 0), 0),
+      beratCount: berat.length,
+      beratPoin: berat.reduce((s, p) => s + Number(p.poin || 0), 0),
+      classStats,
+      topViolators,
+      topRemisi
+    };
+  }, [filteredDisiplinPelanggaran, filteredDisiplinRemisi, db.kelas, db.siswa, db.pelanggaran, db.remisiPoin, disiplinFilterKelas]);
+
   const overallAttendanceStats = useMemo(() => {
     const list = db.kehadiran || [];
     let totalHadir = 0;
@@ -1730,6 +2215,211 @@ export default function KonselingView({
         </div>
       )}
 
+      {/* Layanan Disiplin Piket Dashboard & Graphics */}
+      {(activeTab === 'pelanggaran' || activeTab === 'remisi' || currentUser.role === UserRole.GURU_PIKET) && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+          {/* Top Header Bar with Title, Class Selector, and Primary DOC Download Button */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <ShieldAlert size={12} /> Layanan Disiplin Piket
+                </span>
+                {currentUser.role === UserRole.GURU_PIKET && (
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Sparkles size={11} /> Login Piket Active
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mt-1.5">
+                <BarChart2 className="text-rose-600" size={20} />
+                Grafik Kedisiplinan & Laporan Rekapitulasi Guru Piket
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Monitoring terpadu catatan pelanggaran, akumulasi poin, dan log remisi poin siswa per-rombongan belajar
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Filter Rombel Select */}
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs">
+                <Filter size={14} className="text-slate-500" />
+                <span className="font-bold text-slate-600">Rombel:</span>
+                <select
+                  value={disiplinFilterKelas}
+                  onChange={(e) => setDisiplinFilterKelas(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Kelas (7-1 s.d. 9-11)</option>
+                  {db.kelas.map(c => (
+                    <option key={c.id} value={c.id}>{c.namaKelas}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Download DOC Report Button */}
+              <button
+                onClick={() => handleDownloadDisiplinPiketDoc(disiplinFilterKelas)}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer hover:-translate-y-0.5"
+                title="Unduh Laporan Layanan Disiplin Lengkap dalam Format Microsoft Word (.DOC)"
+              >
+                <FileText size={16} />
+                <span>Unduh Laporan Format .DOC</span>
+                <Download size={14} className="opacity-80" />
+              </button>
+            </div>
+          </div>
+
+          {/* Key KPI Stats Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="bg-rose-50/70 p-4 rounded-2xl border border-rose-100/80 space-y-1">
+              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">Catatan Pelanggaran</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-rose-900">{disiplinStats.totalPelanggaran} Kasus</span>
+                <span className="text-xs font-extrabold text-rose-600">(+{disiplinStats.totalPoinPelanggaran} Pts)</span>
+              </div>
+              <span className="text-[10px] text-rose-600/90 font-medium block">Total Poin Kedisiplinan Terdaftar</span>
+            </div>
+
+            <div className="bg-sky-50/70 p-4 rounded-2xl border border-sky-100/80 space-y-1">
+              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider block">Log Remisi Poin</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-sky-900">{disiplinStats.totalRemisi} Log</span>
+                <span className="text-xs font-extrabold text-sky-600">(-{disiplinStats.totalPoinRemisi} Pts)</span>
+              </div>
+              <span className="text-[10px] text-sky-600/90 font-medium block">Pengurangan Poin Karakter Baik</span>
+            </div>
+
+            <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-100/80 space-y-1">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Net Poin Disiplin Sisa</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-emerald-900">{disiplinStats.netPoin} Pts</span>
+              </div>
+              <span className="text-[10px] text-emerald-600/90 font-medium block">Akumulasi Setelah Remisi</span>
+            </div>
+
+            <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-100/80 space-y-1">
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Breakdown Kategori</span>
+              <div className="flex items-center gap-1.5 pt-1 text-[11px] font-bold">
+                <span className="bg-sky-100 text-sky-800 px-2 py-0.5 rounded">R: {disiplinStats.ringanCount}</span>
+                <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">S: {disiplinStats.sedangCount}</span>
+                <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded">B: {disiplinStats.beratCount}</span>
+              </div>
+              <span className="text-[10px] text-amber-700/90 font-medium block pt-0.5">Ringan / Sedang / Berat</span>
+            </div>
+          </div>
+
+          {/* Charts & Analytics Visuals */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
+            {/* Chart 1: Bar & Dual Progress per Class */}
+            <div className="lg:col-span-7 bg-slate-50/60 p-5 rounded-2xl border border-slate-100 space-y-3">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <BarChart2 size={15} className="text-rose-600" />
+                  Distribusi Poin Pelanggaran vs Remisi per Kelas
+                </h4>
+                <span className="text-[10px] text-slate-400 font-semibold">
+                  {disiplinFilterKelas === 'ALL' ? 'Semua Rombel' : 'Rombel Terpilih'}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 max-h-[270px] overflow-y-auto pr-1 text-xs">
+                {disiplinStats.classStats.map(cls => {
+                  const maxPoin = Math.max(1, ...disiplinStats.classStats.map(c => Math.max(c.pelanggaranPoin, c.remisiPoin)));
+                  const pelPct = Math.min(100, Math.round((cls.pelanggaranPoin / maxPoin) * 100));
+                  const remPct = Math.min(100, Math.round((cls.remisiPoin / maxPoin) * 100));
+
+                  return (
+                    <div key={cls.classId} className="bg-white p-3 rounded-xl border border-slate-100 shadow-2xs space-y-1.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-800">{cls.className} ({cls.studentCount} Siswa)</span>
+                        <div className="flex items-center gap-2 font-mono text-[11px]">
+                          <span className="text-rose-600 font-bold">+{cls.pelanggaranPoin} Pts</span>
+                          <span className="text-sky-600 font-bold">-{cls.remisiPoin} Pts</span>
+                          <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-extrabold text-[10px]">Net: {cls.netPoin}</span>
+                        </div>
+                      </div>
+
+                      {/* Dual Bars */}
+                      <div className="space-y-1">
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex" title={`Pelanggaran: ${cls.pelanggaranPoin} Pts`}>
+                          <div style={{ width: `${pelPct}%` }} className="bg-rose-500 h-full transition-all duration-500" />
+                        </div>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex" title={`Remisi: ${cls.remisiPoin} Pts`}>
+                          <div style={{ width: `${remPct}%` }} className="bg-sky-500 h-full transition-all duration-500" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Chart 2: Leaderboard Top Siswa Atensi & Peraih Remisi */}
+            <div className="lg:col-span-5 bg-slate-50/60 p-5 rounded-2xl border border-slate-100 space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Award size={15} className="text-amber-500" />
+                Siswa Atensi Disiplin & Peraih Remisi
+              </h4>
+
+              {/* Top Violators */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-rose-600 uppercase block">Top Siswa Perlu Pembinaan (+Poin Sisa)</span>
+                {disiplinStats.topViolators.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {disiplinStats.topViolators.map((st, i) => (
+                      <div key={st.siswa.id} className="bg-white p-2.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] flex items-center justify-center shrink-0">
+                            {i + 1}
+                          </span>
+                          <div>
+                            <p className="font-bold text-slate-800 line-clamp-1">{st.siswa.nama}</p>
+                            <p className="text-[10px] text-slate-400">{getStudentClassName(st.siswa.id)} | {st.pelCount} Kasus</p>
+                          </div>
+                        </div>
+                        <span className="bg-rose-100 text-rose-800 font-black text-xs px-2 py-0.5 rounded">
+                          +{st.netPoin} Pts
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">Tidak ada siswa dengan catatan poin aktif.</p>
+                )}
+              </div>
+
+              {/* Top Remisi */}
+              <div className="space-y-2 pt-2 border-t border-slate-200/60">
+                <span className="text-[10px] font-bold text-sky-600 uppercase block">Top Peraih Remisi Poin (Perilaku Positif)</span>
+                {disiplinStats.topRemisi.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {disiplinStats.topRemisi.map((st, i) => (
+                      <div key={st.siswa.id} className="bg-white p-2.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-800 font-bold text-[10px] flex items-center justify-center shrink-0">
+                            {i + 1}
+                          </span>
+                          <div>
+                            <p className="font-bold text-slate-800 line-clamp-1">{st.siswa.nama}</p>
+                            <p className="text-[10px] text-slate-400">{getStudentClassName(st.siswa.id)}</p>
+                          </div>
+                        </div>
+                        <span className="bg-sky-100 text-sky-800 font-black text-xs px-2 py-0.5 rounded">
+                          -{st.remPoin} Pts
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">Belum ada log remisi poin tercatat.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main search and content list */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Search header bar */}
@@ -1863,7 +2553,10 @@ export default function KonselingView({
                     const siswa = db.siswa.find(s => s.id === p.siswaId);
                     return (
                       <tr key={p.id} className="hover:bg-slate-50/30">
-                        <td className="py-3 px-4 font-bold text-slate-800">{siswa?.nama || 'Siswa'}</td>
+                        <td className="py-3 px-4">
+                          <p className="font-bold text-slate-800">{siswa?.nama || 'Siswa'}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">{getStudentClassName(p.siswaId)} | NIS: {siswa?.nis || '-'}</p>
+                        </td>
                         <td className="py-3 px-4">
                           <p className="font-mono text-[10px] text-slate-400">{p.tanggal}</p>
                           <p className="font-semibold text-slate-700">{p.jenisPelanggaran}</p>
@@ -2055,7 +2748,10 @@ export default function KonselingView({
                       const siswa = db.siswa.find(s => s.id === r.siswaId);
                       return (
                         <tr key={r.id} className="hover:bg-slate-50/30">
-                          <td className="py-3 px-4 font-bold text-slate-800">{siswa?.nama || 'Siswa'}</td>
+                          <td className="py-3 px-4">
+                            <p className="font-bold text-slate-800">{siswa?.nama || 'Siswa'}</p>
+                            <p className="text-[10px] text-slate-400 font-medium">{getStudentClassName(r.siswaId)} | NIS: {siswa?.nis || '-'}</p>
+                          </td>
                           <td className="py-3 px-4">
                             <p className="font-mono text-[10px] text-slate-400">{r.tanggal}</p>
                             <p className="font-semibold text-slate-700">{r.jenisRemisi}</p>
