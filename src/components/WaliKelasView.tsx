@@ -26,6 +26,7 @@ import {
   Smile,
   AlertCircle,
   Lock,
+  Shield,
   Send,
   Trash,
   Filter,
@@ -44,6 +45,7 @@ import {
   Save
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran } from '../types';
+import { findSiswa, getSiswaInfo } from '../services/api';
 
 interface HdsDetailDrawerProps {
   siswa: Siswa;
@@ -708,10 +710,13 @@ export default function WaliKelasView({
 
   // Determine currently selected full class name based on active level
   const currentClassName = useMemo(() => {
+    if (currentUser.role === UserRole.WALI_KELAS && allowedClassName) {
+      return allowedClassName;
+    }
     if (activeLevel === '7') return selectedClass7;
     if (activeLevel === '8') return selectedClass8;
     return selectedClass9;
-  }, [activeLevel, selectedClass7, selectedClass8, selectedClass9]);
+  }, [currentUser.role, allowedClassName, activeLevel, selectedClass7, selectedClass8, selectedClass9]);
 
   // Helper to resolve student class name
   const getStudentClassName = (s: Siswa): string => {
@@ -1490,7 +1495,7 @@ export default function WaliKelasView({
 
   const handleDownloadKehadiranSiswaDoc = (siswaId: string) => {
     if (!db) return;
-    const siswa = db.siswa.find(s => s.id === siswaId);
+    const siswa = findSiswa(db, siswaId);
     if (!siswa) return;
 
     const kelas = db.kelas.find(c => c.id === siswa.kelasId || c.namaKelas.toLowerCase().trim() === siswa.kelasId?.toLowerCase().trim());
@@ -2342,7 +2347,7 @@ export default function WaliKelasView({
     if (!searchQuery.trim()) return classViolations;
     const q = searchQuery.toLowerCase();
     return classViolations.filter(p => {
-      const student = db?.siswa.find(s => s.id === p.siswaId);
+      const student = findSiswa(db, p.siswaId, p);
       return (
         (student && student.nama.toLowerCase().includes(q)) ||
         p.jenisPelanggaran.toLowerCase().includes(q) ||
@@ -2363,7 +2368,7 @@ export default function WaliKelasView({
     if (!searchQuery.trim()) return classRemisi;
     const q = searchQuery.toLowerCase();
     return classRemisi.filter(r => {
-      const student = db?.siswa.find(s => s.id === r.siswaId);
+      const student = findSiswa(db, r.siswaId, r);
       return (
         (student && student.nama.toLowerCase().includes(q)) ||
         r.jenisRemisi.toLowerCase().includes(q) ||
@@ -2384,7 +2389,7 @@ export default function WaliKelasView({
     if (!searchQuery.trim()) return classPrestasi;
     const q = searchQuery.toLowerCase();
     return classPrestasi.filter(p => {
-      const student = db?.siswa.find(s => s.id === p.siswaId);
+      const student = findSiswa(db, p.siswaId, p);
       return (
         (student && student.nama.toLowerCase().includes(q)) ||
         p.namaPrestasi.toLowerCase().includes(q) ||
@@ -2404,7 +2409,7 @@ export default function WaliKelasView({
   // Search filter for Kehadiran
   const filteredKehadiran = useMemo(() => {
     return classKehadiran.filter(k => {
-      const student = db?.siswa.find(s => s.id === k.siswaId);
+      const student = findSiswa(db, k.siswaId, k);
       const q = searchQuery.toLowerCase();
       const matchSearch = !q || (
         (student && student.nama.toLowerCase().includes(q)) ||
@@ -2714,6 +2719,8 @@ export default function WaliKelasView({
           let isLocked = false;
           if (currentUser.role === UserRole.GURU_BK && db && db.kelas && db.kelas.length > 0) {
             isLocked = !db.kelas.some(k => k.namaKelas.startsWith(`Kelas ${level}`));
+          } else if (currentUser.role === UserRole.WALI_KELAS && allowedClassLevel) {
+            isLocked = level !== allowedClassLevel;
           }
           return (
             <button
@@ -2745,17 +2752,19 @@ export default function WaliKelasView({
         <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
           <span>Pilih Rombongan Belajar Kelas {activeLevel}:</span>
           {allowedClassName && (
-            <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-md">
-              Akses Semua Sub-Rombel (Wali Kelas Utama: {allowedClassName})
+            <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-lg flex items-center gap-1 border border-indigo-100">
+              <Shield size={12} className="text-indigo-500" /> Akses Terbatas Wali Kelas: <strong className="text-indigo-800">{allowedClassName}</strong>
             </span>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
           {Array.from({ length: 11 }, (_, i) => `Kelas ${activeLevel}-${i + 1}`).map((cls) => {
-            const isActive = currentClassName === cls;
+            const isActive = normalizeClassName(currentClassName) === normalizeClassName(cls);
             let isLocked = false;
             if (currentUser.role === UserRole.GURU_BK && db && db.kelas && db.kelas.length > 0) {
               isLocked = !db.kelas.some(k => k.namaKelas === cls);
+            } else if (currentUser.role === UserRole.WALI_KELAS && allowedClassName) {
+              isLocked = normalizeClassName(cls) !== normalizeClassName(allowedClassName);
             }
             return (
               <button
@@ -3060,11 +3069,11 @@ export default function WaliKelasView({
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                       {filteredViolations.map((p) => {
-                        const student = db?.siswa.find(s => s.id === p.siswaId);
+                        const info = getSiswaInfo(db, p.siswaId, p);
                         return (
                           <tr key={p.id} className="hover:bg-slate-50/50">
                             <td className="p-3 font-mono text-[10px] text-slate-500">{p.tanggal}</td>
-                            <td className="p-3 font-bold text-slate-800">{student?.nama || 'Siswa Dihapus'}</td>
+                            <td className="p-3 font-bold text-slate-800">{info.nama}</td>
                             <td className="p-3 text-slate-600">{p.jenisPelanggaran}</td>
                             <td className="p-3">
                               <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
@@ -3166,11 +3175,11 @@ export default function WaliKelasView({
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                       {filteredRemisi.map((r) => {
-                        const student = db?.siswa.find(s => s.id === r.siswaId);
+                        const info = getSiswaInfo(db, r.siswaId, r);
                         return (
                           <tr key={r.id} className="hover:bg-slate-50/50">
                             <td className="p-3 font-mono text-[10px] text-slate-500">{r.tanggal}</td>
-                            <td className="p-3 font-bold text-slate-800">{student?.nama || 'Siswa Dihapus'}</td>
+                            <td className="p-3 font-bold text-slate-800">{info.nama}</td>
                             <td className="p-3 text-slate-600">{r.jenisRemisi}</td>
                             <td className="p-3 text-slate-500">{r.kategori}</td>
                             <td className="p-3 text-center font-extrabold text-emerald-600">-{r.poin} pts</td>
@@ -3261,19 +3270,26 @@ export default function WaliKelasView({
                       Pilih Kelas (Dropdown)
                     </label>
                     <select
-                      value={filterRemisiClass}
+                      value={currentUser.role === UserRole.WALI_KELAS && allowedClassName ? allowedClassName : filterRemisiClass}
                       onChange={(e) => {
                         setFilterRemisiClass(e.target.value);
                         setFilterRemisiSiswaId('ALL'); // Reset student filter when class changes
                       }}
-                      className="w-full px-3.5 py-2.5 bg-amber-50/30 border border-amber-200 focus:border-amber-500 focus:bg-white rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                      disabled={currentUser.role === UserRole.WALI_KELAS}
+                      className="w-full px-3.5 py-2.5 bg-amber-50/30 border border-amber-200 focus:border-amber-500 focus:bg-white rounded-xl text-xs font-bold text-slate-800 focus:outline-none disabled:bg-slate-100 disabled:text-slate-600"
                     >
-                      <option value="ALL">🌟 Semua Kelas (Kelas 7-1 s.d. 9-11)</option>
-                      {['7', '8', '9'].map(level => (
-                        Array.from({ length: 11 }, (_, i) => `Kelas ${level}-${i + 1}`).map(clsName => (
-                          <option key={clsName} value={clsName}>{clsName}</option>
-                        ))
-                      ))}
+                      {currentUser.role === UserRole.WALI_KELAS && allowedClassName ? (
+                        <option value={allowedClassName}>{allowedClassName} (Kelas Anda)</option>
+                      ) : (
+                        <>
+                          <option value="ALL">🌟 Semua Kelas (Kelas 7-1 s.d. 9-11)</option>
+                          {['7', '8', '9'].map(level => (
+                            Array.from({ length: 11 }, (_, i) => `Kelas ${level}-${i + 1}`).map(clsName => (
+                              <option key={clsName} value={clsName}>{clsName}</option>
+                            ))
+                          ))}
+                        </>
+                      )}
                     </select>
                   </div>
 
@@ -3522,10 +3538,10 @@ export default function WaliKelasView({
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                       {filteredPrestasi.map((p) => {
-                        const student = db?.siswa.find(s => s.id === p.siswaId);
+                        const info = getSiswaInfo(db, p.siswaId, p);
                         return (
                           <tr key={p.id} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-bold text-slate-800">{student?.nama || 'Siswa Dihapus'}</td>
+                            <td className="p-3 font-bold text-slate-800">{info.nama}</td>
                             <td className="p-3 text-slate-600">{p.namaPrestasi}</td>
                             <td className="p-3">
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800">
@@ -3819,13 +3835,12 @@ export default function WaliKelasView({
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                         {filteredKehadiran.map((att) => {
-                          const student = db?.siswa.find(s => s.id === att.siswaId);
-                          const studentKelas = student ? getStudentClassName(student) : currentClassName;
+                          const info = getSiswaInfo(db, att.siswaId, att);
                           return (
                             <tr key={att.id} className="hover:bg-slate-50/50">
                               <td className="p-3">
-                                <p className="font-bold text-slate-800">{student?.nama || 'Siswa Dihapus'}</p>
-                                <p className="text-[9px] text-slate-400">NIS: {student?.nis || '-'}</p>
+                                <p className="font-bold text-slate-800">{info.nama}</p>
+                                <p className="text-[9px] text-slate-400">NIS: {info.nis}</p>
                               </td>
                               <td className="p-3">
                                 <p className="font-semibold text-slate-700">{att.mingguKe}</p>
@@ -3865,7 +3880,7 @@ export default function WaliKelasView({
                               </td>
                               <td className="p-3 text-center bg-teal-50/20">
                                 <button
-                                  onClick={() => handleDownloadKehadiranMingguDoc(studentKelas, att.mingguKe, att.bulan || 'ALL')}
+                                  onClick={() => handleDownloadKehadiranMingguDoc(info.kelasName || currentClassName, att.mingguKe, att.bulan || 'ALL')}
                                   className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition inline-flex items-center gap-1 shadow-xs cursor-pointer"
                                   title="Unduh Laporan Format DOC Rekap Minggu Ini"
                                 >

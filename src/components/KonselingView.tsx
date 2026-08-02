@@ -47,6 +47,7 @@ import {
   HomeVisit,
   Kehadiran
 } from '../types';
+import { findSiswa, getSiswaInfo } from '../services/api';
 
 interface KonselingViewProps {
   db: DatabaseState;
@@ -1497,12 +1498,8 @@ export default function KonselingView({
   };
 
   const getStudentClassName = (siswaId: string): string => {
-    const siswa = db.siswa.find(s => s.id === siswaId);
-    if (!siswa) return 'Kelas -';
-    const foundKelas = db.kelas.find(c => c.id === siswa.kelasId || c.namaKelas.toLowerCase().trim() === String(siswa.kelasId).toLowerCase().trim());
-    if (foundKelas) return foundKelas.namaKelas;
-    if (siswa.kelasId) return siswa.kelasId;
-    return 'Kelas -';
+    const info = getSiswaInfo(db, siswaId);
+    return info.kelasName;
   };
 
   const handleDownloadDisiplinPiketDoc = (targetKelasId: string) => {
@@ -1512,7 +1509,7 @@ export default function KonselingView({
 
     const matchesClass = (siswaId: string): boolean => {
       if (isAll) return true;
-      const s = db.siswa.find(x => x.id === siswaId);
+      const s = findSiswa(db, siswaId);
       if (!s) return false;
       if (targetKelas) {
         return s.kelasId === targetKelas.id || s.kelasId === targetKelas.namaKelas || targetKelas.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim();
@@ -2489,11 +2486,11 @@ export default function KonselingView({
               <tbody className="divide-y divide-slate-50 text-slate-700">
                 {filteredList.length > 0 ? (
                   filteredList.map((k: any) => {
-                    const siswa = db.siswa.find(s => s.id === k.siswaId);
+                    const info = getSiswaInfo(db, k.siswaId, k);
                     return (
                       <tr key={k.id} className="hover:bg-slate-50/30">
                         <td className="py-3 px-4 font-semibold">
-                          <p className="text-slate-800 font-bold">{siswa?.nama || 'Siswa'}</p>
+                          <p className="text-slate-800 font-bold">{info.nama}</p>
                           <p className="text-[10px] text-slate-400">{k.nomorKonseling}</p>
                         </td>
                         <td className="py-3 px-4">
@@ -2550,12 +2547,12 @@ export default function KonselingView({
               <tbody className="divide-y divide-slate-50 text-slate-700">
                 {filteredList.length > 0 ? (
                   filteredList.map((p: any) => {
-                    const siswa = db.siswa.find(s => s.id === p.siswaId);
+                    const info = getSiswaInfo(db, p.siswaId, p);
                     return (
                       <tr key={p.id} className="hover:bg-slate-50/30">
                         <td className="py-3 px-4">
-                          <p className="font-bold text-slate-800">{siswa?.nama || 'Siswa'}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">{getStudentClassName(p.siswaId)} | NIS: {siswa?.nis || '-'}</p>
+                          <p className="font-bold text-slate-800">{info.nama}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">{info.kelasName} | NIS: {info.nis}</p>
                         </td>
                         <td className="py-3 px-4">
                           <p className="font-mono text-[10px] text-slate-400">{p.tanggal}</p>
@@ -2745,12 +2742,12 @@ export default function KonselingView({
                 <tbody className="divide-y divide-slate-50 text-slate-700">
                   {filteredList.length > 0 ? (
                     filteredList.map((r: any) => {
-                      const siswa = db.siswa.find(s => s.id === r.siswaId);
+                      const info = getSiswaInfo(db, r.siswaId, r);
                       return (
                         <tr key={r.id} className="hover:bg-slate-50/30">
                           <td className="py-3 px-4">
-                            <p className="font-bold text-slate-800">{siswa?.nama || 'Siswa'}</p>
-                            <p className="text-[10px] text-slate-400 font-medium">{getStudentClassName(r.siswaId)} | NIS: {siswa?.nis || '-'}</p>
+                            <p className="font-bold text-slate-800">{info.nama}</p>
+                            <p className="text-[10px] text-slate-400 font-medium">{info.kelasName} | NIS: {info.nis}</p>
                           </td>
                           <td className="py-3 px-4">
                             <p className="font-mono text-[10px] text-slate-400">{r.tanggal}</p>
@@ -2800,10 +2797,10 @@ export default function KonselingView({
               <tbody className="divide-y divide-slate-50 text-slate-700">
                 {filteredList.length > 0 ? (
                   filteredList.map((pr: any) => {
-                    const siswa = db.siswa.find(s => s.id === pr.siswaId);
+                    const info = getSiswaInfo(db, pr.siswaId, pr);
                     return (
                       <tr key={pr.id} className="hover:bg-slate-50/30">
-                        <td className="py-3 px-4 font-bold text-slate-800">{siswa?.nama || 'Siswa'}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800">{info.nama}</td>
                         <td className="py-3 px-4 font-medium text-slate-700">{pr.namaPrestasi}</td>
                         <td className="py-3 px-4">
                           <p className="font-semibold text-slate-600">{pr.tingkat}</p>
@@ -2845,10 +2842,10 @@ export default function KonselingView({
               <tbody className="divide-y divide-slate-50 text-slate-700">
                 {filteredList.length > 0 ? (
                   filteredList.map((a: any) => {
-                    const siswa = db.siswa.find(s => s.id === a.siswaId);
+                    const info = getSiswaInfo(db, a.siswaId, a);
                     return (
                       <tr key={a.id} className="hover:bg-slate-50/30">
-                        <td className="py-3 px-4 font-bold text-slate-800">{siswa?.nama || 'Siswa'}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800">{info.nama}</td>
                         <td className="py-3 px-4">
                           <p className="font-semibold text-indigo-700">AKPD: {a.akpd || '-'}</p>
                           <p className="text-slate-500">Gaya Belajar: {a.dcm || '-'}</p>
@@ -2896,10 +2893,10 @@ export default function KonselingView({
               <tbody className="divide-y divide-slate-50 text-slate-700">
                 {filteredList.length > 0 ? (
                   filteredList.map((hv: any) => {
-                    const siswa = db.siswa.find(s => s.id === hv.siswaId);
+                    const info = getSiswaInfo(db, hv.siswaId, hv);
                     return (
                       <tr key={hv.id} className="hover:bg-slate-50/30">
-                        <td className="py-3 px-4 font-bold text-slate-800">{siswa?.nama || 'Siswa'}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800">{info.nama}</td>
                         <td className="py-3 px-4 font-mono font-semibold">{hv.tanggal}</td>
                         <td className="py-3 px-4 max-w-xs truncate" title={hv.tujuan}>{hv.tujuan}</td>
                         <td className="py-3 px-4 max-w-xs truncate font-medium text-emerald-800" title={hv.hasil}>{hv.hasil}</td>
@@ -2943,16 +2940,12 @@ export default function KonselingView({
               <tbody className="divide-y divide-slate-50 text-slate-700">
                 {filteredList.length > 0 ? (
                   filteredList.map((att: any) => {
-                    const siswa = db.siswa.find(s => s.id === att.siswaId);
-                    const kelasId = siswa?.kelasId || 'ALL';
-                    const kelas = db.kelas.find(c => c.id === kelasId || c.namaKelas.toLowerCase().trim() === String(kelasId).toLowerCase().trim());
-                    const namaKelasDisplay = kelas?.namaKelas || siswa?.kelasId || 'Kelas';
-
+                    const info = getSiswaInfo(db, att.siswaId, att);
                     return (
                       <tr key={att.id} className="hover:bg-slate-50/30">
                         <td className="py-3 px-4 font-bold text-slate-800">
-                          <p>{siswa?.nama || 'Siswa'}</p>
-                          <p className="text-[10px] text-slate-400 font-normal">Kelas: {namaKelasDisplay}</p>
+                          <p>{info.nama}</p>
+                          <p className="text-[10px] text-slate-400 font-normal">{info.kelasName}</p>
                         </td>
                         <td className="py-3 px-4">
                           <p className="font-semibold text-slate-700">{att.mingguKe}</p>
@@ -2993,7 +2986,7 @@ export default function KonselingView({
                         </td>
                         <td className="py-3 px-4 text-center">
                           <button
-                            onClick={() => handleDownloadKehadiranKelasDoc(kelas?.id || kelasId)}
+                            onClick={() => handleDownloadKehadiranKelasDoc(info.foundSiswa?.kelasId || 'ALL')}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold transition shadow-xs"
                             title="Unduh Laporan Kehadiran Perkelas (Format DOC)"
                           >

@@ -17,6 +17,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Siswa } from '../types';
+import { getSiswaInfo } from '../services/api';
 
 interface DashboardViewProps {
   db: DatabaseState;
@@ -65,8 +66,8 @@ export default function DashboardView({ db, currentUser, onNavigateToSiswa }: Da
   const recentAchievements = [...db.prestasi]
     .slice(-3)
     .map(p => {
-      const siswa = db.siswa.find(s => s.id === p.siswaId);
-      return { ...p, siswaNama: siswa ? siswa.nama : 'Siswa' };
+      const info = getSiswaInfo(db, p.siswaId, p);
+      return { ...p, siswaNama: info.nama };
     });
 
   // Gender Calculations

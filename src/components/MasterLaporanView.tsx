@@ -32,6 +32,7 @@ import {
   TahunPelajaran,
   Kelas
 } from '../types';
+import { findSiswa } from '../services/api';
 
 interface MasterLaporanViewProps {
   db: DatabaseState;
@@ -129,7 +130,7 @@ export default function MasterLaporanView({
 
     // 2. Filter violations based on the same active filters
     const filteredViolations = db.pelanggaran.filter(p => {
-      const s = db.siswa.find(x => x.id === p.siswaId);
+      const s = findSiswa(db, p.siswaId, p);
       if (!s) return false;
 
       // Filter by KelasId
@@ -161,7 +162,7 @@ export default function MasterLaporanView({
       // Find classes that have violations, sorted by total metric descending, to select top 5
       const classScores: { [kelasId: string]: number } = {};
       filteredViolations.forEach(p => {
-        const s = db.siswa.find(x => x.id === p.siswaId);
+        const s = findSiswa(db, p.siswaId, p);
         if (s && s.kelasId) {
           classScores[s.kelasId] = (classScores[s.kelasId] || 0) + (chartMetric === 'poin' ? Number(p.poin) : 1);
         }
@@ -211,7 +212,7 @@ export default function MasterLaporanView({
 
       // Populate series values
       monthViolations.forEach(p => {
-        const s = db.siswa.find(x => x.id === p.siswaId);
+        const s = findSiswa(db, p.siswaId, p);
         if (!s) return;
         const k = db.kelas.find(x => x.id === s.kelasId);
         if (!k) return;

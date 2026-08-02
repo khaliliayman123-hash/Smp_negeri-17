@@ -110,6 +110,25 @@ export default function SiswaView({
     }
   };
 
+  // Lookup Wali Kelas allowed class
+  const waliKelasAllowedClass = useMemo(() => {
+    if (currentUser.role !== UserRole.WALI_KELAS) return null;
+    const cls = db.kelas?.find(k => k.waliKelasId === currentUser.id);
+    if (cls) return cls;
+    
+    const username = (currentUser.username || '').toLowerCase().trim();
+    const mapping: Record<string, string> = {
+      fay: 'Kelas 7-1', aida: 'Kelas 7-2', viika: 'Kelas 7-3', sribarnetti: 'Kelas 7-4', viny: 'Kelas 7-5', lia: 'Kelas 7-6', yanah: 'Kelas 7-7', srirahayu: 'Kelas 7-8', putri: 'Kelas 7-9', sari: 'Kelas 7-10', rifal: 'Kelas 7-11',
+      neneng: 'Kelas 8-1', meli: 'Kelas 8-2', tiar: 'Kelas 8-3', joko: 'Kelas 8-4', danang: 'Kelas 8-5', sahdiana: 'Kelas 8-6', haifa: 'Kelas 8-7', santi: 'Kelas 8-8', reni: 'Kelas 8-9', dewi: 'Kelas 8-10', emi: 'Kelas 8-11',
+      tere: 'Kelas 9-1', ferry: 'Kelas 9-2', sifah: 'Kelas 9-3', mia: 'Kelas 9-4', habib: 'Kelas 9-5', warsih: 'Kelas 9-6', tut: 'Kelas 9-7', nur: 'Kelas 9-8', pendi: 'Kelas 9-10', hadi: 'Kelas 9-11'
+    };
+    const targetName = mapping[username];
+    if (targetName) {
+      return db.kelas?.find(k => k.namaKelas.toLowerCase().trim() === targetName.toLowerCase().trim()) || { id: targetName, namaKelas: targetName, waliKelasId: currentUser.id };
+    }
+    return null;
+  }, [currentUser, db.kelas]);
+
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedKelas, setSelectedKelas] = useState('All');
@@ -954,6 +973,15 @@ export default function SiswaView({
   const filteredStudents = useMemo(() => {
     return db.siswa
       .filter((s) => {
+        // Enforce restriction for Wali Kelas
+        if (currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass) {
+          const studentClassObj = db.kelas?.find(k => k.id === s.kelasId);
+          const studentClassName = studentClassObj?.namaKelas || s.kelasId;
+          const matchesAllowed = s.kelasId === waliKelasAllowedClass.id || 
+                                 (studentClassName && waliKelasAllowedClass.namaKelas && studentClassName.toLowerCase().trim() === waliKelasAllowedClass.namaKelas.toLowerCase().trim());
+          if (!matchesAllowed) return false;
+        }
+
         const nameStr = s.nama ? String(s.nama).toLowerCase() : '';
         const nisStr = s.nis ? String(s.nis) : '';
         const nisnStr = s.nisn ? String(s.nisn) : '';
@@ -1316,12 +1344,19 @@ export default function SiswaView({
               {/* Class Filter */}
               <div>
                 <select 
-                  value={selectedKelas} 
+                  value={currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass ? waliKelasAllowedClass.id : selectedKelas} 
                   onChange={(e) => { setSelectedKelas(e.target.value); setCurrentPage(1); }}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500"
+                  disabled={currentUser.role === UserRole.WALI_KELAS}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-600 font-semibold"
                 >
-                  <option value="All">Semua Kelas</option>
-                  {db.kelas.map(k => <option key={k.id} value={k.id}>{k.namaKelas}</option>)}
+                  {currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass ? (
+                    <option value={waliKelasAllowedClass.id}>{waliKelasAllowedClass.namaKelas} (Kelas Anda)</option>
+                  ) : (
+                    <>
+                      <option value="All">Semua Kelas</option>
+                      {db.kelas.map(k => <option key={k.id} value={k.id}>{k.namaKelas}</option>)}
+                    </>
+                  )}
                 </select>
               </div>
 

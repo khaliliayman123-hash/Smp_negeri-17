@@ -462,8 +462,76 @@ const INITIAL_DATABASE: DatabaseState = {
 // Local cache
 let currentDatabase: DatabaseState | null = null;
 
+export function findSiswa(db: DatabaseState | null | undefined, targetIdOrRef: string | undefined | null, itemObj?: any): Siswa | null {
+  if (!db || !db.siswa || db.siswa.length === 0) return null;
+  const target = (targetIdOrRef || '').toString().trim();
+  const targetLower = target.toLowerCase();
+
+  if (target) {
+    // 1. Direct match by id
+    let match = db.siswa.find(s => s && s.id === target);
+    if (match) return match;
+
+    // 2. Match by NIS or NISN
+    match = db.siswa.find(s => s && ((s.nis && s.nis.toString().trim() === target) || (s.nisn && s.nisn.toString().trim() === target)));
+    if (match) return match;
+
+    // 3. Match by exact name
+    match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase() === targetLower);
+    if (match) return match;
+  }
+
+  // 4. Match via itemObj fields if itemObj provided (nis, siswaNama, namaSiswa, nama, siswaId)
+  if (itemObj) {
+    const itemNis = (itemObj.nis || itemObj.nisSiswa || '').toString().trim();
+    if (itemNis) {
+      const match = db.siswa.find(s => s && s.nis && s.nis.toString().trim() === itemNis);
+      if (match) return match;
+    }
+
+    const itemNama = (itemObj.siswaNama || itemObj.namaSiswa || itemObj.nama || itemObj.siswa || '').toString().trim().toLowerCase();
+    if (itemNama && itemNama !== 'siswa') {
+      const match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase() === itemNama);
+      if (match) return match;
+
+      const partialMatch = db.siswa.find(s => s && s.nama && (s.nama.toString().trim().toLowerCase().includes(itemNama) || itemNama.includes(s.nama.toString().trim().toLowerCase())));
+      if (partialMatch) return partialMatch;
+    }
+  }
+
+  return null;
+}
+
+export function getSiswaInfo(db: DatabaseState | null | undefined, targetIdOrRef: string | undefined | null, itemObj?: any): { nama: string; nis: string; kelasName: string; foundSiswa: Siswa | null } {
+  const found = findSiswa(db, targetIdOrRef, itemObj);
+  if (found) {
+    const kName = db?.kelas?.find(k => k.id === found.kelasId || k.namaKelas.toLowerCase().trim() === found.kelasId?.toLowerCase().trim())?.namaKelas || found.kelasId || '-';
+    const formattedKName = kName !== '-' ? (kName.startsWith('Kelas ') ? kName : `Kelas ${kName}`) : '-';
+    return {
+      nama: found.nama,
+      nis: found.nis || '-',
+      kelasName: formattedKName,
+      foundSiswa: found
+    };
+  }
+
+  // Fallback if not found in db.siswa:
+  const rawNama = itemObj?.siswaNama || itemObj?.namaSiswa || itemObj?.nama || (targetIdOrRef && !targetIdOrRef.startsWith('sis-') && !targetIdOrRef.startsWith('pel-') ? targetIdOrRef : '');
+  const fallbackNama = rawNama && rawNama.trim() !== '' && rawNama.trim().toLowerCase() !== 'siswa' ? rawNama.trim() : 'Siswa';
+  const fallbackNis = itemObj?.nis || itemObj?.nisSiswa || '-';
+  const rawKelas = itemObj?.kelas || itemObj?.kelasId || itemObj?.namaKelas || '-';
+  const fallbackKelas = rawKelas !== '-' ? (rawKelas.startsWith('Kelas ') ? rawKelas : `Kelas ${rawKelas}`) : '-';
+
+  return {
+    nama: fallbackNama,
+    nis: fallbackNis,
+    kelasName: fallbackKelas,
+    foundSiswa: null
+  };
+}
+
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
-  if (parsed && parsed._sanitized_v7 && parsed.laporanKejadian) {
+  if (parsed && parsed._sanitized_v8 && parsed.laporanKejadian) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
   let migrated = false;
@@ -961,7 +1029,33 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     });
   });
 
-  parsed._sanitized_v7 = true;
+  // Ensure seed students (sis-1, sis-2, sis-3, sis-4) exist in parsed.siswa if missing
+  INITIAL_DATABASE.siswa.forEach((seedS) => {
+    if (!parsed.siswa.some((s: any) => s && (s.id === seedS.id || (s.nis && s.nis.toString().trim() === seedS.nis)))) {
+      parsed.siswa.push(JSON.parse(JSON.stringify(seedS)));
+      migrated = true;
+    }
+  });
+
+  // Heal siswaId references across all sub-collections
+  const relCollections = ['pelanggaran', 'laporanKejadian', 'remisiPoin', 'konseling', 'kehadiran', 'asesmen', 'homeVisit', 'surat', 'dokumen', 'catatanPerkembangan', 'prestasi'];
+  relCollections.forEach((collName) => {
+    if (parsed[collName] && Array.isArray(parsed[collName])) {
+      parsed[collName].forEach((item: any) => {
+        if (!item) return;
+        const targetId = item.siswaId || item.idSiswa;
+        if (targetId) {
+          const matched = findSiswa(parsed as DatabaseState, targetId, item);
+          if (matched && matched.id !== item.siswaId) {
+            item.siswaId = matched.id;
+            migrated = true;
+          }
+        }
+      });
+    }
+  });
+
+  parsed._sanitized_v8 = true;
   return { sanitized: parsed as DatabaseState, migrated };
 }
 

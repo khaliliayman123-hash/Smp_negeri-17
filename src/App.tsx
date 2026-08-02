@@ -32,7 +32,7 @@ import {
 
 // Sub views
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen, LaporanKejadian } from './types';
-import { apiService, WALI_KELAS_USERS } from './services/api';
+import { apiService, WALI_KELAS_USERS, findSiswa, getSiswaInfo } from './services/api';
 import DashboardView from './components/DashboardView';
 import SiswaView from './components/SiswaView';
 import WaliKelasView from './components/WaliKelasView';
@@ -74,6 +74,18 @@ export default function App() {
 
     if (isWaliKelas) {
       assignedClasses = db.kelas.filter(k => k.waliKelasId === currentUser.id);
+      if (assignedClasses.length === 0) {
+        const username = (currentUser.username || '').toLowerCase().trim();
+        const mapping: Record<string, string> = {
+          fay: 'Kelas 7-1', aida: 'Kelas 7-2', viika: 'Kelas 7-3', sribarnetti: 'Kelas 7-4', viny: 'Kelas 7-5', lia: 'Kelas 7-6', yanah: 'Kelas 7-7', srirahayu: 'Kelas 7-8', putri: 'Kelas 7-9', sari: 'Kelas 7-10', rifal: 'Kelas 7-11',
+          neneng: 'Kelas 8-1', meli: 'Kelas 8-2', tiar: 'Kelas 8-3', joko: 'Kelas 8-4', danang: 'Kelas 8-5', sahdiana: 'Kelas 8-6', haifa: 'Kelas 8-7', santi: 'Kelas 8-8', reni: 'Kelas 8-9', dewi: 'Kelas 8-10', emi: 'Kelas 8-11',
+          tere: 'Kelas 9-1', ferry: 'Kelas 9-2', sifah: 'Kelas 9-3', mia: 'Kelas 9-4', habib: 'Kelas 9-5', warsih: 'Kelas 9-6', tut: 'Kelas 9-7', nur: 'Kelas 9-8', pendi: 'Kelas 9-10', hadi: 'Kelas 9-11'
+        };
+        const targetClassName = mapping[username];
+        if (targetClassName) {
+          assignedClasses = db.kelas.filter(k => (k.namaKelas || '').toLowerCase().trim() === targetClassName.toLowerCase().trim());
+        }
+      }
     } else {
       const username = currentUser.username || '';
       
@@ -1128,7 +1140,7 @@ export default function App() {
                       [...filteredDb.laporanKejadian]
                         .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
                         .map((report) => {
-                          const student = filteredDb?.siswa.find(s => s.id === report.siswaId);
+                          const info = getSiswaInfo(filteredDb, report.siswaId, report);
                           return (
                             <div 
                               key={report.id} 
@@ -1143,7 +1155,7 @@ export default function App() {
                                       <span className="w-1.5 h-1.5 bg-rose-500 rounded-full shrink-0"></span>
                                     )}
                                     <span className="font-bold text-slate-800 text-[11px] truncate max-w-[120px] block">
-                                      {student?.nama || 'Siswa Dihapus'}
+                                      {info.nama}
                                     </span>
                                     <span className="text-[9px] bg-indigo-50 text-indigo-700 px-1 py-0.2 rounded-md font-bold">
                                       {filteredDb?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
@@ -1280,7 +1292,7 @@ export default function App() {
                         [...filteredDb.laporanKejadian]
                           .sort((a, b) => new Date(b.timestamp || b.tanggal).getTime() - new Date(a.timestamp || a.tanggal).getTime())
                           .map((report) => {
-                            const student = filteredDb?.siswa.find(s => s.id === report.siswaId);
+                            const info = getSiswaInfo(filteredDb, report.siswaId, report);
                             return (
                               <div 
                                 key={report.id} 
@@ -1295,7 +1307,7 @@ export default function App() {
                                         <span className="w-2 h-2 bg-rose-500 rounded-full shrink-0 animate-pulse"></span>
                                       )}
                                       <span className="font-extrabold text-slate-800 text-xs">
-                                        {student?.nama || 'Siswa Dihapus'}
+                                        {info.nama}
                                       </span>
                                       <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-md font-bold">
                                         {filteredDb?.kelas.find(k => k.id === report.kelasId)?.namaKelas || report.kelasId}
