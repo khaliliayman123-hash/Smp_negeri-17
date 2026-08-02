@@ -332,6 +332,22 @@ function handleRequest(e) {
         responseData = deleteEntity(db, "CatatanPerkembangan", postData.id);
         break;
         
+      case "saveKehadiran":
+        responseData = saveEntity(db, "Kehadiran", postData.k, postData.isNew);
+        break;
+        
+      case "deleteKehadiran":
+        responseData = deleteEntity(db, "Kehadiran", postData.id);
+        break;
+        
+      case "saveLaporanKejadian":
+        responseData = saveEntity(db, "LaporanKejadian", postData.l, postData.isNew);
+        break;
+        
+      case "deleteLaporanKejadian":
+        responseData = deleteEntity(db, "LaporanKejadian", postData.id);
+        break;
+        
       case "addLog":
         responseData = appendLog(db, postData);
         break;
@@ -362,6 +378,10 @@ const SPREADSHEET_ID = SPREADSHEET_ID_CONFIG || "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_q
 
 function getDatabaseSheets(spreadsheetId) {
   let db = null;
+  const DEFAULT_IDS = [
+    "1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc",
+    "1GeBg6ZXwN4MhyfvFTFHw288wu2ZQ_qZy4u07zbjwKaI"
+  ];
   
   // 1. Coba ambil spreadsheetId dari parameter/payload jika dikirim secara dinamis oleh client
   if (spreadsheetId && spreadsheetId !== "") {
@@ -372,11 +392,24 @@ function getDatabaseSheets(spreadsheetId) {
         cleanedId = parts[1].split("/")[0];
       }
     }
+    
+    var isDefaultPlaceholder = false;
+    for (var i = 0; i < DEFAULT_IDS.length; i++) {
+      if (cleanedId === DEFAULT_IDS[i]) {
+        isDefaultPlaceholder = true;
+        break;
+      }
+    }
+    
     try {
       db = SpreadsheetApp.openById(cleanedId);
       if (db) return db;
     } catch (e) {
       Logger.log("Gagal membuka spreadsheet via parameter ID: " + e.message);
+      // Jika ID yang dimasukkan adalah ID khusus milik user (bukan placeholder), lemparkan error secara eksplisit agar user tahu masalah hak aksesnya!
+      if (!isDefaultPlaceholder) {
+        throw new Error("Gagal mengakses Google Spreadsheet Anda dengan ID '" + cleanedId + "'. Pastikan: 1) Akun Google yang mendeploy Web App ini memiliki akses Edit ke spreadsheet tersebut, 2) ID Spreadsheet sudah benar. Detail error: " + e.message);
+      }
     }
   }
   
@@ -436,6 +469,8 @@ function fetchFullDatabase(db) {
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
     "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
@@ -507,6 +542,8 @@ function fetchFullDatabase(db) {
     "Surat": "surat",
     "Dokumen": "dokumen",
     "CatatanPerkembangan": "catatanPerkembangan",
+    "Kehadiran": "kehadiran",
+    "LaporanKejadian": "laporanKejadian",
     "TahunPelajaran": "tahunPelajaran",
     "Kelas": "kelas",
     "LogAktivitas": "logAktivitas"
@@ -824,6 +861,8 @@ function uploadFullDatabase(db, payload) {
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
     "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]

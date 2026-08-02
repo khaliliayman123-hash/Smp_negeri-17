@@ -332,6 +332,22 @@ function handleRequest(e) {
         responseData = deleteEntity(db, "CatatanPerkembangan", postData.id);
         break;
         
+      case "saveKehadiran":
+        responseData = saveEntity(db, "Kehadiran", postData.k, postData.isNew);
+        break;
+        
+      case "deleteKehadiran":
+        responseData = deleteEntity(db, "Kehadiran", postData.id);
+        break;
+        
+      case "saveLaporanKejadian":
+        responseData = saveEntity(db, "LaporanKejadian", postData.l, postData.isNew);
+        break;
+        
+      case "deleteLaporanKejadian":
+        responseData = deleteEntity(db, "LaporanKejadian", postData.id);
+        break;
+        
       case "addLog":
         responseData = appendLog(db, postData);
         break;
@@ -453,6 +469,8 @@ function fetchFullDatabase(db) {
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
     "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
@@ -524,6 +542,8 @@ function fetchFullDatabase(db) {
     "Surat": "surat",
     "Dokumen": "dokumen",
     "CatatanPerkembangan": "catatanPerkembangan",
+    "Kehadiran": "kehadiran",
+    "LaporanKejadian": "laporanKejadian",
     "TahunPelajaran": "tahunPelajaran",
     "Kelas": "kelas",
     "LogAktivitas": "logAktivitas"
@@ -841,6 +861,8 @@ function uploadFullDatabase(db, payload) {
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
     "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]

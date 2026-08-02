@@ -722,15 +722,18 @@ export default function WaliKelasView({
     return match ? match.namaKelas : s.kelasId;
   };
 
-  // Helper to normalize class names for perfect comparison (e.g. "kelas7-1" -> "7-1")
+  // Helper to normalize class names for perfect comparison (e.g. "Kelas 8-9", "8.9", "VIII-9" -> "8-9")
   const normalizeClassName = (name: string): string => {
+    if (!name) return '';
     return name
       .toLowerCase()
       .replace(/kelas/g, '')
-      .replace(/vii/g, '7')
       .replace(/viii/g, '8')
+      .replace(/vii/g, '7')
       .replace(/ix/g, '9')
-      .replace(/[^0-9-]/g, '') // Keep only digits and hyphens (like "7-1")
+      .replace(/[.\s/]+/g, '-')
+      .replace(/[^0-9-]/g, '')
+      .replace(/-+/g, '-')
       .trim();
   };
 
@@ -3773,7 +3776,7 @@ export default function WaliKelasView({
                     onClick={() => {
                       setEditingKehadiran(null);
                       setFormKehadiran({
-                        siswaId: filteredStudents[0]?.id || '',
+                        siswaId: classStudents[0]?.id || '',
                         bulan: 'Juli',
                         mingguKe: 'Minggu 1',
                         tahun: '2026',
@@ -4746,11 +4749,20 @@ export default function WaliKelasView({
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!onSaveKehadiran) return;
+                const isNew = !editingKehadiran;
                 const payload: any = {
-                  ...(editingKehadiran ? { id: editingKehadiran.id } : {}),
-                  ...formKehadiran
+                  id: editingKehadiran ? editingKehadiran.id : `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                  siswaId: formKehadiran.siswaId || classStudents[0]?.id || '',
+                  bulan: formKehadiran.bulan || 'Juli',
+                  mingguKe: formKehadiran.mingguKe || 'Minggu 1',
+                  tahun: formKehadiran.tahun || '2026',
+                  hadir: Number(formKehadiran.hadir || 0),
+                  sakit: Number(formKehadiran.sakit || 0),
+                  izin: Number(formKehadiran.izin || 0),
+                  alfa: Number(formKehadiran.alfa || 0),
+                  keterangan: formKehadiran.keterangan || ''
                 };
-                await onSaveKehadiran(payload, !editingKehadiran);
+                await onSaveKehadiran(payload, isNew);
                 setShowKehadiranModal(false);
               }}
               className="space-y-3 text-xs"
@@ -4765,7 +4777,7 @@ export default function WaliKelasView({
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
                   required
                 >
-                  {filteredStudents.map((s) => (
+                  {classStudents.map((s) => (
                     <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
                   ))}
                 </select>

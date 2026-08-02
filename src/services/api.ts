@@ -449,7 +449,12 @@ const INITIAL_DATABASE: DatabaseState = {
   ],
   kehadiran: [
     { id: 'att-1', siswaId: 'sis-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
-    { id: 'att-2', siswaId: 'sis-3', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 4, sakit: 0, izin: 1, alfa: 0, keterangan: 'Izin urusan keluarga' }
+    { id: 'att-2', siswaId: 'sis-3', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 4, sakit: 0, izin: 1, alfa: 0, keterangan: 'Izin urusan keluarga' },
+    { id: 'att-8-1-1', siswaId: 'sis-sample-8-1-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
+    { id: 'att-8-9-1', siswaId: 'sis-sample-8-9-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
+    { id: 'att-8-9-2', siswaId: 'sis-sample-8-9-2', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 4, sakit: 1, izin: 0, alfa: 0, keterangan: 'Sakit demam' },
+    { id: 'att-9-9-1', siswaId: 'sis-sample-9-9-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
+    { id: 'att-9-9-2', siswaId: 'sis-sample-9-9-2', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' }
   ],
   laporanKejadian: []
 };
@@ -1804,13 +1809,22 @@ export const apiService = {
   saveKehadiran: async (k: Kehadiran, isNew: boolean): Promise<{ success: boolean; message: string }> => {
     const db = loadLocalDatabase();
     if (!db.kehadiran) db.kehadiran = [];
+    if (!k.id) {
+      k.id = `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    }
     if (isNew) {
       db.kehadiran.push(k);
     } else {
       db.kehadiran = db.kehadiran.map(item => item.id === k.id ? k : item);
     }
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('saveKehadiran', { k, isNew });
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('saveKehadiran', { k, isNew });
+      } catch (err) {
+        console.warn('Google Sheets saveKehadiran warning:', err);
+      }
+    }
     return { success: true, message: 'Rekap Kehadiran berhasil disimpan.' };
   },
 
