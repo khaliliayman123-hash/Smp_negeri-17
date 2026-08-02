@@ -145,6 +145,9 @@ export interface Pelanggaran {
   guruPelapor: string;
   tindakLanjut: string;
   status: 'Selesai' | 'Proses' | 'Belum Ditindak';
+  mingguKe?: string; // 'Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'
+  bulan?: string;    // 'Januari', 'Februari', ..., 'Desember'
+  tahun?: string;    // '2026'
 }
 
 export interface RemisiPoin {
@@ -156,6 +159,9 @@ export interface RemisiPoin {
   poin: number;
   guruPemberi: string;
   keterangan: string;
+  mingguKe?: string; // 'Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'
+  bulan?: string;    // 'Januari', 'Februari', ..., 'Desember'
+  tahun?: string;    // '2026'
 }
 
 export interface Konseling {

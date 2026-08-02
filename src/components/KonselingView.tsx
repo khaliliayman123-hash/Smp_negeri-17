@@ -23,6 +23,7 @@ import {
   FileText,
   Calculator,
   TrendingDown,
+  TrendingUp,
   FileDown,
   BarChart2,
   PieChart,
@@ -102,6 +103,9 @@ export default function KonselingView({
   const [attendanceFilterKelas, setAttendanceFilterKelas] = useState<string>('ALL');
   const [attendanceFilterBulan, setAttendanceFilterBulan] = useState<string>('ALL');
   const [disiplinFilterKelas, setDisiplinFilterKelas] = useState<string>('ALL');
+  const [disiplinFilterMinggu, setDisiplinFilterMinggu] = useState<string>('ALL');
+  const [disiplinFilterBulan, setDisiplinFilterBulan] = useState<string>('ALL');
+  const [disiplinFilterTahun, setDisiplinFilterTahun] = useState<string>('ALL');
 
   // State for Remisi and Poin summary dashboard
   const [selectedSummarySiswaId, setSelectedSummarySiswaId] = useState<string>('');
@@ -158,8 +162,16 @@ export default function KonselingView({
         poin: 5,
         guruPelapor: currentUser.nama,
         tindakLanjut: '',
-        status: 'Belum Ditindak'
-      } : entity);
+        status: 'Belum Ditindak',
+        mingguKe: 'Minggu 1',
+        bulan: 'Juli',
+        tahun: new Date().getFullYear().toString()
+      } : {
+        ...entity,
+        mingguKe: entity.mingguKe || 'Minggu 1',
+        bulan: entity.bulan || 'Juli',
+        tahun: entity.tahun || new Date().getFullYear().toString()
+      });
     } else if (activeTab === 'remisi') {
       setFormRemisiPoin(isNew ? {
         id: `rem-${Date.now()}`,
@@ -169,8 +181,16 @@ export default function KonselingView({
         kategori: 'Karakter Baik',
         poin: 10,
         guruPemberi: currentUser.nama,
-        keterangan: ''
-      } : entity);
+        keterangan: '',
+        mingguKe: 'Minggu 1',
+        bulan: 'Juli',
+        tahun: new Date().getFullYear().toString()
+      } : {
+        ...entity,
+        mingguKe: entity.mingguKe || 'Minggu 1',
+        bulan: entity.bulan || 'Juli',
+        tahun: entity.tahun || new Date().getFullYear().toString()
+      });
     } else if (activeTab === 'prestasi') {
       setFormPrestasi(isNew ? {
         id: `pres-${Date.now()}`,
@@ -1517,8 +1537,16 @@ export default function KonselingView({
       return String(s.kelasId).toLowerCase().trim() === targetKelasId.toLowerCase().trim();
     };
 
-    const filteredPelanggaranList = (db.pelanggaran || []).filter(p => matchesClass(p.siswaId));
-    const filteredRemisiList = (db.remisiPoin || []).filter(r => matchesClass(r.siswaId));
+    const matchesFilter = (item: any): boolean => {
+      if (!matchesClass(item.siswaId)) return false;
+      if (disiplinFilterMinggu !== 'ALL' && (item.mingguKe || 'Minggu 1') !== disiplinFilterMinggu) return false;
+      if (disiplinFilterBulan !== 'ALL' && (item.bulan || 'Juli') !== disiplinFilterBulan) return false;
+      if (disiplinFilterTahun !== 'ALL' && (item.tahun || '2026') !== disiplinFilterTahun) return false;
+      return true;
+    };
+
+    const filteredPelanggaranList = (db.pelanggaran || []).filter(p => matchesFilter(p));
+    const filteredRemisiList = (db.remisiPoin || []).filter(r => matchesFilter(r));
 
     const totalCases = filteredPelanggaranList.length;
     const totalViolPoin = filteredPelanggaranList.reduce((sum, p) => sum + Number(p.poin || 0), 0);
@@ -1534,6 +1562,55 @@ export default function KonselingView({
       year: 'numeric'
     });
 
+    // Histogram computation for Kelas 7, 8, 9 for DOC report
+    const gradeLevelsDoc = ['Kelas 7', 'Kelas 8', 'Kelas 9'] as const;
+    const gradeHistogramDoc = gradeLevelsDoc.map(lvl => {
+      const pInGrade = filteredPelanggaranList.filter(p => {
+        const s = db.siswa.find(x => x.id === p.siswaId);
+        if (!s) return lvl === 'Kelas 7';
+        const k = db.kelas.find(c => c.id === s.kelasId || c.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
+        const kName = (k?.namaKelas || s.kelasId || '').toString();
+        if (kName.includes('7') || kName.includes('VII')) return lvl === 'Kelas 7';
+        if (kName.includes('8') || kName.includes('VIII')) return lvl === 'Kelas 8';
+        if (kName.includes('9') || kName.includes('IX')) return lvl === 'Kelas 9';
+        const matchKl = (k?.id || s.kelasId || '').match(/^kl-(\d+)$/);
+        if (matchKl) {
+          const num = parseInt(matchKl[1], 10);
+          if (num >= 1 && num <= 11) return lvl === 'Kelas 7';
+          if (num >= 12 && num <= 22) return lvl === 'Kelas 8';
+          if (num >= 23 && num <= 33) return lvl === 'Kelas 9';
+        }
+        return lvl === 'Kelas 7';
+      });
+
+      const count = pInGrade.length;
+      const points = pInGrade.reduce((sum, p) => sum + Number(p.poin || 0), 0);
+      const pct = totalCases > 0 ? Math.round((count / totalCases) * 100) : 0;
+      const rCnt = pInGrade.filter(p => (p.kategori || 'Ringan') === 'Ringan').length;
+      const sCnt = pInGrade.filter(p => p.kategori === 'Sedang').length;
+      const bCnt = pInGrade.filter(p => p.kategori === 'Berat').length;
+
+      const jMap = new Map<string, number>();
+      pInGrade.forEach(p => {
+        const j = p.jenisPelanggaran || 'Lainnya';
+        jMap.set(j, (jMap.get(j) || 0) + 1);
+      });
+      const topTypes = Array.from(jMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([j, c]) => `${j} (${c})`).join(', ') || 'Belum ada data';
+
+      return { lvl, count, points, pct, rCnt, sCnt, bCnt, topTypes };
+    });
+
+    const histogramRowsHtml = gradeHistogramDoc.map(gh => `
+      <tr>
+        <td style="text-align: center; font-weight: bold; background-color: #f1f5f9;">${gh.lvl}</td>
+        <td style="text-align: center; font-weight: bold; color: #dc2626;">${gh.count} Kasus</td>
+        <td style="text-align: center; font-weight: bold; font-size: 11pt; color: #9f1239; background-color: #ffe4e6;">${gh.pct}%</td>
+        <td style="text-align: center; font-weight: bold;">+${gh.points} Pts</td>
+        <td style="text-align: center;">Ringan: ${gh.rCnt} | Sedang: ${gh.sCnt} | Berat: ${gh.bCnt}</td>
+        <td>${gh.topTypes}</td>
+      </tr>
+    `).join('');
+
     const pelanggaranRowsHtml = filteredPelanggaranList.length > 0 ? filteredPelanggaranList.map((p, idx) => {
       const s = db.siswa.find(x => x.id === p.siswaId);
       const kelasName = getStudentClassName(p.siswaId);
@@ -1544,10 +1621,13 @@ export default function KonselingView({
       if (p.kategori === 'Sedang') catColor = '#d97706';
       if (p.kategori === 'Berat') catColor = '#dc2626';
 
+      const klasifikasiStr = `${p.mingguKe || 'Minggu 1'}, ${p.bulan || 'Juli'} ${p.tahun || '2026'}`;
+
       return `
         <tr>
           <td style="text-align: center;">${idx + 1}</td>
           <td style="text-align: center;">${p.tanggal || '-'}</td>
+          <td style="text-align: center; font-size: 8.5pt;">${klasifikasiStr}</td>
           <td><b>${s?.nama || 'Siswa'}</b></td>
           <td style="text-align: center;">${s?.nisn || s?.nis || '-'}</td>
           <td style="text-align: center; font-weight: bold;">${kelasName}</td>
@@ -1560,7 +1640,7 @@ export default function KonselingView({
       `;
     }).join('') : `
       <tr>
-        <td colspan="10" style="text-align: center; padding: 12px; color: #777;">Belum ada data catatan pelanggaran disiplin terdaftar.</td>
+        <td colspan="11" style="text-align: center; padding: 12px; color: #777;">Belum ada data catatan pelanggaran disiplin terdaftar.</td>
       </tr>
     `;
 
@@ -1570,10 +1650,13 @@ export default function KonselingView({
       const pemberiUser = db.users.find(u => u.id === (r as any).pemberiId);
       const pemberiNama = pemberiUser?.nama || (r as any).guruPemberi || (r as any).pemberiId || 'Guru BK / Wali Kelas';
 
+      const klasifikasiStr = `${r.mingguKe || 'Minggu 1'}, ${r.bulan || 'Juli'} ${r.tahun || '2026'}`;
+
       return `
         <tr>
           <td style="text-align: center;">${idx + 1}</td>
           <td style="text-align: center;">${r.tanggal || '-'}</td>
+          <td style="text-align: center; font-size: 8.5pt;">${klasifikasiStr}</td>
           <td><b>${s?.nama || 'Siswa'}</b></td>
           <td style="text-align: center;">${s?.nisn || s?.nis || '-'}</td>
           <td style="text-align: center; font-weight: bold;">${kelasName}</td>
@@ -1586,7 +1669,7 @@ export default function KonselingView({
       `;
     }).join('') : `
       <tr>
-        <td colspan="10" style="text-align: center; padding: 12px; color: #777;">Belum ada data log remisi poin terdaftar.</td>
+        <td colspan="11" style="text-align: center; padding: 12px; color: #777;">Belum ada data log remisi poin terdaftar.</td>
       </tr>
     `;
 
@@ -1594,10 +1677,10 @@ export default function KonselingView({
       const classStudents = db.siswa.filter(s => s.kelasId === cls.id || s.kelasId === cls.namaKelas || cls.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
       const studentIds = new Set(classStudents.map(s => s.id));
 
-      const classPelanggaran = (db.pelanggaran || []).filter(p => studentIds.has(p.siswaId));
+      const classPelanggaran = (db.pelanggaran || []).filter(p => studentIds.has(p.siswaId) && matchesFilter(p));
       const classPelPoin = classPelanggaran.reduce((s, p) => s + Number(p.poin || 0), 0);
 
-      const classRemisi = (db.remisiPoin || []).filter(r => studentIds.has(r.siswaId));
+      const classRemisi = (db.remisiPoin || []).filter(r => studentIds.has(r.siswaId) && matchesFilter(r));
       const classRemPoin = classRemisi.reduce((s, r) => s + Number(r.poin || 0), 0);
 
       const netClassPoin = Math.max(0, classPelPoin - classRemPoin);
@@ -1743,7 +1826,8 @@ export default function KonselingView({
         <div class="doc-title">
           <h3>LAPORAN REKAPITULASI LAYANAN DISIPLIN, PELANGGARAN & REMISI POIN SISWA</h3>
           <p><b>PETUGAS GURU PIKET SEKOLAH &ndash; TARGET: ${targetKelasLabel.toUpperCase()}</b></p>
-          <p style="font-size: 9pt; color: #555;">Tanggal Cetak Laporan: ${dateTodayStr}</p>
+          <p style="font-size: 9.5pt; color: #1e293b; margin-top: 3px;"><b>KLASIFIKASI PERIODE:</b> Minggu: <u>${disiplinFilterMinggu === 'ALL' ? 'Semua Minggu (1-5)' : disiplinFilterMinggu}</u> &nbsp;|&nbsp; Bulan: <u>${disiplinFilterBulan === 'ALL' ? 'Semua Bulan' : disiplinFilterBulan}</u> &nbsp;|&nbsp; Tahun: <u>${disiplinFilterTahun === 'ALL' ? 'Semua Tahun' : disiplinFilterTahun}</u></p>
+          <p style="font-size: 8.5pt; color: #555;">Tanggal Cetak Laporan: ${dateTodayStr}</p>
         </div>
 
         <table class="kpi-table">
@@ -1771,20 +1855,38 @@ export default function KonselingView({
           </tr>
         </table>
 
-        <div class="section-title">BAGIAN I: REKAPITULASI CATATAN PELANGGARAN SISWA</div>
+        <div class="section-title">BAGIAN I: HISTOGRAM & ANALISIS TINGKAT PELANGGARAN (KELAS 7, KELAS 8, DAN KELAS 9)</div>
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 4%;">No</th>
-              <th style="width: 10%;">Tanggal</th>
-              <th style="width: 18%;">Nama Siswa</th>
-              <th style="width: 10%;">NIS / NISN</th>
-              <th style="width: 8%;">Kelas</th>
-              <th style="width: 20%;">Jenis / Deskripsi Pelanggaran</th>
-              <th style="width: 8%;">Kategori</th>
-              <th style="width: 8%;">Poin</th>
-              <th style="width: 14%;">Guru Pelapor</th>
-              <th style="width: 10%;">Status / Tindak Lanjut</th>
+              <th style="width: 12%;">Tingkat Kelas</th>
+              <th style="width: 12%;">Jumlah Kasus</th>
+              <th style="width: 15%;">Persentase Pelanggaran (%)</th>
+              <th style="width: 12%;">Total Poin (+)</th>
+              <th style="width: 24%;">Breakdown Kategori (Ringan | Sedang | Berat)</th>
+              <th style="width: 25%;">Jenis Pelanggaran Dominan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${histogramRowsHtml}
+          </tbody>
+        </table>
+
+        <div class="section-title">BAGIAN II: REKAPITULASI CATATAN PELANGGARAN SISWA</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 3%;">No</th>
+              <th style="width: 8%;">Tanggal</th>
+              <th style="width: 12%;">Klasifikasi Waktu</th>
+              <th style="width: 15%;">Nama Siswa</th>
+              <th style="width: 8%;">NIS / NISN</th>
+              <th style="width: 7%;">Kelas</th>
+              <th style="width: 18%;">Jenis / Deskripsi Pelanggaran</th>
+              <th style="width: 7%;">Kategori</th>
+              <th style="width: 6%;">Poin</th>
+              <th style="width: 8%;">Guru Pelapor</th>
+              <th style="width: 8%;">Status / Tindak Lanjut</th>
             </tr>
           </thead>
           <tbody>
@@ -1792,20 +1894,21 @@ export default function KonselingView({
           </tbody>
         </table>
 
-        <div class="section-title">BAGIAN II: REKAPITULASI LOG REMISI POIN SISWA (PERILAKU POSITIF & PEMBINAAN)</div>
+        <div class="section-title">BAGIAN III: REKAPITULASI LOG REMISI POIN SISWA (PERILAKU POSITIF & PEMBINAAN)</div>
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 4%;">No</th>
-              <th style="width: 10%;">Tanggal</th>
-              <th style="width: 18%;">Nama Siswa</th>
-              <th style="width: 10%;">NIS / NISN</th>
-              <th style="width: 8%;">Kelas</th>
-              <th style="width: 20%;">Bentuk Pembinaan / Perilaku Baik</th>
-              <th style="width: 8%;">Kategori</th>
-              <th style="width: 8%;">Remisi Poin</th>
-              <th style="width: 14%;">Guru Pemberi</th>
-              <th style="width: 10%;">Keterangan</th>
+              <th style="width: 3%;">No</th>
+              <th style="width: 8%;">Tanggal</th>
+              <th style="width: 12%;">Klasifikasi Waktu</th>
+              <th style="width: 15%;">Nama Siswa</th>
+              <th style="width: 8%;">NIS / NISN</th>
+              <th style="width: 7%;">Kelas</th>
+              <th style="width: 18%;">Bentuk Pembinaan / Perilaku Baik</th>
+              <th style="width: 7%;">Kategori</th>
+              <th style="width: 6%;">Remisi Poin</th>
+              <th style="width: 8%;">Guru Pemberi</th>
+              <th style="width: 8%;">Keterangan</th>
             </tr>
           </thead>
           <tbody>
@@ -1813,7 +1916,7 @@ export default function KonselingView({
           </tbody>
         </table>
 
-        <div class="section-title">BAGIAN III: REKAPITULASI AKUMULASI POIN DISIPLIN PER KELAS / ROMBEL</div>
+        <div class="section-title">BAGIAN IV: REKAPITULASI AKUMULASI POIN DISIPLIN PER KELAS / ROMBEL</div>
         <table class="data-table">
           <thead>
             <tr>
@@ -1871,25 +1974,55 @@ export default function KonselingView({
 
   const filteredDisiplinPelanggaran = useMemo(() => {
     return (db.pelanggaran || []).filter(p => {
-      if (disiplinFilterKelas === 'ALL') return true;
-      const s = db.siswa.find(x => x.id === p.siswaId);
-      if (!s) return false;
-      const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
-      const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
-      return s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+      if (disiplinFilterKelas !== 'ALL') {
+        const s = db.siswa.find(x => x.id === p.siswaId);
+        if (!s) return false;
+        const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
+        const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
+        const matchClass = s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+        if (!matchClass) return false;
+      }
+      if (disiplinFilterMinggu !== 'ALL') {
+        const pMinggu = p.mingguKe || 'Minggu 1';
+        if (pMinggu !== disiplinFilterMinggu) return false;
+      }
+      if (disiplinFilterBulan !== 'ALL') {
+        const pBulan = p.bulan || 'Juli';
+        if (pBulan !== disiplinFilterBulan) return false;
+      }
+      if (disiplinFilterTahun !== 'ALL') {
+        const pTahun = p.tahun || '2026';
+        if (pTahun !== disiplinFilterTahun) return false;
+      }
+      return true;
     });
-  }, [db.pelanggaran, db.siswa, db.kelas, disiplinFilterKelas]);
+  }, [db.pelanggaran, db.siswa, db.kelas, disiplinFilterKelas, disiplinFilterMinggu, disiplinFilterBulan, disiplinFilterTahun]);
 
   const filteredDisiplinRemisi = useMemo(() => {
     return (db.remisiPoin || []).filter(r => {
-      if (disiplinFilterKelas === 'ALL') return true;
-      const s = db.siswa.find(x => x.id === r.siswaId);
-      if (!s) return false;
-      const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
-      const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
-      return s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+      if (disiplinFilterKelas !== 'ALL') {
+        const s = db.siswa.find(x => x.id === r.siswaId);
+        if (!s) return false;
+        const targetKelas = db.kelas.find(c => c.id === disiplinFilterKelas);
+        const targetName = targetKelas?.namaKelas || disiplinFilterKelas;
+        const matchClass = s.kelasId === disiplinFilterKelas || s.kelasId === targetName || String(s.kelasId).toLowerCase().trim() === String(targetName).toLowerCase().trim();
+        if (!matchClass) return false;
+      }
+      if (disiplinFilterMinggu !== 'ALL') {
+        const rMinggu = r.mingguKe || 'Minggu 1';
+        if (rMinggu !== disiplinFilterMinggu) return false;
+      }
+      if (disiplinFilterBulan !== 'ALL') {
+        const rBulan = r.bulan || 'Juli';
+        if (rBulan !== disiplinFilterBulan) return false;
+      }
+      if (disiplinFilterTahun !== 'ALL') {
+        const rTahun = r.tahun || '2026';
+        if (rTahun !== disiplinFilterTahun) return false;
+      }
+      return true;
     });
-  }, [db.remisiPoin, db.siswa, db.kelas, disiplinFilterKelas]);
+  }, [db.remisiPoin, db.siswa, db.kelas, disiplinFilterKelas, disiplinFilterMinggu, disiplinFilterBulan, disiplinFilterTahun]);
 
   const disiplinStats = useMemo(() => {
     const totalPelanggaran = filteredDisiplinPelanggaran.length;
@@ -1901,6 +2034,65 @@ export default function KonselingView({
     const ringan = filteredDisiplinPelanggaran.filter(p => p.kategori === 'Ringan' || !p.kategori);
     const sedang = filteredDisiplinPelanggaran.filter(p => p.kategori === 'Sedang');
     const berat = filteredDisiplinPelanggaran.filter(p => p.kategori === 'Berat');
+
+    // Helper to determine Grade Level (Kelas 7, Kelas 8, Kelas 9)
+    const getGradeLevel = (siswaId: string): 'Kelas 7' | 'Kelas 8' | 'Kelas 9' => {
+      const s = (db.siswa || []).find(x => x.id === siswaId);
+      if (!s) return 'Kelas 7';
+      const k = (db.kelas || []).find(c => c.id === s.kelasId || c.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
+      const kName = (k?.namaKelas || s.kelasId || '').toString();
+
+      if (kName.includes('7') || kName.includes('VII')) return 'Kelas 7';
+      if (kName.includes('8') || kName.includes('VIII')) return 'Kelas 8';
+      if (kName.includes('9') || kName.includes('IX')) return 'Kelas 9';
+
+      const matchKl = (k?.id || s.kelasId || '').match(/^kl-(\d+)$/);
+      if (matchKl) {
+        const num = parseInt(matchKl[1], 10);
+        if (num >= 1 && num <= 11) return 'Kelas 7';
+        if (num >= 12 && num <= 22) return 'Kelas 8';
+        if (num >= 23 && num <= 33) return 'Kelas 9';
+      }
+      return 'Kelas 7';
+    };
+
+    // Grade Level Histogram computation for Kelas 7, Kelas 8, Kelas 9
+    const gradeLevels = ['Kelas 7', 'Kelas 8', 'Kelas 9'] as const;
+    const gradeHistogram = gradeLevels.map(lvl => {
+      const pInGrade = filteredDisiplinPelanggaran.filter(p => getGradeLevel(p.siswaId) === lvl);
+      const count = pInGrade.length;
+      const points = pInGrade.reduce((sum, p) => sum + Number(p.poin || 0), 0);
+      const percentage = totalPelanggaran > 0 ? Math.round((count / totalPelanggaran) * 100) : 0;
+
+      const ringanCnt = pInGrade.filter(p => (p.kategori || 'Ringan') === 'Ringan').length;
+      const sedangCnt = pInGrade.filter(p => p.kategori === 'Sedang').length;
+      const beratCnt = pInGrade.filter(p => p.kategori === 'Berat').length;
+
+      // Group by jenisPelanggaran
+      const jenisMap = new Map<string, number>();
+      pInGrade.forEach(p => {
+        const j = p.jenisPelanggaran || 'Lainnya';
+        jenisMap.set(j, (jenisMap.get(j) || 0) + 1);
+      });
+      const topJenis = Array.from(jenisMap.entries())
+        .map(([jenis, cnt]) => ({
+          jenis,
+          cnt,
+          pct: count > 0 ? Math.round((cnt / count) * 100) : 0
+        }))
+        .sort((a, b) => b.cnt - a.cnt);
+
+      return {
+        level: lvl,
+        count,
+        points,
+        percentage,
+        ringan: ringanCnt,
+        sedang: sedangCnt,
+        berat: beratCnt,
+        topJenis
+      };
+    });
 
     const classStats = (db.kelas || []).map(cls => {
       const classStudents = (db.siswa || []).filter(s => s.kelasId === cls.id || s.kelasId === cls.namaKelas || cls.namaKelas.toLowerCase().trim() === String(s.kelasId).toLowerCase().trim());
@@ -1968,6 +2160,7 @@ export default function KonselingView({
       sedangPoin: sedang.reduce((s, p) => s + Number(p.poin || 0), 0),
       beratCount: berat.length,
       beratPoin: berat.reduce((s, p) => s + Number(p.poin || 0), 0),
+      gradeHistogram,
       classStats,
       topViolators,
       topRemisi
@@ -2237,10 +2430,10 @@ export default function KonselingView({
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Filter Rombel Select */}
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs">
-                <Filter size={14} className="text-slate-500" />
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
+                <Filter size={13} className="text-slate-500" />
                 <span className="font-bold text-slate-600">Rombel:</span>
                 <select
                   value={disiplinFilterKelas}
@@ -2254,15 +2447,62 @@ export default function KonselingView({
                 </select>
               </div>
 
+              {/* Filter Minggu Dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
+                <span className="font-bold text-slate-600">Minggu:</span>
+                <select
+                  value={disiplinFilterMinggu}
+                  onChange={(e) => setDisiplinFilterMinggu(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Minggu (1-5)</option>
+                  <option value="Minggu 1">Minggu 1</option>
+                  <option value="Minggu 2">Minggu 2</option>
+                  <option value="Minggu 3">Minggu 3</option>
+                  <option value="Minggu 4">Minggu 4</option>
+                  <option value="Minggu 5">Minggu 5</option>
+                </select>
+              </div>
+
+              {/* Filter Bulan Dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
+                <span className="font-bold text-slate-600">Bulan:</span>
+                <select
+                  value={disiplinFilterBulan}
+                  onChange={(e) => setDisiplinFilterBulan(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Bulan</option>
+                  {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter Tahun Dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
+                <span className="font-bold text-slate-600">Tahun:</span>
+                <select
+                  value={disiplinFilterTahun}
+                  onChange={(e) => setDisiplinFilterTahun(e.target.value)}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Tahun</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+
               {/* Download DOC Report Button */}
               <button
                 onClick={() => handleDownloadDisiplinPiketDoc(disiplinFilterKelas)}
-                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer hover:-translate-y-0.5"
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:-translate-y-0.5"
                 title="Unduh Laporan Layanan Disiplin Lengkap dalam Format Microsoft Word (.DOC)"
               >
-                <FileText size={16} />
-                <span>Unduh Laporan Format .DOC</span>
-                <Download size={14} className="opacity-80" />
+                <FileText size={15} />
+                <span>Unduh Laporan .DOC</span>
+                <Download size={13} className="opacity-80" />
               </button>
             </div>
           </div>
@@ -2288,21 +2528,147 @@ export default function KonselingView({
             </div>
 
             <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-100/80 space-y-1">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Net Poin Disiplin Sisa</span>
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Sisa Net Poin Aktif</span>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-black text-emerald-900">{disiplinStats.netPoin} Pts</span>
               </div>
-              <span className="text-[10px] text-emerald-600/90 font-medium block">Akumulasi Setelah Remisi</span>
+              <span className="text-[10px] text-emerald-600/90 font-medium block">Total Poin Setelah Remisi</span>
             </div>
 
             <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-100/80 space-y-1">
               <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Breakdown Kategori</span>
-              <div className="flex items-center gap-1.5 pt-1 text-[11px] font-bold">
-                <span className="bg-sky-100 text-sky-800 px-2 py-0.5 rounded">R: {disiplinStats.ringanCount}</span>
-                <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">S: {disiplinStats.sedangCount}</span>
-                <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded">B: {disiplinStats.beratCount}</span>
+              <div className="flex items-center justify-between text-[11px] font-bold pt-1">
+                <span className="text-emerald-700">Ringan: {disiplinStats.ringanCount}</span>
+                <span className="text-amber-700">Sedang: {disiplinStats.sedangCount}</span>
+                <span className="text-rose-700">Berat: {disiplinStats.beratCount}</span>
               </div>
-              <span className="text-[10px] text-amber-700/90 font-medium block pt-0.5">Ringan / Sedang / Berat</span>
+              <span className="text-[10px] text-amber-600/90 font-medium block">Klasifikasi Bobot Kasus</span>
+            </div>
+          </div>
+
+          {/* Histogram Tingkat Pelanggaran Kelas 7, 8, dan 9 */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-5 rounded-2xl border border-slate-700 text-white space-y-4 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/80 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-rose-500/20 text-rose-300 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border border-rose-500/30 flex items-center gap-1">
+                    <PieChart size={12} /> Histogram Analisis Disiplin
+                  </span>
+                  <span className="text-slate-400 text-xs">
+                    Klasifikasi: <strong className="text-white">{disiplinFilterMinggu === 'ALL' ? 'Semua Minggu' : disiplinFilterMinggu}</strong> | <strong className="text-white">{disiplinFilterBulan === 'ALL' ? 'Semua Bulan' : disiplinFilterBulan}</strong> | <strong className="text-white">{disiplinFilterTahun === 'ALL' ? 'Semua Tahun' : disiplinFilterTahun}</strong>
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-white mt-1.5 flex items-center gap-2">
+                  <TrendingUp className="text-rose-400" size={18} />
+                  Histogram Tingkat & Persentase Pelanggaran (Kelas 7, Kelas 8, & Kelas 9)
+                </h4>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-slate-400 block">Total Pelanggaran Terdaftar:</span>
+                <span className="text-lg font-black text-rose-400">{disiplinStats.gradeHistogram.reduce((s, g) => s + g.count, 0)} Kasus</span>
+              </div>
+            </div>
+
+            {/* Visual Cumulative Percentage Comparison Bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[11px] font-bold text-slate-300">
+                <span>Distribusi Persentase Pelanggaran Per Tingkat Kelas</span>
+                <span>Total 100% Porsi Sekolah</span>
+              </div>
+              <div className="w-full bg-slate-800 h-5 rounded-xl overflow-hidden flex border border-slate-700 p-0.5">
+                {disiplinStats.gradeHistogram.map((gh, idx) => {
+                  const bgColors = [
+                    'bg-rose-500 hover:bg-rose-400',
+                    'bg-amber-500 hover:bg-amber-400',
+                    'bg-indigo-500 hover:bg-indigo-400'
+                  ];
+                  return (
+                    <div
+                      key={gh.level}
+                      style={{ width: `${Math.max(gh.percentage, 2)}%` }}
+                      className={`${bgColors[idx % 3]} h-full transition-all duration-500 flex items-center justify-center text-[9px] font-extrabold text-white cursor-pointer relative group`}
+                      title={`${gh.level}: ${gh.percentage}% (${gh.count} Kasus)`}
+                    >
+                      {gh.percentage > 8 && `${gh.level} (${gh.percentage}%)`}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3 Grade Level Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              {disiplinStats.gradeHistogram.map((gh, idx) => {
+                const themes = [
+                  { border: 'border-rose-500/40', bg: 'bg-rose-950/30', badgeBg: 'bg-rose-500', textAccent: 'text-rose-400', barBg: 'bg-rose-500' },
+                  { border: 'border-amber-500/40', bg: 'bg-amber-950/30', badgeBg: 'bg-amber-500', textAccent: 'text-amber-400', barBg: 'bg-amber-500' },
+                  { border: 'border-indigo-500/40', bg: 'bg-indigo-950/30', badgeBg: 'bg-indigo-500', textAccent: 'text-indigo-400', barBg: 'bg-indigo-500' }
+                ];
+                const theme = themes[idx % 3];
+
+                return (
+                  <div key={gh.level} className={`p-4 rounded-xl border ${theme.border} ${theme.bg} space-y-3 relative overflow-hidden backdrop-blur-xs`}>
+                    {/* Header & Percentage */}
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${theme.badgeBg} text-white`}>
+                          {gh.level}
+                        </span>
+                        <p className="text-xl font-black text-white mt-1">{gh.count} Kasus</p>
+                        <p className="text-[10px] text-slate-300 font-mono">+{gh.points} Total Poin</p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-2xl font-black ${theme.textAccent}`}>{gh.percentage}%</span>
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">Porsi Sekolah</span>
+                      </div>
+                    </div>
+
+                    {/* Horizontal Histogram Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] text-slate-300 font-semibold">
+                        <span>Persentase Pelanggaran</span>
+                        <span>{gh.percentage}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+                        <div style={{ width: `${gh.percentage}%` }} className={`${theme.barBg} h-full transition-all duration-500 rounded-full`} />
+                      </div>
+                    </div>
+
+                    {/* Kategori Breakdown */}
+                    <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-bold text-center">
+                      <div className="bg-sky-900/60 p-1 rounded border border-sky-700/50 text-sky-200">
+                        <span className="block text-[8px] uppercase text-sky-400">Ringan</span>
+                        {gh.ringan}
+                      </div>
+                      <div className="bg-amber-900/60 p-1 rounded border border-amber-700/50 text-amber-200">
+                        <span className="block text-[8px] uppercase text-amber-400">Sedang</span>
+                        {gh.sedang}
+                      </div>
+                      <div className="bg-rose-900/60 p-1 rounded border border-rose-700/50 text-rose-200">
+                        <span className="block text-[8px] uppercase text-rose-400">Berat</span>
+                        {gh.berat}
+                      </div>
+                    </div>
+
+                    {/* Jenis Pelanggaran Dominan */}
+                    <div className="pt-2 border-t border-slate-700/60 space-y-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Jenis Pelanggaran Dominan:</span>
+                      {gh.topJenis.length > 0 ? (
+                        <div className="space-y-1 max-h-[85px] overflow-y-auto pr-1">
+                          {gh.topJenis.slice(0, 3).map((tj) => (
+                            <div key={tj.jenis} className="flex justify-between items-center text-[10px] bg-slate-800/80 px-2 py-1 rounded border border-slate-700/60">
+                              <span className="truncate pr-1 text-slate-200">{tj.jenis}</span>
+                              <span className={`font-mono font-bold shrink-0 ${theme.textAccent}`}>{tj.cnt} ({tj.pct}%)</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">Belum ada kasus tercatat</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -2555,8 +2921,13 @@ export default function KonselingView({
                           <p className="text-[10px] text-slate-400 font-medium">{info.kelasName} | NIS: {info.nis}</p>
                         </td>
                         <td className="py-3 px-4">
-                          <p className="font-mono text-[10px] text-slate-400">{p.tanggal}</p>
-                          <p className="font-semibold text-slate-700">{p.jenisPelanggaran}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[10px] text-slate-400">{p.tanggal}</span>
+                            <span className="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded text-[9px] border border-slate-200">
+                              {p.mingguKe || 'Minggu 1'}, {p.bulan || 'Juli'} {p.tahun || '2026'}
+                            </span>
+                          </div>
+                          <p className="font-semibold text-slate-700 mt-0.5">{p.jenisPelanggaran}</p>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold mr-2 ${
@@ -2750,8 +3121,13 @@ export default function KonselingView({
                             <p className="text-[10px] text-slate-400 font-medium">{info.kelasName} | NIS: {info.nis}</p>
                           </td>
                           <td className="py-3 px-4">
-                            <p className="font-mono text-[10px] text-slate-400">{r.tanggal}</p>
-                            <p className="font-semibold text-slate-700">{r.jenisRemisi}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[10px] text-slate-400">{r.tanggal}</span>
+                              <span className="bg-sky-50 text-sky-800 font-bold px-1.5 py-0.5 rounded text-[9px] border border-sky-200/80">
+                                {r.mingguKe || 'Minggu 1'}, {r.bulan || 'Juli'} {r.tahun || '2026'}
+                              </span>
+                            </div>
+                            <p className="font-semibold text-slate-700 mt-0.5">{r.jenisRemisi}</p>
                           </td>
                           <td className="py-3 px-4">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold mr-2 bg-sky-100 text-sky-800">{r.kategori}</span>
@@ -3106,6 +3482,49 @@ export default function KonselingView({
               {/* B. PELANGGARAN FIELDS */}
               {activeTab === 'pelanggaran' && (
                 <div className="space-y-3">
+                  {/* Klasifikasi Minggu, Bulan, Tahun Section */}
+                  <div className="grid grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Klasifikasi Minggu</label>
+                      <select
+                        value={formPelanggaran.mingguKe || 'Minggu 1'}
+                        onChange={(e) => setFormPelanggaran(prev => ({ ...prev, mingguKe: e.target.value }))}
+                        className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs font-semibold focus:outline-none focus:border-rose-500"
+                        required
+                      >
+                        <option value="Minggu 1">Minggu 1</option>
+                        <option value="Minggu 2">Minggu 2</option>
+                        <option value="Minggu 3">Minggu 3</option>
+                        <option value="Minggu 4">Minggu 4</option>
+                        <option value="Minggu 5">Minggu 5</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Bulan</label>
+                      <select
+                        value={formPelanggaran.bulan || 'Juli'}
+                        onChange={(e) => setFormPelanggaran(prev => ({ ...prev, bulan: e.target.value }))}
+                        className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs font-semibold focus:outline-none focus:border-rose-500"
+                        required
+                      >
+                        {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Tahun (Teks)</label>
+                      <input
+                        type="text"
+                        placeholder="2026"
+                        value={formPelanggaran.tahun || '2026'}
+                        onChange={(e) => setFormPelanggaran(prev => ({ ...prev, tahun: e.target.value }))}
+                        className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs font-semibold focus:outline-none focus:border-rose-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 mb-1">Tanggal</label>
@@ -3156,6 +3575,48 @@ export default function KonselingView({
               {/* B2. REMISI POIN FIELDS */}
               {activeTab === 'remisi' && (
                 <div className="space-y-3">
+                  {/* Klasifikasi Minggu, Bulan, Tahun Section */}
+                  <div className="grid grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Klasifikasi Minggu</label>
+                      <select
+                        value={formRemisiPoin.mingguKe || 'Minggu 1'}
+                        onChange={(e) => setFormRemisiPoin(prev => ({ ...prev, mingguKe: e.target.value }))}
+                        className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs font-semibold focus:outline-none focus:border-sky-500"
+                        required
+                      >
+                        <option value="Minggu 1">Minggu 1</option>
+                        <option value="Minggu 2">Minggu 2</option>
+                        <option value="Minggu 3">Minggu 3</option>
+                        <option value="Minggu 4">Minggu 4</option>
+                        <option value="Minggu 5">Minggu 5</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Bulan</label>
+                      <select
+                        value={formRemisiPoin.bulan || 'Juli'}
+                        onChange={(e) => setFormRemisiPoin(prev => ({ ...prev, bulan: e.target.value }))}
+                        className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs font-semibold focus:outline-none focus:border-sky-500"
+                        required
+                      >
+                        {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Tahun (Teks)</label>
+                      <input
+                        type="text"
+                        placeholder="2026"
+                        value={formRemisiPoin.tahun || '2026'}
+                        onChange={(e) => setFormRemisiPoin(prev => ({ ...prev, tahun: e.target.value }))}
+                        className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs font-semibold focus:outline-none focus:border-sky-500"
+                        required
+                      />
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 mb-1">Tanggal</label>
