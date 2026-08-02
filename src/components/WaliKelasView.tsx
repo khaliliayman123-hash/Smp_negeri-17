@@ -28,6 +28,7 @@ import {
   Lock,
   Send,
   Trash,
+  Filter,
   Download,
   BarChart2,
   PieChart,
@@ -641,6 +642,7 @@ export default function WaliKelasView({
   // Search input within the filtered class
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceFilterBulan, setAttendanceFilterBulan] = useState<string>('ALL');
+  const [attendanceFilterMinggu, setAttendanceFilterMinggu] = useState<string>('ALL');
 
   // Selected student for slide-over detail panel
   const [selectedSiswaId, setSelectedSiswaId] = useState<string | null>(null);
@@ -2028,6 +2030,277 @@ export default function WaliKelasView({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadKehadiranMingguDoc = (namaKelasTarget: string, targetMinggu: string, targetBulan: string) => {
+    if (!db) return;
+    const targetKelas = db.kelas.find(c => c.namaKelas.toLowerCase().trim() === namaKelasTarget.toLowerCase().trim() || c.id === namaKelasTarget);
+    const namaKelas = targetKelas?.namaKelas || namaKelasTarget || currentClassName;
+    
+    const siswaListInKelas = classStudents;
+    const waliKelas = db.users.find(u => u.id === targetKelas?.waliKelasId) || currentUser;
+    const waliKelasName = waliKelas?.nama || currentUser.nama || 'Wali Kelas';
+    const guruBkName = db.users.find(u => (u.role as string) === 'bk' || ((u as any).jabatan && String((u as any).jabatan).toLowerCase().includes('bk')))?.nama || 'Guru BK';
+
+    const dateTodayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    let totalHadirMinggu = 0;
+    let totalSakitMinggu = 0;
+    let totalIzinMinggu = 0;
+    let totalAlfaMinggu = 0;
+
+    const studentRowsHtml = siswaListInKelas.length > 0 ? siswaListInKelas.map((s, idx) => {
+      const records = (db.kehadiran || []).filter(k => 
+        k.siswaId === s.id &&
+        String(k.mingguKe || '').toLowerCase().trim() === String(targetMinggu).toLowerCase().trim() &&
+        (targetBulan === 'ALL' || String(k.bulan || '').toLowerCase().trim() === String(targetBulan).toLowerCase().trim())
+      );
+
+      let h = 0, sk = 0, iz = 0, al = 0;
+      let keterangan = '-';
+      records.forEach(item => {
+        h += Number(item.hadir || 0);
+        sk += Number(item.sakit || 0);
+        iz += Number(item.izin || (item as any).ijin || 0);
+        al += Number(item.alfa || 0);
+        if (item.keterangan) keterangan = item.keterangan;
+      });
+
+      totalHadirMinggu += h;
+      totalSakitMinggu += sk;
+      totalIzinMinggu += iz;
+      totalAlfaMinggu += al;
+
+      const tot = h + sk + iz + al;
+      const pct = tot > 0 ? Math.round((h / tot) * 100) : 100;
+
+      let statusBadge = '<span style="color: #047857; font-weight: bold;">Hadir Tepat</span>';
+      if (pct < 75 || al >= 2) {
+        statusBadge = '<span style="color: #dc2626; font-weight: bold;">Atensi Khusus (Alfa)</span>';
+      } else if (pct < 85 || sk > 0 || iz > 0) {
+        statusBadge = '<span style="color: #d97706; font-weight: bold;">Izin / Sakit</span>';
+      }
+
+      return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td><b>${s.nama}</b></td>
+          <td style="text-align: center;">${s.nisn || s.nis || '-'}</td>
+          <td style="text-align: center; color: #047857; font-weight: bold;">${h} Hari</td>
+          <td style="text-align: center; color: #0284c7;">${sk} Hari</td>
+          <td style="text-align: center; color: #d97706;">${iz} Hari</td>
+          <td style="text-align: center; color: #dc2626; font-weight: bold;">${al} Hari</td>
+          <td style="text-align: center;">
+            <div style="background-color: #e2e8f0; border-radius: 4px; overflow: hidden; height: 12px; width: 100px; display: inline-block;">
+              <div style="background-color: ${pct >= 85 ? '#059669' : (pct >= 70 ? '#d97706' : '#dc2626')}; height: 100%; width: ${pct}%;"></div>
+            </div>
+            <br/><span style="font-size: 8.5pt; font-weight: bold;">${pct}%</span>
+          </td>
+          <td style="text-align: center;">${statusBadge}</td>
+          <td>${keterangan}</td>
+        </tr>
+      `;
+    }).join('') : `
+      <tr>
+        <td colspan="10" style="text-align: center; padding: 15px; color: #888;">Belum ada data presensi terdaftar untuk periode ini.</td>
+      </tr>
+    `;
+
+    const totalHariMinggu = totalHadirMinggu + totalSakitMinggu + totalIzinMinggu + totalAlfaMinggu;
+    const pctMinggu = totalHariMinggu > 0 ? Math.round((totalHadirMinggu / totalHariMinggu) * 100) : 100;
+
+    const docHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>Laporan Kehadiran Mingguan - ${targetMinggu} ${targetBulan} - Kelas ${namaKelas}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 1.2cm 1.5cm 1.2cm 1.5cm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            color: #000000;
+            line-height: 1.4;
+            font-size: 10pt;
+          }
+          .kop-text {
+            text-align: center;
+          }
+          .doc-title {
+            text-align: center;
+            margin-bottom: 18px;
+          }
+          .doc-title h3 {
+            margin: 0;
+            font-size: 13pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-decoration: underline;
+          }
+          .kpi-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+          }
+          .kpi-table td {
+            padding: 8px;
+            border: 1px solid #333333;
+            text-align: center;
+            background-color: #f8fafc;
+          }
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 9.5pt;
+          }
+          .data-table th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8.5pt;
+            padding: 6px;
+            border: 1px solid #000000;
+            text-align: center;
+          }
+          .data-table td {
+            padding: 5px 6px;
+            border: 1px solid #000000;
+            vertical-align: middle;
+          }
+          .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+            page-break-inside: avoid;
+          }
+          .sig-table td {
+            width: 33%;
+            text-align: center;
+            vertical-align: top;
+            font-size: 10pt;
+          }
+          .sig-space {
+            height: 55px;
+          }
+          .sig-name {
+            font-weight: bold;
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kop-text" style="border-bottom: 3px double #000000; padding-bottom: 5px; margin-bottom: 15px;">
+          <span style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 10.5pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN DAN KEBUDAYAAN</span><br/>
+          <span style="font-size: 13pt; font-weight: bold; text-transform: uppercase;">UPTD SMP NEGERI 17 KOTA TANGERANG SELATAN</span><br/>
+          <span style="font-size: 8.5pt; font-style: italic;">Jl. Melati III No.2, Komplek Batan Indah, Kec. Setu, Kota Tangerang Selatan, Banten 15314</span>
+        </div>
+
+        <div class="doc-title">
+          <h3>LAPORAN REKAPITULASI PRESENSI & GRAFIK KEHADIRAN MINGGUAN SISWA</h3>
+          <p>PERIODE: <b>${targetMinggu.toUpperCase()} &ndash; BULAN ${targetBulan.toUpperCase()} 2026</b> | KELAS: <b>${namaKelas}</b></p>
+          <p style="font-size: 8.5pt; color: #555;">Tanggal Cetak Laporan: ${dateTodayStr}</p>
+        </div>
+
+        <table class="kpi-table">
+          <tr>
+            <td>
+              <div style="font-size: 8pt; font-weight: bold; color: #047857;">PERSENTASE KEHADIRAN</div>
+              <div style="font-size: 14pt; font-weight: bold; color: #047857;">${pctMinggu}%</div>
+            </td>
+            <td>
+              <div style="font-size: 8pt; font-weight: bold; color: #047857;">TOTAL HADIR</div>
+              <div style="font-size: 14pt; font-weight: bold; color: #047857;">${totalHadirMinggu} Hari</div>
+            </td>
+            <td>
+              <div style="font-size: 8pt; font-weight: bold; color: #0284c7;">TOTAL SAKIT</div>
+              <div style="font-size: 14pt; font-weight: bold; color: #0284c7;">${totalSakitMinggu} Hari</div>
+            </td>
+            <td>
+              <div style="font-size: 8pt; font-weight: bold; color: #d97706;">TOTAL IZIN</div>
+              <div style="font-size: 14pt; font-weight: bold; color: #d97706;">${totalIzinMinggu} Hari</div>
+            </td>
+            <td>
+              <div style="font-size: 8pt; font-weight: bold; color: #dc2626;">TOTAL ALFA</div>
+              <div style="font-size: 14pt; font-weight: bold; color: #dc2626;">${totalAlfaMinggu} Hari</div>
+            </td>
+          </tr>
+        </table>
+
+        <div style="font-weight: bold; font-size: 10.5pt; margin-top: 15px; margin-bottom: 8px; background-color: #064e3b; color: #ffffff; padding: 5px 10px;">
+          DAFTAR RINCIAN PRESENSI SISWA PERIODE ${targetMinggu.toUpperCase()} (${targetBulan.toUpperCase()})
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 4%;">No</th>
+              <th style="width: 22%;">Nama Siswa</th>
+              <th style="width: 12%;">NIS / NISN</th>
+              <th style="width: 9%;">Hadir</th>
+              <th style="width: 9%;">Sakit</th>
+              <th style="width: 9%;">Izin</th>
+              <th style="width: 9%;">Alfa</th>
+              <th style="width: 12%;">Diagram Visual (%)</th>
+              <th style="width: 14%;">Status Presensi</th>
+              <th style="width: 10%;">Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${studentRowsHtml}
+          </tbody>
+        </table>
+
+        <table class="sig-table">
+          <tr>
+            <td>
+              <div>Mengetahui,</div>
+              <div><b>Kepala Sekolah</b></div>
+              <div class="sig-space"></div>
+              <div class="sig-name">Drs. H. M. Syarif, M.Pd</div>
+              <div>NIP. 19680512 199412 1 002</div>
+            </td>
+            <td>
+              <div>Tangerang Selatan, ${dateTodayStr}</div>
+              <div><b>Wali Kelas ${namaKelas}</b></div>
+              <div class="sig-space"></div>
+              <div class="sig-name">${waliKelasName}</div>
+              <div>NIP. Wali Kelas</div>
+            </td>
+            <td>
+              <div>Mengetahui,</div>
+              <div><b>Guru Bimbingan Konseling (BK)</b></div>
+              <div class="sig-space"></div>
+              <div class="sig-name">${guruBkName}</div>
+              <div>NIP. Guru BK</div>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + docHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeKelas = namaKelas.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeMinggu = targetMinggu.replace(/[^a-zA-Z0-9]/g, '_');
+    link.download = `Laporan_Presensi_${safeKelas}_${safeMinggu}_${targetBulan}_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Filter students belonging to the current selected class
   const classStudents = useMemo(() => {
     if (!db || !db.siswa) return [];
@@ -2142,9 +2415,51 @@ export default function WaliKelasView({
         matchBulan = String(k.bulan || '').toLowerCase().trim() === attendanceFilterBulan.toLowerCase().trim();
       }
 
-      return matchSearch && matchBulan;
+      let matchMinggu = true;
+      if (attendanceFilterMinggu !== 'ALL') {
+        matchMinggu = String(k.mingguKe || '').toLowerCase().trim() === attendanceFilterMinggu.toLowerCase().trim();
+      }
+
+      return matchSearch && matchBulan && matchMinggu;
     });
-  }, [classKehadiran, searchQuery, attendanceFilterBulan, db]);
+  }, [classKehadiran, searchQuery, attendanceFilterBulan, attendanceFilterMinggu, db]);
+
+  // Weekly attendance breakdown stats (Minggu 1 s.d. Minggu 5)
+  const weeklyBreakdownStats = useMemo(() => {
+    const weeks = ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'];
+    return weeks.map(weekLabel => {
+      const weekRecords = classKehadiran.filter(k => {
+        const matchWeek = String(k.mingguKe || '').toLowerCase().trim() === weekLabel.toLowerCase().trim();
+        let matchBulan = true;
+        if (attendanceFilterBulan !== 'ALL') {
+          matchBulan = String(k.bulan || '').toLowerCase().trim() === attendanceFilterBulan.toLowerCase().trim();
+        }
+        return matchWeek && matchBulan;
+      });
+
+      let h = 0, sk = 0, iz = 0, al = 0;
+      weekRecords.forEach(r => {
+        h += Number(r.hadir || 0);
+        sk += Number(r.sakit || 0);
+        iz += Number(r.izin || (r as any).ijin || 0);
+        al += Number(r.alfa || 0);
+      });
+
+      const tot = h + sk + iz + al;
+      const percentage = tot > 0 ? Math.round((h / tot) * 100) : 100;
+
+      return {
+        weekLabel,
+        recordCount: weekRecords.length,
+        hadir: h,
+        sakit: sk,
+        izin: iz,
+        alfa: al,
+        totalHari: tot,
+        percentage
+      };
+    });
+  }, [classKehadiran, attendanceFilterBulan]);
 
   const classAttendanceMetrics = useMemo(() => {
     let totalHadir = 0;
@@ -3328,15 +3643,98 @@ export default function WaliKelasView({
                 </div>
               </div>
 
+              {/* Rekap Presensi Mingguan (Diagram & Visualisasi Cards) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                      <BarChart2 size={16} className="text-emerald-600" />
+                      Diagram & Visualisasi Rekapitulasi Kehadiran Mingguan
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Statistik kehadiran per minggu {attendanceFilterBulan !== 'ALL' ? `(Bulan ${attendanceFilterBulan})` : '(Semua Bulan)'} lengkap dengan tombol cetak format DOC mingguan.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDownloadKehadiranKelasDoc(currentClassName)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+                  >
+                    <Download size={14} /> Unduh Format DOC Rekap Kelas
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                  {weeklyBreakdownStats.map((wStat) => {
+                    const pct = wStat.percentage;
+                    let pctBg = 'bg-emerald-500';
+                    let pctText = 'text-emerald-700';
+                    let cardBorder = 'border-slate-100';
+
+                    if (pct < 70) {
+                      pctBg = 'bg-rose-500';
+                      pctText = 'text-rose-700';
+                      cardBorder = 'border-rose-200 bg-rose-50/20';
+                    } else if (pct < 85) {
+                      pctBg = 'bg-amber-500';
+                      pctText = 'text-amber-700';
+                      cardBorder = 'border-amber-200 bg-amber-50/20';
+                    }
+
+                    return (
+                      <div key={wStat.weekLabel} className={`p-3.5 rounded-xl border ${cardBorder} bg-white shadow-2xs hover:shadow-md transition flex flex-col justify-between space-y-3`}>
+                        <div>
+                          <div className="flex items-center justify-between gap-1 mb-1.5">
+                            <span className="font-black text-xs text-slate-800">{wStat.weekLabel}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${pctText} bg-slate-100`}>
+                              {pct}%
+                            </span>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
+                            <div className={`${pctBg} h-full rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-1 text-[10px] pt-1">
+                            <div className="bg-emerald-50 text-emerald-800 px-2 py-1 rounded font-semibold text-center">
+                              Hadir: <b>{wStat.hadir}</b>
+                            </div>
+                            <div className="bg-sky-50 text-sky-800 px-2 py-1 rounded font-semibold text-center">
+                              Sakit: <b>{wStat.sakit}</b>
+                            </div>
+                            <div className="bg-amber-50 text-amber-800 px-2 py-1 rounded font-semibold text-center">
+                              Izin: <b>{wStat.izin}</b>
+                            </div>
+                            <div className="bg-rose-50 text-rose-800 px-2 py-1 rounded font-semibold text-center">
+                              Alfa: <b>{wStat.alfa}</b>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleDownloadKehadiranMingguDoc(currentClassName, wStat.weekLabel, attendanceFilterBulan)}
+                          className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+                          title={`Unduh Laporan Format DOC untuk ${wStat.weekLabel}`}
+                        >
+                          <FileDown size={12} className="text-emerald-400" /> Unduh DOC {wStat.weekLabel}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Filter Bar with Tambah Button */}
               <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs text-slate-600 font-semibold">
                   <Info size={15} className="text-emerald-600 shrink-0" />
-                  <span>Daftar rekapitulasi presensi siswa kelas <b>{currentClassName}</b>. Anda dapat melihat, menambah, mengedit, dan menghapus catatan presensi.</span>
+                  <span>Daftar rekapitulasi presensi siswa kelas <b>{currentClassName}</b>. Anda dapat memfilter mingguan/bulanan, menambah, mengedit, dan mengunduh format DOC resmi.</span>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-slate-500">Bulan:</span>
+                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                    <Filter size={12} /> Bulan:
+                  </span>
                   <select
                     value={attendanceFilterBulan}
                     onChange={(e) => setAttendanceFilterBulan(e.target.value)}
@@ -3355,6 +3753,20 @@ export default function WaliKelasView({
                     <option value="Oktober">Oktober</option>
                     <option value="November">November</option>
                     <option value="Desember">Desember</option>
+                  </select>
+
+                  <span className="text-xs font-bold text-slate-500">Minggu:</span>
+                  <select
+                    value={attendanceFilterMinggu}
+                    onChange={(e) => setAttendanceFilterMinggu(e.target.value)}
+                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ALL">Semua Minggu</option>
+                    <option value="Minggu 1">Minggu 1</option>
+                    <option value="Minggu 2">Minggu 2</option>
+                    <option value="Minggu 3">Minggu 3</option>
+                    <option value="Minggu 4">Minggu 4</option>
+                    <option value="Minggu 5">Minggu 5</option>
                   </select>
 
                   <button
@@ -3398,7 +3810,7 @@ export default function WaliKelasView({
                           <th className="p-3 text-center">Alfa</th>
                           <th className="p-3">Keterangan</th>
                           <th className="p-3 text-center bg-emerald-50/50 text-emerald-800">Unduh DOC Siswa</th>
-                          <th className="p-3 text-center bg-teal-50/50 text-teal-800">Unduh DOC Kelas</th>
+                          <th className="p-3 text-center bg-teal-50/50 text-teal-800">Unduh DOC Minggu</th>
                           <th className="p-3 text-center">Aksi (Ubah & Hapus)</th>
                         </tr>
                       </thead>
@@ -3450,11 +3862,11 @@ export default function WaliKelasView({
                               </td>
                               <td className="p-3 text-center bg-teal-50/20">
                                 <button
-                                  onClick={() => handleDownloadKehadiranKelasDoc(studentKelas)}
+                                  onClick={() => handleDownloadKehadiranMingguDoc(studentKelas, att.mingguKe, att.bulan || 'ALL')}
                                   className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition inline-flex items-center gap-1 shadow-xs cursor-pointer"
-                                  title="Unduh Laporan Format DOC Rekap Kelas"
+                                  title="Unduh Laporan Format DOC Rekap Minggu Ini"
                                 >
-                                  <FileDown size={12} /> Doc Kelas
+                                  <FileDown size={12} /> Doc Minggu
                                 </button>
                               </td>
                               <td className="p-3 text-center">
