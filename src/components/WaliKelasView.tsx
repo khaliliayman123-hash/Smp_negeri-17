@@ -2470,7 +2470,7 @@ export default function WaliKelasView({
     let totalIzin = 0;
     let totalAlfa = 0;
 
-    classKehadiran.forEach(k => {
+    filteredKehadiran.forEach(k => {
       totalHadir += Number(k.hadir || 0);
       totalSakit += Number(k.sakit || 0);
       totalIzin += Number(k.izin || (k as any).ijin || 0);
@@ -2488,7 +2488,7 @@ export default function WaliKelasView({
       totalHari,
       percentage
     };
-  }, [classKehadiran]);
+  }, [filteredKehadiran]);
 
   // Monthly violation points calculation for the selected class
   const monthlyChartData = useMemo(() => {
@@ -3592,7 +3592,7 @@ export default function WaliKelasView({
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 mb-2">
-                      <BarChart2 size={12} /> Dashboard Presensi Kelas {currentClassName}
+                      <BarChart2 size={12} /> Dashboard Presensi {currentClassName.startsWith('Kelas') ? currentClassName : `Kelas ${currentClassName}`}
                     </span>
                     <h3 className="text-lg font-black text-white">Grafik & Analytics Rekap Kehadiran</h3>
                     <p className="text-xs text-emerald-200/80 mt-0.5">

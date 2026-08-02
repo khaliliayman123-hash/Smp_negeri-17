@@ -506,6 +506,12 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
+  // Ensure default sample kehadiran if empty
+  if (!parsed.kehadiran || !Array.isArray(parsed.kehadiran) || parsed.kehadiran.length === 0) {
+    parsed.kehadiran = [...INITIAL_DATABASE.kehadiran];
+    migrated = true;
+  }
+
   // Check if the parsed database is fundamentally empty (to prevent overwriting real local data with empty remote sheets)
   const isParsedEmpty = parsed.siswa.length === 0 || parsed.users.length === 0;
 
@@ -1363,8 +1369,34 @@ export const apiService = {
           return updated;
         }
 
-        // Update local cache with remote data, preserving the config block
-        const updated = { ...sanitized, config: { ...localDb.config, gasApiUrl: getGasApiUrl() } };
+        // Preserve and merge local records with remote records for arrays where local updates might not be in remote yet
+        const mergeEntityArray = <T extends { id?: string }>(remoteList: T[] = [], localList: T[] = []): T[] => {
+          if (!remoteList || remoteList.length === 0) return localList || [];
+          if (!localList || localList.length === 0) return remoteList || [];
+          const map = new Map<string, T>();
+          remoteList.forEach(item => { if (item && item.id) map.set(item.id, item); });
+          localList.forEach(item => { if (item && item.id && !map.has(item.id)) map.set(item.id, item); });
+          return Array.from(map.values());
+        };
+
+        const mergedKehadiran = mergeEntityArray(sanitized.kehadiran, localDb.kehadiran);
+        const mergedLaporan = mergeEntityArray(sanitized.laporanKejadian, localDb.laporanKejadian);
+        const mergedPelanggaran = mergeEntityArray(sanitized.pelanggaran, localDb.pelanggaran);
+        const mergedPrestasi = mergeEntityArray(sanitized.prestasi, localDb.prestasi);
+        const mergedRemisi = mergeEntityArray(sanitized.remisiPoin, localDb.remisiPoin);
+        const mergedKonseling = mergeEntityArray(sanitized.konseling, localDb.konseling);
+
+        // Update local cache with remote data, preserving the config block and merged arrays
+        const updated = {
+          ...sanitized,
+          kehadiran: mergedKehadiran,
+          laporanKejadian: mergedLaporan,
+          pelanggaran: mergedPelanggaran,
+          prestasi: mergedPrestasi,
+          remisiPoin: mergedRemisi,
+          konseling: mergedKonseling,
+          config: { ...localDb.config, gasApiUrl: getGasApiUrl() }
+        };
         saveLocalDatabase(updated);
         lastFetchSuccessful = true;
 
