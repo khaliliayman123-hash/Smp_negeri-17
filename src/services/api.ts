@@ -74,144 +74,10 @@ const MOCK_FIRST_NAMES_FEMALE = ['Amanda', 'Bella', 'Citra', 'Dhea', 'Elvira', '
 const MOCK_LAST_NAMES = ['Pratama', 'Lestari', 'Wijaya', 'Saputra', 'Hidayat', 'Ramadhan', 'Salsabila', 'Maulana', 'Alfarizi', 'Kurniawan', 'Santoso', 'Permata', 'Handayani', 'Anggara', 'Putra', 'Kusuma', 'Nugraha', 'Wibowo', 'Riyadi', 'Utami'];
 
 export const generateAllSampleStudents = (): Siswa[] => {
-  const list: Siswa[] = [
-    {
-      id: 'sis-1',
-      nis: '23241001',
-      nisn: '0071234561',
-      nama: 'Aditya Pratama',
-      jenisKelamin: 'Laki-laki',
-      tempatLahir: 'Tangerang Selatan',
-      tanggalLahir: '2013-05-12',
-      agama: 'Islam',
-      alamat: 'Jl. Raya Ciater No. 12, Serpong',
-      desa: 'Ciater',
-      kecamatan: 'Serpong',
-      kabupaten: 'Kota Tangerang Selatan',
-      provinsi: 'Banten',
-      nomorHp: '081234567890',
-      email: 'aditya.pratama@student.sch.id',
-      kelasId: 'kl-1',
-      jurusanId: '',
-      tahunMasuk: '2025',
-      tahunPelajaran: '2025/2026',
-    },
-    {
-      id: 'sis-2',
-      nis: '23241002',
-      nisn: '0071234562',
-      nama: 'Bella Amanda',
-      jenisKelamin: 'Perempuan',
-      tempatLahir: 'Tangerang Selatan',
-      tanggalLahir: '2013-09-21',
-      agama: 'Islam',
-      alamat: 'Jl. Pamulang Raya No. 45',
-      desa: 'Pamulang Barat',
-      kecamatan: 'Pamulang',
-      kabupaten: 'Kota Tangerang Selatan',
-      provinsi: 'Banten',
-      nomorHp: '082345678901',
-      email: 'bella.amanda@student.sch.id',
-      kelasId: 'kl-2',
-      jurusanId: '',
-      tahunMasuk: '2025',
-      tahunPelajaran: '2025/2026',
-    },
-    {
-      id: 'sis-3',
-      nis: '23241003',
-      nisn: '0071234563',
-      nama: 'Candra Wijaya',
-      jenisKelamin: 'Laki-laki',
-      tempatLahir: 'Tangerang Selatan',
-      tanggalLahir: '2012-11-03',
-      agama: 'Islam',
-      alamat: 'Jl. Bintaro Utama 3',
-      desa: 'Pondok Karya',
-      kecamatan: 'Pondok Aren',
-      kabupaten: 'Kota Tangerang Selatan',
-      provinsi: 'Banten',
-      nomorHp: '083456789012',
-      email: 'candra.wijaya@student.sch.id',
-      kelasId: 'kl-12',
-      jurusanId: '',
-      tahunMasuk: '2024',
-      tahunPelajaran: '2024/2025',
-    },
-    {
-      id: 'sis-4',
-      nis: '23241004',
-      nisn: '0071234564',
-      nama: 'Dian Lestari',
-      jenisKelamin: 'Perempuan',
-      tempatLahir: 'Tangerang Selatan',
-      tanggalLahir: '2011-03-15',
-      agama: 'Islam',
-      alamat: 'Jl. Ciputat Raya No. 8',
-      desa: 'Ciputat',
-      kecamatan: 'Ciputat',
-      kabupaten: 'Kota Tangerang Selatan',
-      provinsi: 'Banten',
-      nomorHp: '084567890123',
-      email: 'dian.lestari@student.sch.id',
-      kelasId: 'kl-13',
-      jurusanId: '',
-      tahunMasuk: '2023',
-      tahunPelajaran: '2023/2024',
-    },
-  ];
-
-  for (let level = 7; level <= 9; level++) {
-    const baseKl = level === 7 ? 1 : level === 8 ? 12 : 23;
-    const yearIn = level === 7 ? '2025' : level === 8 ? '2024' : '2023';
-    const tp = level === 7 ? '2025/2026' : level === 8 ? '2024/2025' : '2023/2024';
-
-    for (let rombel = 1; rombel <= 11; rombel++) {
-      const klId = `kl-${baseKl + rombel - 1}`;
-      const existingInClass = list.filter(s => s.kelasId === klId);
-      const need = 2 - existingInClass.length;
-
-      for (let i = 1; i <= need; i++) {
-        const isMale = (rombel + i) % 2 === 0;
-        const firstName = isMale 
-          ? MOCK_FIRST_NAMES_MALE[(level * 11 + rombel * 2 + i) % MOCK_FIRST_NAMES_MALE.length]
-          : MOCK_FIRST_NAMES_FEMALE[(level * 11 + rombel * 2 + i) % MOCK_FIRST_NAMES_FEMALE.length];
-        const lastName = MOCK_LAST_NAMES[(level * 7 + rombel * 3 + i) % MOCK_LAST_NAMES.length];
-        const fullName = `${firstName} ${lastName}`;
-        const nisCode = `${level}${rombel < 10 ? '0' + rombel : rombel}${i}`;
-        const nis = `2425${nisCode}`;
-        const nisn = `00${level}123${nisCode}`;
-        const sId = `sis-sample-${level}-${rombel}-${i}`;
-
-        list.push({
-          id: sId,
-          nis: nis,
-          nisn: nisn,
-          nama: fullName,
-          jenisKelamin: isMale ? 'Laki-laki' : 'Perempuan',
-          tempatLahir: 'Tangerang Selatan',
-          tanggalLahir: `${2020 - level}-0${(rombel % 9) + 1}-1${i}`,
-          agama: 'Islam',
-          alamat: `Jl. BSD Boulevard Utama No. ${rombel * 5 + i}, Serpong`,
-          desa: 'Lengkong Gudang',
-          kecamatan: 'Serpong',
-          kabupaten: 'Kota Tangerang Selatan',
-          provinsi: 'Banten',
-          nomorHp: `0812${level}${rombel}${i}789`,
-          email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@student.sch.id`,
-          kelasId: klId,
-          jurusanId: '',
-          tahunMasuk: yearIn,
-          tahunPelajaran: tp,
-        });
-      }
-    }
-  }
-
-  return list;
+  return [];
 };
 
-// Seed data to make the dashboard charts and widgets look spectacular and complete right away
+// Clean initial database state without sample data
 const INITIAL_DATABASE: DatabaseState = {
   config: {
     gasApiUrl: 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec',
@@ -272,190 +138,24 @@ const INITIAL_DATABASE: DatabaseState = {
     { id: 'kl-32', namaKelas: 'Kelas 9-10', waliKelasId: 'wk-9-10' },
     { id: 'kl-33', namaKelas: 'Kelas 9-11', waliKelasId: 'wk-9-11' },
   ],
-  siswa: generateAllSampleStudents(),
-  orangTua: [
-    {
-      id: 'sis-1',
-      namaAyah: 'Suparno Pratama',
-      statusAyah: 'Hidup',
-      tempatLahirAyah: 'Jakarta',
-      tanggalLahirAyah: '1978-04-15',
-      alamatAyah: 'Jl. Merdeka No. 45, Kebon Jeruk',
-      agamaAyah: 'Islam',
-      pendidikanAyah: 'S1',
-      pekerjaanAyah: 'Wiraswasta',
-      noHpAyah: '081234567801',
-      namaIbu: 'Endang Lestari',
-      statusIbu: 'Hidup',
-      tempatLahirIbu: 'Surakarta',
-      tanggalLahirIbu: '1981-08-20',
-      alamatIbu: 'Jl. Merdeka No. 45, Kebon Jeruk',
-      agamaIbu: 'Islam',
-      pendidikanIbu: 'SMA',
-      pekerjaanIbu: 'Ibu Rumah Tangga',
-      noHpIbu: '081234567802',
-      wali: '',
-      penghasilan: 'Rp 4.000.000 - Rp 6.000.000',
-      pendidikanOrangTua: 'S1'
-    },
-    {
-      id: 'sis-2',
-      namaAyah: 'Herman Wijaya',
-      statusAyah: 'Hidup',
-      tempatLahirAyah: 'Bandung',
-      tanggalLahirAyah: '1975-12-05',
-      alamatAyah: 'Perum Gading Indah Blok C/12',
-      agamaAyah: 'Kristen',
-      pendidikanAyah: 'D3',
-      pekerjaanAyah: 'Karyawan Swasta',
-      noHpAyah: '082345678911',
-      namaIbu: 'Maria Ulfa',
-      statusIbu: 'Hidup',
-      tempatLahirIbu: 'Bandung',
-      tanggalLahirIbu: '1978-03-25',
-      alamatIbu: 'Perum Gading Indah Blok C/12',
-      agamaIbu: 'Kristen',
-      pendidikanIbu: 'D3',
-      pekerjaanIbu: 'Guru',
-      noHpIbu: '082345678912',
-      wali: '',
-      penghasilan: 'Rp 6.000.000 - Rp 10.000.000',
-      pendidikanOrangTua: 'D3'
-    },
-    {
-      id: 'sis-3',
-      namaAyah: 'Agus Wijaya',
-      statusAyah: 'Hidup',
-      tempatLahirAyah: 'Surabaya',
-      tanggalLahirAyah: '1970-10-10',
-      alamatAyah: 'Jl. Diponegoro Gg. 3 No. 9',
-      agamaAyah: 'Islam',
-      pendidikanAyah: 'SMA',
-      pekerjaanAyah: 'Buruh',
-      noHpAyah: '083456789021',
-      namaIbu: 'Siti Aminah',
-      statusIbu: 'Meninggal',
-      tempatLahirIbu: 'Surabaya',
-      tanggalLahirIbu: '1973-05-12',
-      alamatIbu: 'Jl. Diponegoro Gg. 3 No. 9',
-      agamaIbu: 'Islam',
-      pendidikanIbu: 'SMP',
-      pekerjaanIbu: 'Almarhumah',
-      noHpIbu: '-',
-      wali: '',
-      penghasilan: 'Rp 2.000.000 - Rp 4.000.000',
-      pendidikanOrangTua: 'SMA'
-    },
-    {
-      id: 'sis-4',
-      namaAyah: 'Rahmat Hidayat',
-      statusAyah: 'Meninggal',
-      tempatLahirAyah: 'Yogyakarta',
-      tanggalLahirAyah: '1968-02-14',
-      alamatAyah: 'Kampung Sastrodirjan GT II/412',
-      agamaAyah: 'Islam',
-      pendidikanAyah: 'SMP',
-      pekerjaanAyah: 'Almarhum',
-      noHpAyah: '-',
-      namaIbu: 'Kartika Sari',
-      statusIbu: 'Hidup',
-      tempatLahirIbu: 'Yogyakarta',
-      tanggalLahirIbu: '1974-09-09',
-      alamatIbu: 'Kampung Sastrodirjan GT II/412',
-      agamaIbu: 'Islam',
-      pendidikanIbu: 'SMA',
-      pekerjaanIbu: 'Pedagang',
-      noHpIbu: '084567890124',
-      wali: 'Bambang Sudewo',
-      statusWali: 'Hidup',
-      tempatLahirWali: 'Yogyakarta',
-      tanggalLahirWali: '1965-06-20',
-      alamatWali: 'Jl. Malioboro No. 12',
-      agamaWali: 'Islam',
-      pendidikanWali: 'S1',
-      pekerjaanWali: 'PNS',
-      noHpWali: '084567890125',
-      penghasilan: 'Kurang dari Rp 2.000.000',
-      pendidikanOrangTua: 'SMP'
-    },
-  ],
-  akademik: [
-    { id: 'sis-1', semester: '1', rataRataRaport: 85.5, catatanWaliKelas: 'Sangat baik dalam pemrograman dasar.' },
-    { id: 'sis-2', semester: '1', rataRataRaport: 89.2, catatanWaliKelas: 'Pertahankan prestasi akademis.' },
-    { id: 'sis-3', semester: '3', rataRataRaport: 78.0, catatanWaliKelas: 'Tingkatkan fokus saat praktikum jaringan.' },
-    { id: 'sis-4', semester: '5', rataRataRaport: 92.4, catatanWaliKelas: 'Sangat berbakat di bidang desain grafis dan UI.' },
-  ],
-  kesehatan: [
-    { id: 'sis-1', tinggiBadan: 172, beratBadan: 64, golonganDarah: 'O', penyakit: '-', alergi: 'Debu', disabilitas: '-' },
-    { id: 'sis-2', tinggiBadan: 160, beratBadan: 52, golonganDarah: 'A', penyakit: '-', alergi: 'Seafood', disabilitas: '-' },
-    { id: 'sis-3', tinggiBadan: 168, beratBadan: 75, golonganDarah: 'B', penyakit: 'Maag', alergi: '-', disabilitas: '-' },
-    { id: 'sis-4', tinggiBadan: 158, beratBadan: 48, golonganDarah: 'AB', penyakit: 'Asma', alergi: 'Udara dingin', disabilitas: '-' },
-  ],
-  ekonomi: [
-    { id: 'sis-1', statusRumah: 'Milik Sendiri', penghasilan: 'Rp 4.000.000 - Rp 6.000.000', kendaraan: 'Motor', pip: false, pkh: false, kip: false },
-    { id: 'sis-2', statusRumah: 'Milik Sendiri', penghasilan: 'Rp 6.000.000 - Rp 10.000.000', kendaraan: 'Mobil & Motor', pip: false, pkh: false, kip: false },
-    { id: 'sis-3', statusRumah: 'Sewa / Kontrak', penghasilan: 'Rp 2.000.000 - Rp 4.000.000', kendaraan: 'Motor', pip: true, pkh: false, kip: true },
-    { id: 'sis-4', statusRumah: 'Sewa / Kontrak', penghasilan: 'Kurang dari Rp 2.000.000', kendaraan: 'Sepeda', pip: true, pkh: true, kip: true },
-  ],
-  psikologi: [
-    { id: 'sis-1', minat: 'Coding & Robotics', bakat: 'Logika & Analitis', hobi: 'Gaming, Membaca', gayaBelajar: 'Visual', citaCita: 'Software Engineer', kepribadian: 'Introvert (INTJ)' },
-    { id: 'sis-2', minat: 'Public Speaking', bakat: 'Komunikasi', hobi: 'Menulis, Organisasi', gayaBelajar: 'Auditory', citaCita: 'HR Manager', kepribadian: 'Extrovert (ENFJ)' },
-    { id: 'sis-3', minat: 'Hardware & Network', bakat: 'Keterampilan Mekanik', hobi: 'Bermain Musik', gayaBelajar: 'Kinestetik', citaCita: 'Network Engineer', kepribadian: 'Introvert (ISTP)' },
-    { id: 'sis-4', minat: 'Desain Komunikasi Visual', bakat: 'Seni Rupa & Estetika', hobi: 'Menggambar, Fotografi', gayaBelajar: 'Visual', citaCita: 'Art Director', kepribadian: 'Introvert (INFP)' },
-  ],
-  sosial: [
-    { id: 'sis-1', hubunganTeman: 'Sangat Baik', organisasi: 'OSIS (Staff IT)', masalahSosial: '-' },
-    { id: 'sis-2', hubunganTeman: 'Sangat Baik', organisasi: 'Pramuka (Bantara)', masalahSosial: '-' },
-    { id: 'sis-3', hubunganTeman: 'Kurang Bersosialisasi', organisasi: '-', masalahSosial: 'Sering menyendiri' },
-    { id: 'sis-4', hubunganTeman: 'Baik', organisasi: 'Majalah Dinding', masalahSosial: '-' },
-  ],
-  prestasi: [
-    { id: 'pres-1', siswaId: 'sis-4', namaPrestasi: 'Juara 1 Lomba Desain Poster Nasional', tingkat: 'Nasional', tahun: '2025', juara: 'Juara I', kategori: 'Non Akademik' },
-    { id: 'pres-2', siswaId: 'sis-1', namaPrestasi: 'Juara 2 Hackathon Pelajar Provinsi', tingkat: 'Provinsi', tahun: '2025', juara: 'Juara II', kategori: 'Akademik' },
-  ],
-  pelanggaran: [
-    { id: 'pel-1', siswaId: 'sis-3', tanggal: '2026-06-15', jenisPelanggaran: 'Merokok di area sekolah', kategori: 'Berat', poin: 75, guruPelapor: 'Arta Polta, S.Pd', tindakLanjut: 'Pemanggilan Orang Tua', status: 'Proses' },
-    { id: 'pel-2', siswaId: 'sis-3', tanggal: '2026-06-20', jenisPelanggaran: 'Terlambat masuk sekolah lebih dari 3 kali', kategori: 'Ringan', poin: 15, guruPelapor: 'Piket Guru', tindakLanjut: 'Teguran lisan & pembinaan', status: 'Selesai' },
-    { id: 'pel-3', siswaId: 'sis-3', tanggal: '2026-06-25', jenisPelanggaran: 'Bolos sekolah pada jam pelajaran produktif', kategori: 'Sedang', poin: 30, guruPelapor: 'Arta Polta, S.Pd', tindakLanjut: 'Konseling Individu & SP 1', status: 'Belum Ditindak' },
-    // Total points for sis-3 (Candra) will be 75 + 15 + 30 = 120 (Triggers the > 100 points alert!)
-    { id: 'pel-4', siswaId: 'sis-1', tanggal: '2026-06-10', jenisPelanggaran: 'Terlambat masuk sekolah', kategori: 'Ringan', poin: 5, guruPelapor: 'Piket Guru', tindakLanjut: 'Teguran lisan', status: 'Selesai' },
-  ],
-  remisiPoin: [
-    { id: 'rem-1', siswaId: 'sis-3', tanggal: '2026-06-26', jenisRemisi: 'Membantu Kerapian Perpustakaan', kategori: 'Karakter Baik', poin: 15, guruPemberi: 'Nur Jamilah Purwaningsih, S.Psi', keterangan: 'Siswa sangat rajin merapikan buku di perpustakaan sebagai bentuk perubahan perilaku positif.' }
-  ],
-  konseling: [
-    { id: 'kon-1', nomorKonseling: 'BK-2026-001', siswaId: 'sis-3', tanggal: '2026-06-18', jenis: 'Individu', guruBkId: 'usr-2', permasalahan: 'Merokok di area sekolah dan kedapatan membawa rokok.', analisis: 'Siswa mengalami tekanan pergaulan luar sekolah dan merasa stres karena masalah ekonomi keluarga.', solusi: 'Melakukan konseling relaksasi, menyepakati kontrak perilaku untuk berhenti merokok, dan menghubungkan ke program beasiswa sekolah.', hasil: 'Siswa kooperatif, berjanji mengurangi rokok, dan bersedia dipantau perkembangannya.', tindakLanjut: 'Pemantauan berkala bersama Wali Kelas.' },
-  ],
-  asesmen: [
-    { id: 'ase-1', siswaId: 'sis-1', akpd: 'Tinggi pemahaman diri, sedang penyesuaian sosial', dcm: 'Visual & Auditori', aum: 'Hambatan belajar ringan', iq: 125, bakat: 'Komputasi, Logika', minat: 'Sains, Teknologi' },
-    { id: 'ase-2', siswaId: 'sis-4', akpd: 'Tinggi minat seni, tinggi kemampuan karir', dcm: 'Kinestetik', aum: 'Tidak ada masalah berarti', iq: 118, bakat: 'Artistik, Komunikasi', minat: 'Seni Kreatif, Media' },
-  ],
-  homeVisit: [
-    { id: 'hv-1', siswaId: 'sis-3', tanggal: '2026-06-19', tujuan: 'Mengetahui kondisi lingkungan rumah dan dukungan orang tua terkait kasus pelanggaran merokok.', hasil: 'Orang tua menyambut baik dan berjanji akan memperketat pengawasan di rumah, serta berterima kasih atas informasi dari sekolah.' },
-  ],
-  surat: [
-    { id: 'sur-1', siswaId: 'sis-3', nomorSurat: '045/BK-SMK/VI/2026', tanggal: '2026-06-16', jenisSurat: 'Surat Panggilan', perihal: 'Undangan Pertemuan Wali Murid', isiSurat: 'Mengharap kehadiran Bapak/Ibu Wali Murid dari siswa Candra Wijaya ke ruang BK sekolah untuk membicarakan mengenai perkembangan putra Bapak/Ibu.' },
-  ],
-  dokumen: [
-    { id: 'dok-1', siswaId: 'sis-1', jenisDokumen: 'KK', namaFile: 'kk_aditya.pdf', tanggalUpload: '2025-07-15' },
-    { id: 'dok-2', siswaId: 'sis-1', jenisDokumen: 'Akta', namaFile: 'akta_aditya.pdf', tanggalUpload: '2025-07-15' },
-  ],
-  catatanPerkembangan: [
-    { id: 'cp-1', siswaId: 'sis-3', tanggal: '2026-06-22', catatan: 'Candra menunjukkan perilaku lebih rapi dan masuk kelas tepat waktu selama 3 hari terakhir.', guruBkId: 'usr-2' },
-  ],
-  logAktivitas: [
-    { id: 'log-1', timestamp: '2026-06-28T09:00:00Z', userId: 'usr-1', namaUser: 'Sulaiman, S.Psi', role: 'Admin', aktivitas: 'Login', detail: 'Berhasil masuk ke dalam sistem.' },
-    { id: 'log-2', timestamp: '2026-06-28T09:15:00Z', userId: 'usr-2', namaUser: 'Nur Jamilah Purwaningsih, S.Psi', role: 'Guru BK', aktivitas: 'Tambah Konseling', detail: 'Membuat rekaman konseling individu untuk Candra Wijaya.' },
-  ],
-  kehadiran: [
-    { id: 'att-1', siswaId: 'sis-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
-    { id: 'att-2', siswaId: 'sis-3', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 4, sakit: 0, izin: 1, alfa: 0, keterangan: 'Izin urusan keluarga' },
-    { id: 'att-8-1-1', siswaId: 'sis-sample-8-1-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
-    { id: 'att-8-9-1', siswaId: 'sis-sample-8-9-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
-    { id: 'att-8-9-2', siswaId: 'sis-sample-8-9-2', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 4, sakit: 1, izin: 0, alfa: 0, keterangan: 'Sakit demam' },
-    { id: 'att-9-9-1', siswaId: 'sis-sample-9-9-1', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' },
-    { id: 'att-9-9-2', siswaId: 'sis-sample-9-9-2', mingguKe: 'Minggu 1', bulan: 'Juli', tahun: '2026', hadir: 5, sakit: 0, izin: 0, alfa: 0, keterangan: 'Hadir penuh' }
-  ],
+  siswa: [],
+  orangTua: [],
+  akademik: [],
+  kesehatan: [],
+  ekonomi: [],
+  psikologi: [],
+  sosial: [],
+  prestasi: [],
+  pelanggaran: [],
+  remisiPoin: [],
+  konseling: [],
+  asesmen: [],
+  homeVisit: [],
+  surat: [],
+  dokumen: [],
+  catatanPerkembangan: [],
+  logAktivitas: [],
+  kehadiran: [],
   laporanKejadian: []
 };
 
@@ -531,7 +231,7 @@ export function getSiswaInfo(db: DatabaseState | null | undefined, targetIdOrRef
 }
 
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
-  if (parsed && parsed._sanitized_v8 && parsed.laporanKejadian) {
+  if (parsed && parsed._sanitized_v9) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
   let migrated = false;
@@ -573,12 +273,6 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       migrated = true;
     }
   });
-
-  // Ensure default sample kehadiran if empty
-  if (!parsed.kehadiran || !Array.isArray(parsed.kehadiran) || parsed.kehadiran.length === 0) {
-    parsed.kehadiran = [...INITIAL_DATABASE.kehadiran];
-    migrated = true;
-  }
 
   // Check if the parsed database is fundamentally empty (to prevent overwriting real local data with empty remote sheets)
   const isParsedEmpty = parsed.siswa.length === 0 || parsed.users.length === 0;
@@ -959,84 +653,6 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     return s;
   }).filter(Boolean);
 
-  // Self-healing: Ensure every class in parsed.kelas has students populated
-  const allSampleStudents = generateAllSampleStudents();
-  parsed.kelas.forEach((c: any) => {
-    if (!c || !c.id) return;
-    const cNameNorm = normalizeClassName(c.namaKelas || c.id);
-    const hasStudentInClass = parsed.siswa.some((s: any) => {
-      if (!s) return false;
-      const sKl = (s.kelasId || '').toString().trim();
-      return sKl === c.id || sKl === c.namaKelas || normalizeClassName(sKl) === cNameNorm;
-    });
-
-    if (!hasStudentInClass) {
-      const samplesForClass = allSampleStudents.filter((s: any) => {
-        const sKl = (s.kelasId || '').toString().trim();
-        return sKl === c.id || sKl === c.namaKelas || normalizeClassName(sKl) === cNameNorm;
-      });
-      if (samplesForClass.length > 0) {
-        parsed.siswa.push(...samplesForClass);
-        migrated = true;
-      }
-    }
-  });
-
-  // Double check that all mock siswa records have expanded parent fields initialized
-  parsed.orangTua = parsed.orangTua.map((ot: any) => {
-    if (!ot) return ot;
-    const matchingSeed = INITIAL_DATABASE.orangTua.find(s => s.id === ot.id);
-    let updatedOt = { ...ot };
-    if (matchingSeed && !ot.statusAyah) {
-      updatedOt = { ...matchingSeed, ...ot };
-      migrated = true;
-    }
-    const matchingS = parsed.siswa.find((s: any) => s.id === ot.id);
-    const sAgama = matchingS?.agama || 'Islam';
-    if (!updatedOt.agamaAyah || updatedOt.agamaAyah.toString().trim() === '' || updatedOt.agamaAyah === '-') {
-      updatedOt.agamaAyah = sAgama;
-      migrated = true;
-    }
-    if (!updatedOt.agamaIbu || updatedOt.agamaIbu.toString().trim() === '' || updatedOt.agamaIbu === '-') {
-      updatedOt.agamaIbu = sAgama;
-      migrated = true;
-    }
-    if (updatedOt.wali && (!updatedOt.agamaWali || updatedOt.agamaWali.toString().trim() === '' || updatedOt.agamaWali === '-')) {
-      updatedOt.agamaWali = sAgama;
-      migrated = true;
-    }
-    return updatedOt;
-  });
-
-  // Self-heal secondary records for every student to ensure complete data integrity across all sheets
-  const secondaryKeys = [
-    { key: 'orangTua', defaultObj: { namaAyah: '', statusAyah: '', namaIbu: '', statusIbu: '', wali: '', statusWali: '', penghasilan: '', pendidikanOrangTua: '' } },
-    { key: 'akademik', defaultObj: { semester: 'Ganjil', rataRataRaport: '', catatanWaliKelas: '' } },
-    { key: 'kesehatan', defaultObj: { tinggiBadan: '', beratBadan: '', golonganDarah: '-', penyakit: '', alergi: '', disabilitas: '' } },
-    { key: 'ekonomi', defaultObj: { statusRumah: '', penghasilan: '', kendaraan: '', pip: '-', pkh: '-', kip: '-' } },
-    { key: 'psikologi', defaultObj: { minat: '', bakat: '', hobi: '', gayaBelajar: '', citaCita: '', kepribadian: '' } },
-    { key: 'sosial', defaultObj: { hubunganTeman: 'Baik', organisasi: '-', masalahSosial: '-' } }
-  ];
-
-  parsed.siswa.forEach((s: any) => {
-    secondaryKeys.forEach(({ key, defaultObj }) => {
-      const exists = parsed[key] && parsed[key].some((item: any) => item && item.id === s.id);
-      if (!exists) {
-        if (!parsed[key]) parsed[key] = [];
-        parsed[key].push({ id: s.id, ...defaultObj });
-        migrated = true;
-      }
-    });
-  });
-
-  // Ensure seed students (sis-1, sis-2, sis-3, sis-4) exist in parsed.siswa if missing
-  INITIAL_DATABASE.siswa.forEach((seedS) => {
-    if (!parsed.siswa.some((s: any) => s && (s.id === seedS.id || (s.nis && s.nis.toString().trim() === seedS.nis)))) {
-      parsed.siswa.push(JSON.parse(JSON.stringify(seedS)));
-      migrated = true;
-    }
-  });
-
   // Heal siswaId references across all sub-collections
   const relCollections = ['pelanggaran', 'laporanKejadian', 'remisiPoin', 'konseling', 'kehadiran', 'asesmen', 'homeVisit', 'surat', 'dokumen', 'catatanPerkembangan', 'prestasi'];
   relCollections.forEach((collName) => {
@@ -1055,7 +671,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
-  parsed._sanitized_v8 = true;
+  parsed._sanitized_v9 = true;
   return { sanitized: parsed as DatabaseState, migrated };
 }
 
@@ -1067,6 +683,37 @@ function loadLocalDatabase(): DatabaseState {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
+      // Wipe old cached sample data if present
+      if (!parsed._cleaned_default_data_v2) {
+        const cleanDb: DatabaseState = {
+          ...parsed,
+          siswa: [],
+          orangTua: [],
+          akademik: [],
+          kesehatan: [],
+          ekonomi: [],
+          psikologi: [],
+          sosial: [],
+          prestasi: [],
+          pelanggaran: [],
+          remisiPoin: [],
+          konseling: [],
+          asesmen: [],
+          homeVisit: [],
+          surat: [],
+          dokumen: [],
+          catatanPerkembangan: [],
+          logAktivitas: [],
+          kehadiran: [],
+          laporanKejadian: [],
+          _cleaned_default_data_v2: true,
+          _sanitized_v9: true
+        };
+        const { sanitized } = sanitizeDatabaseState(cleanDb);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+        currentDatabase = sanitized;
+        return sanitized;
+      }
       const { sanitized, migrated } = sanitizeDatabaseState(parsed);
       if (migrated) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
@@ -1074,10 +721,12 @@ function loadLocalDatabase(): DatabaseState {
       currentDatabase = sanitized;
       return sanitized;
     } catch (e) {
-      console.error('Failed to parse local database, resetting to seed data.', e);
+      console.error('Failed to parse local database, resetting to clean initial data.', e);
     }
   }
   const clonedInitial = JSON.parse(JSON.stringify(INITIAL_DATABASE));
+  clonedInitial._cleaned_default_data_v2 = true;
+  clonedInitial._sanitized_v9 = true;
   const { sanitized } = sanitizeDatabaseState(clonedInitial);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
   currentDatabase = sanitized;
