@@ -2909,14 +2909,7 @@ export default function WaliKelasView({
           >
             🏆 Rekam Prestasi
           </button>
-          <button
-            onClick={() => { setActiveSubFeature('kehadiran'); setSearchQuery(''); }}
-            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-              activeSubFeature === 'kehadiran' ? 'bg-white text-indigo-700 shadow-xs border border-slate-100 font-black' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            📅 Rekap Kehadiran
-          </button>
+
           <button
             onClick={() => { setActiveSubFeature('laporan'); setSearchQuery(''); }}
             className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
