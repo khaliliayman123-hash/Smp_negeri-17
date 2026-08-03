@@ -1432,12 +1432,14 @@ export default function App() {
                   : (prev.kehadiran || []).map(item => item.id === k.id ? k : item);
                 return { ...prev, kehadiran: list };
               });
-              apiService.saveKehadiran(k, isNew).then(res => {
+              try {
+                const res = await apiService.saveKehadiran(k, isNew);
                 showToast(res.message, res.success ? 'success' : 'error');
-              }).catch(() => {
+                return res.success;
+              } catch (err) {
                 showToast('Gagal menyimpan data Kehadiran.', 'error');
-              });
-              return true;
+                return false;
+              }
             }}
             onDeleteKehadiran={async (id) => {
               setDb(prev => {
@@ -1652,12 +1654,14 @@ export default function App() {
                   : (prev.kehadiran || []).map(item => item.id === k.id ? k : item);
                 return { ...prev, kehadiran: list };
               });
-              apiService.saveKehadiran(k, isNew).then(res => {
+              try {
+                const res = await apiService.saveKehadiran(k, isNew);
                 showToast(res.message, res.success ? 'success' : 'error');
-              }).catch(() => {
+                return res.success;
+              } catch (err) {
                 showToast('Gagal menyimpan data Kehadiran.', 'error');
-              });
-              return true;
+                return false;
+              }
             }}
             onDeleteKehadiran={async (id) => {
               setDb(prev => {
@@ -1849,12 +1853,14 @@ export default function App() {
                   : (prev.kehadiran || []).map(item => item.id === k.id ? k : item);
                 return { ...prev, kehadiran: list };
               });
-              apiService.saveKehadiran(k, isNew).then(res => {
+              try {
+                const res = await apiService.saveKehadiran(k, isNew);
                 showToast(res.message, res.success ? 'success' : 'error');
-              }).catch(() => {
+                return res.success;
+              } catch (err) {
                 showToast('Gagal menyimpan data Kehadiran.', 'error');
-              });
-              return true;
+                return false;
+              }
             }}
             onDeleteKehadiran={async (id) => {
               setDb(prev => {

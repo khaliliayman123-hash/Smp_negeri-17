@@ -716,8 +716,7 @@ function saveRowEntity(db, sheetName, entity, isNew) {
   if (!sheet) {
     throw new Error("Sheet '" + sheetName + "' tidak ditemukan.");
   }
-  
-  const headers = sheet.getDataRange().getValues()[0];
+
   const schema = {
     "Users": ["id", "username", "nama", "role", "email", "isActive"],
     "Siswa": ["id", "nis", "nisn", "nama", "foto", "tempatLahir", "tanggalLahir", "jenisKelamin", "agama", "alamat", "desa", "kecamatan", "kabupaten", "provinsi", "nomorHp", "email", "kelasId", "tahunMasuk"],
@@ -743,45 +742,78 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
   };
   const standardHeaders = schema[sheetName] || [];
-  
+
+  let headers = sheet.getDataRange().getValues()[0] || [];
+  if (!headers || headers.length === 0 || (headers.length === 1 && !headers[0])) {
+    headers = standardHeaders;
+    if (standardHeaders.length > 0) {
+      sheet.getRange(1, 1, 1, standardHeaders.length).setValues([standardHeaders]);
+      sheet.getRange(1, 1, 1, standardHeaders.length).setFontWeight("bold").setBackground("#e2e8f0");
+    }
+  }
+
   let rowIndex = -1;
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+
   if (!isNew) {
-    // Edit Row - first search for existing row
-    const dataRange = sheet.getDataRange();
-    const values = dataRange.getValues();
-    
+    // Edit Row - first search for existing row by ID
     for (let i = 1; i < values.length; i++) {
       if (values[i][0] == entity.id) {
         rowIndex = i + 1; // 1-indexed and skip header
         break;
       }
     }
-    
-    // Safety fallback for Siswa sheet: If ID not found, check by NIS / NISN / Nama to prevent duplicate rows
+
+    // Safety fallback for Siswa sheet: If ID not found, check by NIS / NISN / Nama
     if (rowIndex === -1 && sheetName === "Siswa") {
       const nisColIdx = headers.indexOf("nis");
       const nisnColIdx = headers.indexOf("nisn");
       const namaColIdx = headers.indexOf("nama");
-      
+
       for (let i = 1; i < values.length; i++) {
         const rowNIS = values[i][nisColIdx];
         const rowNISN = values[i][nisnColIdx];
         const rowNama = values[i][namaColIdx];
-        
+
         if (
           (entity.nis && rowNIS == entity.nis) ||
           (entity.nisn && rowNISN == entity.nisn) ||
           (entity.nama && rowNama && rowNama.toString().toLowerCase().trim() === entity.nama.toString().toLowerCase().trim())
         ) {
           rowIndex = i + 1;
-          // Fill in the missing ID in the sheet directly to heal it!
           sheet.getRange(rowIndex, 1).setValue(entity.id);
           break;
         }
       }
     }
   }
-  
+
+  // Fallback check for Kehadiran: match existing row by siswaId + bulan + mingguKe if ID check missed
+  if (sheetName === "Kehadiran") {
+    const siswaIdColIdx = headers.indexOf("siswaId");
+    const bulanColIdx = headers.indexOf("bulan");
+    const mingguKeColIdx = headers.indexOf("mingguKe");
+
+    if (siswaIdColIdx !== -1 && bulanColIdx !== -1 && mingguKeColIdx !== -1) {
+      for (let i = 1; i < values.length; i++) {
+        const rowSiswaId = values[i][siswaIdColIdx];
+        const rowBulan = values[i][bulanColIdx];
+        const rowMingguKe = values[i][mingguKeColIdx];
+
+        if (
+          rowSiswaId == entity.siswaId &&
+          rowBulan && entity.bulan && rowBulan.toString().toLowerCase().trim() === entity.bulan.toString().toLowerCase().trim() &&
+          rowMingguKe && entity.mingguKe && rowMingguKe.toString().toLowerCase().trim() === entity.mingguKe.toString().toLowerCase().trim()
+        ) {
+          rowIndex = i + 1;
+          sheet.getRange(rowIndex, 1).setValue(entity.id);
+          break;
+        }
+      }
+    }
+  }
+
   if (isNew || rowIndex === -1) {
     // Append Row (either explicitly new, or fallback because ID wasn't found in this sheet yet)
     const newRow = [];

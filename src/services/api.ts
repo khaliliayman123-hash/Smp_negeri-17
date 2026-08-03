@@ -77,10 +77,21 @@ export const generateAllSampleStudents = (): Siswa[] => {
   return [];
 };
 
+export const DEFAULT_GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzmKCjxxtUQBqQrC_SrnpRWWB_88voYQeUOiWG_XhDX6m-Yvy9QfdnPITfSJDkULZGy/exec';
+
+export const isOldOrDefaultUrl = (url?: string): boolean => {
+  if (!url || typeof url !== 'string') return true;
+  const trimmed = url.trim();
+  if (trimmed === '') return true;
+  if (trimmed.includes('AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm')) return true;
+  if (trimmed.includes('AKfycbwBbd5COo3yw1rij0XNuqSR62c22IuaFf7ty5Zqb-7PcCnTvHD1nHzss4gjKQWNiF10')) return true;
+  return false;
+};
+
 // Clean initial database state without sample data
 const INITIAL_DATABASE: DatabaseState = {
   config: {
-    gasApiUrl: 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec',
+    gasApiUrl: DEFAULT_GAS_API_URL,
     spreadsheetId: '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc',
   },
   users: [
@@ -243,15 +254,19 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
   // Ensure config block is present
   if (!parsed.config || typeof parsed.config !== 'object') {
     parsed.config = { 
-      gasApiUrl: (import.meta as any).env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec', 
+      gasApiUrl: (import.meta as any).env.VITE_GAS_API_URL || DEFAULT_GAS_API_URL, 
       spreadsheetId: (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc' 
     };
     migrated = true;
   } else {
     const originalGas = parsed.config.gasApiUrl;
     const originalSpreadsheet = parsed.config.spreadsheetId;
+    let gas = (parsed.config.gasApiUrl && parsed.config.gasApiUrl.trim() !== '' ? parsed.config.gasApiUrl : (import.meta as any).env.VITE_GAS_API_URL || DEFAULT_GAS_API_URL).toString().trim();
+    if (isOldOrDefaultUrl(gas)) {
+      gas = DEFAULT_GAS_API_URL;
+    }
     parsed.config = {
-      gasApiUrl: (parsed.config.gasApiUrl && parsed.config.gasApiUrl.trim() !== '' ? parsed.config.gasApiUrl : (import.meta as any).env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec').toString().trim(),
+      gasApiUrl: gas,
       spreadsheetId: (parsed.config.spreadsheetId || (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc').toString().trim()
     };
     if (parsed.config.gasApiUrl !== originalGas || parsed.config.spreadsheetId !== originalSpreadsheet) {
@@ -724,7 +739,11 @@ export const getGasApiUrl = (): string => {
   if (envUrl && envUrl.trim() !== '') {
     return envUrl.trim();
   }
-  return currentDatabase?.config?.gasApiUrl || 'https://script.google.com/macros/s/AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm/exec';
+  const current = currentDatabase?.config?.gasApiUrl;
+  if (current && current.trim() !== '' && !isOldOrDefaultUrl(current)) {
+    return current.trim();
+  }
+  return DEFAULT_GAS_API_URL;
 };
 
 export const setGasApiUrl = (url: string) => {
@@ -1592,23 +1611,53 @@ export const apiService = {
     if (!k.id) {
       k.id = `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     }
+
+    // Ensure numeric fields are numbers
+    k.hadir = Number(k.hadir || 0);
+    k.sakit = Number(k.sakit || 0);
+    k.izin = Number(k.izin || (k as any).ijin || 0);
+    k.alfa = Number(k.alfa || (k as any).alpha || 0);
+
+    // Derive class name if missing
+    if (!k.kelas && k.siswaId) {
+      const student = db.siswa.find(s => s.id === k.siswaId);
+      if (student && student.kelasId) {
+        const cls = db.kelas.find(c => c.id === student.kelasId);
+        if (cls) {
+          k.kelas = cls.namaKelas;
+        } else {
+          k.kelas = student.kelasId;
+        }
+      }
+    }
+
     if (isNew) {
-      db.kehadiran.push(k);
+      // Check if item with same ID or same (siswaId + bulan + mingguKe) already exists locally
+      const existingIdx = db.kehadiran.findIndex(item => item.id === k.id || (item.siswaId === k.siswaId && item.bulan === k.bulan && item.mingguKe === k.mingguKe));
+      if (existingIdx !== -1) {
+        db.kehadiran[existingIdx] = k;
+      } else {
+        db.kehadiran.push(k);
+      }
     } else {
       db.kehadiran = db.kehadiran.map(item => item.id === k.id ? k : item);
     }
+
     saveLocalDatabase(db);
+
     if (getGasApiUrl()) {
       try {
         const res = await apiCall<{ success: boolean; message?: string }>('saveKehadiran', { k, isNew });
         if (res && res.success === false) {
-          console.warn('Google Sheets saveKehadiran returned warning/error:', res.message);
+          console.warn('Google Sheets saveKehadiran returned error:', res.message);
+          return { success: false, message: 'Gagal menyimpan ke Google Sheets: ' + (res.message || 'Error tidak diketahui') };
         }
-      } catch (err) {
-        console.warn('Google Sheets saveKehadiran warning:', err);
+      } catch (err: any) {
+        console.warn('Google Sheets saveKehadiran network error:', err);
+        return { success: false, message: 'Gagal terhubung ke Google Sheets: ' + (err?.message || 'Error jaringan') };
       }
     }
-    return { success: true, message: 'Rekap Kehadiran berhasil disimpan.' };
+    return { success: true, message: 'Rekap Kehadiran berhasil disimpan permanen di aplikasi & Google Sheets.' };
   },
 
   deleteKehadiran: async (id: string): Promise<{ success: boolean; message: string }> => {
