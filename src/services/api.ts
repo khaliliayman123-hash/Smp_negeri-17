@@ -1089,9 +1089,60 @@ export const apiService = {
           return updated;
         }
 
-        // Update local cache with remote authoritative data from Google Sheets
+        // Intelligent Merge: Preserve any locally created records (e.g. Kehadiran, Pelanggaran, Laporan, etc.)
+        // that exist in localDb but are not yet present in Google Sheets response.
+        const collectionsToPreserve: (keyof DatabaseState)[] = [
+          'kehadiran', 'pelanggaran', 'remisiPoin', 'laporanKejadian',
+          'konseling', 'prestasi', 'surat', 'dokumen', 'catatanPerkembangan',
+          'asesmen', 'homeVisit', 'siswa', 'orangTua', 'akademik',
+          'kesehatan', 'ekonomi', 'psikologi', 'sosial', 'users', 'kelas', 'tahunPelajaran'
+        ];
+
+        const mergedData = { ...sanitized };
+
+        collectionsToPreserve.forEach((collKey) => {
+          const localItems = Array.isArray((localDb as any)[collKey]) ? (localDb as any)[collKey] : [];
+          const remoteItems = Array.isArray((sanitized as any)[collKey]) ? (sanitized as any)[collKey] : [];
+
+          if (localItems.length > 0) {
+            const remoteMap = new Map<string, any>();
+            remoteItems.forEach((item: any) => {
+              if (item && item.id) {
+                remoteMap.set(item.id.toString(), item);
+              }
+            });
+
+            const combined = [...remoteItems];
+
+            localItems.forEach((localItem: any) => {
+              if (localItem && localItem.id) {
+                const strId = localItem.id.toString();
+                if (!remoteMap.has(strId)) {
+                  combined.push(localItem);
+
+                  // Auto background sync to GAS so Google Sheets catches up!
+                  if (collKey === 'kehadiran') {
+                    apiCall('saveKehadiran', { k: localItem, isNew: true }).catch(() => {});
+                  } else if (collKey === 'pelanggaran') {
+                    apiCall('savePelanggaran', { p: localItem, isNew: true }).catch(() => {});
+                  } else if (collKey === 'laporanKejadian') {
+                    apiCall('saveLaporanKejadian', { l: localItem, isNew: true }).catch(() => {});
+                  } else if (collKey === 'prestasi') {
+                    apiCall('savePrestasi', { p: localItem, isNew: true }).catch(() => {});
+                  } else if (collKey === 'konseling') {
+                    apiCall('saveKonseling', { k: localItem, isNew: true }).catch(() => {});
+                  }
+                }
+              }
+            });
+
+            (mergedData as any)[collKey] = combined;
+          }
+        });
+
+        // Update local cache with remote authoritative data + merged local items
         const updated = {
-          ...sanitized,
+          ...mergedData,
           config: { ...localDb.config, gasApiUrl: getGasApiUrl(), spreadsheetId: getSpreadsheetId() }
         };
         saveLocalDatabase(updated);
