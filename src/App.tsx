@@ -124,12 +124,14 @@ export default function App() {
 
     const assignedClassIds = new Set(assignedClasses.map(k => k.id));
     const assignedClassNamesLower = new Set(assignedClasses.map(k => (k.namaKelas || '').toLowerCase().trim()));
+    const assignedClassNorms = new Set(assignedClasses.map(k => (k.namaKelas || '').toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim()));
 
     // Filter students
     const assignedStudents = db.siswa.filter(s => {
       if (!s.kelasId) return false;
       const cleanKelasId = s.kelasId.toString().trim().toLowerCase();
-      return assignedClassIds.has(s.kelasId) || assignedClassNamesLower.has(cleanKelasId);
+      const sNorm = cleanKelasId.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim();
+      return assignedClassIds.has(s.kelasId) || assignedClassNamesLower.has(cleanKelasId) || (sNorm && assignedClassNorms.has(sNorm));
     });
     const assignedStudentIds = new Set(assignedStudents.map(s => s.id));
 
@@ -169,7 +171,9 @@ export default function App() {
           assignedClassNamesLower.has(item.kelas.toString().trim().toLowerCase()) ||
           Array.from(assignedClassNamesLower).some(c => c.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() === itemKelasNorm)
         );
-        return isStudentMatch || isClassMatch;
+        const matchedStudent = findSiswa(db, item.siswaId, item);
+        const isMappedStudentMatch = Boolean(matchedStudent && assignedStudentIds.has(matchedStudent.id));
+        return isStudentMatch || isClassMatch || isMappedStudentMatch;
       }),
       laporanKejadian: (db.laporanKejadian || []).filter(item => {
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);

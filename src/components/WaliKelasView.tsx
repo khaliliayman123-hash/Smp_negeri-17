@@ -4772,6 +4772,7 @@ export default function WaliKelasView({
                 const payload: any = {
                   id: editingKehadiran ? editingKehadiran.id : `khd-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                   siswaId: formKehadiran.siswaId || classStudents[0]?.id || '',
+                  kelas: currentClassName,
                   bulan: formKehadiran.bulan || 'Juli',
                   mingguKe: formKehadiran.mingguKe || 'Minggu 1',
                   tahun: formKehadiran.tahun || '2026',

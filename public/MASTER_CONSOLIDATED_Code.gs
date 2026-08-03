@@ -718,6 +718,31 @@ function saveRowEntity(db, sheetName, entity, isNew) {
   }
   
   const headers = sheet.getDataRange().getValues()[0];
+  const schema = {
+    "Users": ["id", "username", "nama", "role", "email", "isActive"],
+    "Siswa": ["id", "nis", "nisn", "nama", "foto", "tempatLahir", "tanggalLahir", "jenisKelamin", "agama", "alamat", "desa", "kecamatan", "kabupaten", "provinsi", "nomorHp", "email", "kelasId", "tahunMasuk"],
+    "OrangTua": ["id", "namaAyah", "statusAyah", "tempatLahirAyah", "tanggalLahirAyah", "alamatAyah", "agamaAyah", "pendidikanAyah", "pekerjaanAyah", "noHpAyah", "namaIbu", "statusIbu", "tempatLahirIbu", "tanggalLahirIbu", "alamatIbu", "agamaIbu", "pendidikanIbu", "pekerjaanIbu", "noHpIbu", "wali", "statusWali", "tempatLahirWali", "tanggalLahirWali", "alamatWali", "agamaWali", "pendidikanWali", "pekerjaanWali", "noHpWali", "penghasilan", "pendidikanOrangTua"],
+    "Akademik": ["id", "semester", "rataRataRaport", "catatanWaliKelas"],
+    "Kesehatan": ["id", "tinggiBadan", "beratBadan", "golonganDarah", "penyakit", "alergi", "disabilitas"],
+    "Ekonomi": ["id", "statusRumah", "penghasilan", "kendaraan", "pip", "pkh", "kip"],
+    "Psikologi": ["id", "minat", "bakat", "hobi", "gayaBelajar", "citaCita", "kepribadian"],
+    "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
+    "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
+    "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
+    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+    "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
+    "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
+    "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
+    "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
+    "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
+    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Kehadiran": ["id", "siswaId", "kelas", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
+    "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
+    "Kelas": ["id", "namaKelas", "waliKelasId"],
+    "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
+  };
+  const standardHeaders = schema[sheetName] || [];
   
   let rowIndex = -1;
   if (!isNew) {
@@ -761,7 +786,8 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     // Append Row (either explicitly new, or fallback because ID wasn't found in this sheet yet)
     const newRow = [];
     headers.forEach(function(header) {
-      let val = entity[header] !== undefined ? entity[header] : "";
+      let propKey = normalizeHeaderKey(header, standardHeaders);
+      let val = entity[propKey] !== undefined ? entity[propKey] : (entity[header] !== undefined ? entity[header] : "");
       if (typeof val === 'string' && val.length > 45000) {
         val = val.substring(0, 45000) + "... (truncated)";
       }
@@ -771,8 +797,9 @@ function saveRowEntity(db, sheetName, entity, isNew) {
   } else {
     // Edit Row
     headers.forEach(function(header, colIdx) {
-      if (entity[header] !== undefined) {
-        let val = entity[header];
+      let propKey = normalizeHeaderKey(header, standardHeaders);
+      let val = entity[propKey] !== undefined ? entity[propKey] : entity[header];
+      if (val !== undefined) {
         if (typeof val === 'string' && val.length > 45000) {
           val = val.substring(0, 45000) + "... (truncated)";
         }
@@ -929,12 +956,18 @@ function uploadFullDatabase(db, payload) {
       var items = payload[key];
       if (items && items.length > 0) {
         var headers = sheet.getDataRange().getValues()[0];
+        var standardHeaders = schema[sheetName] || [];
         var rowsToAdd = [];
         
         items.forEach(function(item) {
           var row = [];
           headers.forEach(function(header) {
-            row.push(item[header] !== undefined ? item[header] : "");
+            var propKey = normalizeHeaderKey(header, standardHeaders);
+            var val = item[propKey] !== undefined ? item[propKey] : (item[header] !== undefined ? item[header] : "");
+            if (typeof val === 'string' && val.length > 45000) {
+              val = val.substring(0, 45000) + "... (truncated)";
+            }
+            row.push(val);
           });
           rowsToAdd.push(row);
         });
