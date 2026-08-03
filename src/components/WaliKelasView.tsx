@@ -4777,7 +4777,7 @@ export default function WaliKelasView({
                 if (!onSaveKehadiran) return;
                 const isNew = !editingKehadiran;
                 const payload: any = {
-                  id: editingKehadiran ? editingKehadiran.id : `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                  id: editingKehadiran ? editingKehadiran.id : `khd-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                   siswaId: formKehadiran.siswaId || classStudents[0]?.id || '',
                   bulan: formKehadiran.bulan || 'Juli',
                   mingguKe: formKehadiran.mingguKe || 'Minggu 1',

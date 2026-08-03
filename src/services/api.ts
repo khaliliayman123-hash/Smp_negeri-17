@@ -671,106 +671,24 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
-  // Ensure attendance records exist across all classes so dashboards are populated permanently
-  if (ensureKehadiranData(parsed as DatabaseState)) {
-    migrated = true;
+  // Purge any previously auto-generated dummy attendance records
+  if (parsed.kehadiran && Array.isArray(parsed.kehadiran)) {
+    const origLen = parsed.kehadiran.length;
+    parsed.kehadiran = parsed.kehadiran.filter((k: any) => {
+      if (!k) return false;
+      const isDummy =
+        (k.id && typeof k.id === 'string' && k.id.startsWith('att-')) ||
+        (k.keterangan && typeof k.keterangan === 'string' && k.keterangan.includes('Presensi mingguan')) ||
+        (k.siswaId && typeof k.siswaId === 'string' && k.siswaId.startsWith('sis-rep-'));
+      return !isDummy;
+    });
+    if (parsed.kehadiran.length !== origLen) {
+      migrated = true;
+    }
   }
 
-  parsed._sanitized_v9 = true;
+  parsed._sanitized_v10 = true;
   return { sanitized: parsed as DatabaseState, migrated };
-}
-
-export function ensureKehadiranData(db: DatabaseState): boolean {
-  if (!db || !db.kelas) return false;
-  if (!db.kehadiran) db.kehadiran = [];
-  let modified = false;
-
-  const months = ['Juli', 'Agustus'];
-  const weeks = ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'];
-
-  db.kelas.forEach(cls => {
-    if (!cls || !cls.namaKelas) return;
-
-    const cNorm = cls.namaKelas
-      .toLowerCase()
-      .replace(/kelas/g, '')
-      .replace(/vii/g, '7')
-      .replace(/viii/g, '8')
-      .replace(/ix/g, '9')
-      .replace(/[^0-9-]/g, '')
-      .trim();
-
-    const classStudents = (db.siswa || []).filter(s => {
-      if (!s) return false;
-      if (s.kelasId === cls.id || s.kelasId === cls.namaKelas) return true;
-      const sNorm = (s.kelasId || '')
-        .toLowerCase()
-        .replace(/kelas/g, '')
-        .replace(/vii/g, '7')
-        .replace(/viii/g, '8')
-        .replace(/ix/g, '9')
-        .replace(/[^0-9-]/g, '')
-        .trim();
-      return sNorm && cNorm && sNorm === cNorm;
-    });
-
-    const existingForClass = db.kehadiran.filter(k => {
-      if (k.kelas && k.kelas.toLowerCase().includes(cNorm)) return true;
-      if (classStudents.some(s => s.id === k.siswaId)) return true;
-      return false;
-    });
-
-    if (existingForClass.length === 0) {
-      if (classStudents.length > 0) {
-        classStudents.forEach((std, idx) => {
-          months.forEach(m => {
-            weeks.forEach((w, wIdx) => {
-              const sakit = (idx + wIdx) % 7 === 0 ? 1 : 0;
-              const izin = (idx + wIdx) % 11 === 0 ? 1 : 0;
-              const alfa = (idx + wIdx) % 19 === 0 ? 1 : 0;
-              const hadir = 5 - (sakit + izin + alfa);
-
-              db.kehadiran.push({
-                id: `att-${cls.id}-${std.id}-${m.toLowerCase()}-w${wIdx + 1}`,
-                siswaId: std.id,
-                kelas: cls.namaKelas,
-                bulan: m,
-                mingguKe: w,
-                tahun: '2026',
-                hadir: hadir > 0 ? hadir : 5,
-                sakit,
-                izin,
-                alfa,
-                keterangan: 'Presensi mingguan terdata'
-              });
-              modified = true;
-            });
-          });
-        });
-      } else {
-        months.forEach(m => {
-          weeks.forEach((w, wIdx) => {
-            db.kehadiran.push({
-              id: `att-cls-${cls.id}-${m.toLowerCase()}-w${wIdx + 1}`,
-              siswaId: `sis-rep-${cls.id}`,
-              kelas: cls.namaKelas,
-              bulan: m,
-              mingguKe: w,
-              tahun: '2026',
-              hadir: 5,
-              sakit: wIdx === 2 ? 1 : 0,
-              izin: wIdx === 4 ? 1 : 0,
-              alfa: 0,
-              keterangan: `Presensi mingguan ${cls.namaKelas}`
-            });
-            modified = true;
-          });
-        });
-      }
-    }
-  });
-
-  return modified;
 }
 
 function loadLocalDatabase(): DatabaseState {
@@ -785,7 +703,7 @@ function loadLocalDatabase(): DatabaseState {
         parsed._cleaned_default_data_v2 = true;
       }
       const { sanitized, migrated } = sanitizeDatabaseState(parsed);
-      if (migrated || !stored.includes('_sanitized_v9')) {
+      if (migrated || !stored.includes('_sanitized_v10')) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
       }
       currentDatabase = sanitized;

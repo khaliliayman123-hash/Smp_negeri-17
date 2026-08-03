@@ -221,7 +221,7 @@ export default function KonselingView({
       } : entity);
     } else if (activeTab === 'kehadiran') {
       setFormKehadiran(isNew ? {
-        id: `att-${Date.now()}`,
+        id: `khd-${Date.now()}`,
         siswaId: db.siswa[0]?.id || '',
         mingguKe: 'Minggu 1',
         bulan: 'Juli',
