@@ -671,20 +671,9 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
-  // Purge any previously auto-generated dummy attendance records
+  // Ensure user attendance records are preserved and valid
   if (parsed.kehadiran && Array.isArray(parsed.kehadiran)) {
-    const origLen = parsed.kehadiran.length;
-    parsed.kehadiran = parsed.kehadiran.filter((k: any) => {
-      if (!k) return false;
-      const isDummy =
-        (k.id && typeof k.id === 'string' && k.id.startsWith('att-')) ||
-        (k.keterangan && typeof k.keterangan === 'string' && k.keterangan.includes('Presensi mingguan')) ||
-        (k.siswaId && typeof k.siswaId === 'string' && k.siswaId.startsWith('sis-rep-'));
-      return !isDummy;
-    });
-    if (parsed.kehadiran.length !== origLen) {
-      migrated = true;
-    }
+    parsed.kehadiran = parsed.kehadiran.filter((k: any) => k && (k.id || k.siswaId));
   }
 
   parsed._sanitized_v10 = true;
@@ -1560,7 +1549,10 @@ export const apiService = {
     saveLocalDatabase(db);
     if (getGasApiUrl()) {
       try {
-        await apiCall('saveKehadiran', { k, isNew });
+        const res = await apiCall<{ success: boolean; message?: string }>('saveKehadiran', { k, isNew });
+        if (res && res.success === false) {
+          console.warn('Google Sheets saveKehadiran returned warning/error:', res.message);
+        }
       } catch (err) {
         console.warn('Google Sheets saveKehadiran warning:', err);
       }
@@ -1573,7 +1565,13 @@ export const apiService = {
     if (!db.kehadiran) db.kehadiran = [];
     db.kehadiran = db.kehadiran.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteKehadiran', { id });
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('deleteKehadiran', { id });
+      } catch (err) {
+        console.warn('Google Sheets deleteKehadiran warning:', err);
+      }
+    }
     return { success: true, message: 'Rekap Kehadiran berhasil dihapus.' };
   },
 

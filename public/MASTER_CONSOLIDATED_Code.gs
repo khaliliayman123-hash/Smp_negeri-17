@@ -88,6 +88,12 @@ function setupHDSDatabaseSheets() {
     "CatatanPerkembangan": [
       "id", "siswaId", "tanggal", "catatan", "guruBkId"
     ],
+    "Kehadiran": [
+      "id", "siswaId", "kelas", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"
+    ],
+    "LaporanKejadian": [
+      "id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"
+    ],
     "TahunPelajaran": [
       "id", "tahun", "semester", "isActive"
     ],
@@ -598,6 +604,14 @@ function normalizeHeaderKey(header, standardHeaders) {
   if (cleanHeader === "kabupaten" || cleanHeader === "kota") return "kabupaten";
   if (cleanHeader === "provinsi") return "provinsi";
   if (cleanHeader === "email" || cleanHeader === "surel") return "email";
+  if (cleanHeader === "alfa" || cleanHeader === "alpha") return "alfa";
+  if (cleanHeader === "izin" || cleanHeader === "ijin") return "izin";
+  if (cleanHeader === "catatan" || cleanHeader === "keterangan") return "keterangan";
+  if (cleanHeader === "mingguke" || cleanHeader === "minggu") return "mingguKe";
+  if (cleanHeader === "bulan") return "bulan";
+  if (cleanHeader === "tahun" || cleanHeader === "tahunpelajaran") return "tahun";
+  if (cleanHeader === "siswaid" || cleanHeader === "penginput" || cleanHeader === "siswa") return "siswaId";
+  if (cleanHeader === "rinciandetailjson" || cleanHeader === "rinciandetail" || cleanHeader === "json") return "rincianDetailJson";
   
   return header;
 }
@@ -627,6 +641,8 @@ function getSheetDataAsJson(sheet) {
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
     "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Kehadiran": ["id", "siswaId", "kelas", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
