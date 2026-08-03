@@ -231,7 +231,7 @@ export function getSiswaInfo(db: DatabaseState | null | undefined, targetIdOrRef
 }
 
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
-  if (parsed && parsed._sanitized_v9) {
+  if (parsed && parsed._sanitized_v10) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
   let migrated = false;
@@ -714,7 +714,7 @@ function loadLocalDatabase(): DatabaseState {
   }
   const clonedInitial = JSON.parse(JSON.stringify(INITIAL_DATABASE));
   clonedInitial._cleaned_default_data_v2 = true;
-  clonedInitial._sanitized_v9 = true;
+  clonedInitial._sanitized_v10 = true;
   const { sanitized } = sanitizeDatabaseState(clonedInitial);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
   currentDatabase = sanitized;
@@ -1100,33 +1100,10 @@ export const apiService = {
           return updated;
         }
 
-        // Preserve and merge local records with remote records for arrays where local updates might not be in remote yet
-        const mergeEntityArray = <T extends { id?: string }>(remoteList: T[] = [], localList: T[] = []): T[] => {
-          if (!remoteList || remoteList.length === 0) return localList || [];
-          if (!localList || localList.length === 0) return remoteList || [];
-          const map = new Map<string, T>();
-          remoteList.forEach(item => { if (item && item.id) map.set(item.id, item); });
-          localList.forEach(item => { if (item && item.id && !map.has(item.id)) map.set(item.id, item); });
-          return Array.from(map.values());
-        };
-
-        const mergedKehadiran = mergeEntityArray(sanitized.kehadiran, localDb.kehadiran);
-        const mergedLaporan = mergeEntityArray(sanitized.laporanKejadian, localDb.laporanKejadian);
-        const mergedPelanggaran = mergeEntityArray(sanitized.pelanggaran, localDb.pelanggaran);
-        const mergedPrestasi = mergeEntityArray(sanitized.prestasi, localDb.prestasi);
-        const mergedRemisi = mergeEntityArray(sanitized.remisiPoin, localDb.remisiPoin);
-        const mergedKonseling = mergeEntityArray(sanitized.konseling, localDb.konseling);
-
-        // Update local cache with remote data, preserving the config block and merged arrays
+        // Update local cache with remote authoritative data from Google Sheets
         const updated = {
           ...sanitized,
-          kehadiran: mergedKehadiran,
-          laporanKejadian: mergedLaporan,
-          pelanggaran: mergedPelanggaran,
-          prestasi: mergedPrestasi,
-          remisiPoin: mergedRemisi,
-          konseling: mergedKonseling,
-          config: { ...localDb.config, gasApiUrl: getGasApiUrl() }
+          config: { ...localDb.config, gasApiUrl: getGasApiUrl(), spreadsheetId: getSpreadsheetId() }
         };
         saveLocalDatabase(updated);
         lastFetchSuccessful = true;

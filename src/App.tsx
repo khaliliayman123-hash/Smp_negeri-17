@@ -27,7 +27,8 @@ import {
   Loader2,
   Copy,
   Download,
-  RefreshCw
+  RefreshCw,
+  Calendar
 } from 'lucide-react';
 
 // Sub views
@@ -36,6 +37,7 @@ import { apiService, WALI_KELAS_USERS, findSiswa, getSiswaInfo } from './service
 import DashboardView from './components/DashboardView';
 import SiswaView from './components/SiswaView';
 import WaliKelasView from './components/WaliKelasView';
+import KehadiranView from './components/KehadiranView';
 import KonselingView from './components/KonselingView';
 import DokumenSuratView from './components/DokumenSuratView';
 import MasterLaporanView from './components/MasterLaporanView';
@@ -159,7 +161,16 @@ export default function App() {
       surat: filterByStudent(db.surat),
       dokumen: filterByStudent(db.dokumen),
       catatanPerkembangan: filterByStudent(db.catatanPerkembangan),
-      kehadiran: filterByStudent(db.kehadiran),
+      kehadiran: (db.kehadiran || []).filter(item => {
+        const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
+        const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
+        const isClassMatch = item.kelas && (
+          assignedClassIds.has(item.kelas) || 
+          assignedClassNamesLower.has(item.kelas.toString().trim().toLowerCase()) ||
+          Array.from(assignedClassNamesLower).some(c => c.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() === itemKelasNorm)
+        );
+        return isStudentMatch || isClassMatch;
+      }),
       laporanKejadian: (db.laporanKejadian || []).filter(item => {
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
         const isClassMatch = item.kelasId && (assignedClassIds.has(item.kelasId) || assignedClassNamesLower.has(item.kelasId.toString().trim().toLowerCase()));
@@ -192,7 +203,7 @@ export default function App() {
   };
 
   // Navigations routing states
-  const [activeMenu, setActiveMenu] = useState<'dashboard' | 'siswa' | 'walikelas' | 'layanan' | 'dokumen' | 'master' | 'pengaturan'>(() => {
+  const [activeMenu, setActiveMenu] = useState<'dashboard' | 'siswa' | 'kehadiran' | 'walikelas' | 'layanan' | 'dokumen' | 'master' | 'pengaturan'>(() => {
     try {
       const saved = localStorage.getItem('hds_current_user');
       if (saved) {
@@ -241,11 +252,11 @@ export default function App() {
 
   // Enforce Wali Kelas restricted view
   useEffect(() => {
-    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard' && activeMenu !== 'siswa') {
+    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard' && activeMenu !== 'siswa' && activeMenu !== 'kehadiran') {
       setActiveMenu('walikelas');
     }
     if (currentUser && currentUser.role === UserRole.GURU_PIKET) {
-      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan') {
+      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan' && activeMenu !== 'kehadiran') {
         setActiveMenu('dashboard');
       }
     }
@@ -994,6 +1005,12 @@ export default function App() {
                   <Users size={16} /> Dashboard Evaluasi
                 </button>
                 <button 
+                  onClick={() => { setActiveMenu('kehadiran'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'kehadiran' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <Calendar size={16} /> Rekap Kehadiran
+                </button>
+                <button 
                   onClick={() => { setActiveMenu('walikelas'); setDeepLinkSiswaId(undefined); }}
                   className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'walikelas' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
@@ -1015,6 +1032,12 @@ export default function App() {
                   <Users size={16} /> Dashboard Evaluasi
                 </button>
                 <button 
+                  onClick={() => { setActiveMenu('kehadiran'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'kehadiran' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <Calendar size={16} /> Rekap Kehadiran
+                </button>
+                <button 
                   onClick={() => { setActiveMenu('layanan'); }}
                   className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'layanan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
@@ -1028,6 +1051,12 @@ export default function App() {
                   className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'dashboard' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
                   <Users size={16} /> Dashboard Evaluasi
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('kehadiran'); setDeepLinkSiswaId(undefined); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'kehadiran' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <Calendar size={16} /> Rekap Kehadiran
                 </button>
                 <button 
                   onClick={() => { setActiveMenu('siswa'); setDeepLinkSiswaId(undefined); }}
@@ -1210,17 +1239,20 @@ export default function App() {
             ) : currentUser.role === UserRole.WALI_KELAS ? (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
+                <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
+                <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
               </>
             ) : (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
+                <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
                 <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
@@ -1380,6 +1412,41 @@ export default function App() {
             db={filteredDb} 
             currentUser={currentUser} 
             onNavigateToSiswa={handleNavigateToSiswa} 
+          />
+        )}
+
+        {/* VIEW: REKAP KEHADIRAN */}
+        {activeMenu === 'kehadiran' && (
+          <KehadiranView
+            db={filteredDb}
+            currentUser={currentUser}
+            onSaveKehadiran={async (k, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const list = isNew 
+                  ? [...(prev.kehadiran || []), k] 
+                  : (prev.kehadiran || []).map(item => item.id === k.id ? k : item);
+                return { ...prev, kehadiran: list };
+              });
+              apiService.saveKehadiran(k, isNew).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menyimpan data Kehadiran.', 'error');
+              });
+              return true;
+            }}
+            onDeleteKehadiran={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return { ...prev, kehadiran: (prev.kehadiran || []).filter(item => item.id !== id) };
+              });
+              apiService.deleteKehadiran(id).then(res => {
+                showToast(res.message, res.success ? 'success' : 'error');
+              }).catch(() => {
+                showToast('Gagal menghapus data Kehadiran.', 'error');
+              });
+              return true;
+            }}
           />
         )}
 
