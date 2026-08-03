@@ -2403,8 +2403,19 @@ export default function WaliKelasView({
   const classKehadiran = useMemo(() => {
     if (!db || !db.kehadiran) return [];
     const studentIds = new Set(classStudents.map(s => s.id));
-    return db.kehadiran.filter(k => studentIds.has(k.siswaId));
-  }, [db, classStudents]);
+    const targetNorm = normalizeClassName(currentClassName);
+
+    return db.kehadiran.filter(k => {
+      if (studentIds.has(k.siswaId)) return true;
+      const student = findSiswa(db, k.siswaId, k);
+      if (student && studentIds.has(student.id)) return true;
+      if (k.kelas) {
+        const kNorm = normalizeClassName(k.kelas);
+        if (kNorm && targetNorm && kNorm === targetNorm) return true;
+      }
+      return false;
+    });
+  }, [db, classStudents, currentClassName]);
 
   // Search filter for Kehadiran
   const filteredKehadiran = useMemo(() => {

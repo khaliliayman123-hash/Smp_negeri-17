@@ -342,7 +342,7 @@ export default function KonselingView({
       });
     } else if (activeTab === 'kehadiran') {
       return (db.kehadiran || []).filter(h => {
-        const siswa = db.siswa.find(s => s.id === h.siswaId);
+        const siswa = findSiswa(db, h.siswaId, h);
         const siswaNama = String(siswa?.nama || '').toLowerCase();
         const mingguKe = String(h.mingguKe || '').toLowerCase();
         const bulan = String(h.bulan || '').toLowerCase();
@@ -352,9 +352,12 @@ export default function KonselingView({
 
         let matchKelas = true;
         if (attendanceFilterKelas !== 'ALL') {
-          const targetKelas = db.kelas.find(c => c.id === attendanceFilterKelas);
+          const targetKelas = db.kelas.find(c => c.id === attendanceFilterKelas || c.namaKelas === attendanceFilterKelas);
           if (targetKelas) {
-            matchKelas = siswa?.kelasId === targetKelas.id || siswa?.kelasId === targetKelas.namaKelas || targetKelas.namaKelas.toLowerCase().trim() === String(siswa?.kelasId).toLowerCase().trim();
+            const targetNorm = targetKelas.namaKelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim();
+            const sNorm = siswa ? (siswa.kelasId || '').toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
+            const hNorm = h.kelas ? h.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
+            matchKelas = (sNorm && targetNorm && sNorm === targetNorm) || (hNorm && targetNorm && hNorm === targetNorm) || siswa?.kelasId === targetKelas.id;
           } else {
             matchKelas = siswa?.kelasId === attendanceFilterKelas;
           }

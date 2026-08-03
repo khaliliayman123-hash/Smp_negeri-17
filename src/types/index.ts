@@ -257,6 +257,8 @@ export interface LogAktivitas {
 export interface Kehadiran {
   id: string;
   siswaId: string;
+  kelas?: string;
+  kelasId?: string;
   mingguKe: string; // e.g., "Minggu 1", "Minggu 2"
   bulan: string;    // e.g., "Juli"
   tahun: string;    // e.g., "2026"
