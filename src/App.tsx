@@ -573,6 +573,8 @@ export default function App() {
 
     apiService.setGasUrl(gasUrlInput);
     apiService.setSpreadsheetId(spreadsheetIdInput);
+    const activeGasUrl = apiService.getGasApiUrl();
+    setGasUrlInput(activeGasUrl);
     
     setConnStatus('checking');
     try {

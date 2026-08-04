@@ -83,8 +83,10 @@ export const isOldOrDefaultUrl = (url?: string): boolean => {
   if (!url || typeof url !== 'string') return true;
   const trimmed = url.trim();
   if (trimmed === '') return true;
+  if (trimmed === DEFAULT_GAS_API_URL) return false;
   if (trimmed.includes('AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm')) return true;
   if (trimmed.includes('AKfycbwBbd5COo3yw1rij0XNuqSR62c22IuaFf7ty5Zqb-7PcCnTvHD1nHzss4gjKQWNiF10')) return true;
+  if (trimmed.includes('AKfycbw')) return true;
   return false;
 };
 
@@ -242,26 +244,23 @@ export function getSiswaInfo(db: DatabaseState | null | undefined, targetIdOrRef
 }
 
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
-  if (parsed && parsed._sanitized_v10) {
-    return { sanitized: parsed as DatabaseState, migrated: false };
+  if (!parsed || typeof parsed !== 'object') {
+    return { sanitized: JSON.parse(JSON.stringify(INITIAL_DATABASE)), migrated: true };
   }
+
   let migrated = false;
 
-  if (!parsed || typeof parsed !== 'object') {
-    return { sanitized: { ...INITIAL_DATABASE }, migrated: true };
-  }
-
-  // Ensure config block is present
+  // Ensure config block is present and always sanitized to latest URL
   if (!parsed.config || typeof parsed.config !== 'object') {
     parsed.config = { 
-      gasApiUrl: (import.meta as any).env.VITE_GAS_API_URL || DEFAULT_GAS_API_URL, 
+      gasApiUrl: DEFAULT_GAS_API_URL, 
       spreadsheetId: (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc' 
     };
     migrated = true;
   } else {
     const originalGas = parsed.config.gasApiUrl;
     const originalSpreadsheet = parsed.config.spreadsheetId;
-    let gas = (parsed.config.gasApiUrl && parsed.config.gasApiUrl.trim() !== '' ? parsed.config.gasApiUrl : (import.meta as any).env.VITE_GAS_API_URL || DEFAULT_GAS_API_URL).toString().trim();
+    let gas = (parsed.config.gasApiUrl && typeof parsed.config.gasApiUrl === 'string' && parsed.config.gasApiUrl.trim() !== '' ? parsed.config.gasApiUrl : DEFAULT_GAS_API_URL).toString().trim();
     if (isOldOrDefaultUrl(gas)) {
       gas = DEFAULT_GAS_API_URL;
     }
@@ -272,6 +271,10 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     if (parsed.config.gasApiUrl !== originalGas || parsed.config.spreadsheetId !== originalSpreadsheet) {
       migrated = true;
     }
+  }
+
+  if (parsed._sanitized_v11 && !migrated) {
+    return { sanitized: parsed as DatabaseState, migrated: false };
   }
 
   // Safety initialize lists
@@ -691,7 +694,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.kehadiran = parsed.kehadiran.filter((k: any) => k && (k.id || k.siswaId));
   }
 
-  parsed._sanitized_v10 = true;
+  parsed._sanitized_v11 = true;
   return { sanitized: parsed as DatabaseState, migrated };
 }
 
@@ -707,7 +710,7 @@ function loadLocalDatabase(): DatabaseState {
         parsed._cleaned_default_data_v2 = true;
       }
       const { sanitized, migrated } = sanitizeDatabaseState(parsed);
-      if (migrated || !stored.includes('_sanitized_v10')) {
+      if (migrated || !stored.includes('_sanitized_v11')) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
       }
       currentDatabase = sanitized;
@@ -718,7 +721,7 @@ function loadLocalDatabase(): DatabaseState {
   }
   const clonedInitial = JSON.parse(JSON.stringify(INITIAL_DATABASE));
   clonedInitial._cleaned_default_data_v2 = true;
-  clonedInitial._sanitized_v10 = true;
+  clonedInitial._sanitized_v11 = true;
   const { sanitized } = sanitizeDatabaseState(clonedInitial);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
   currentDatabase = sanitized;
@@ -736,19 +739,26 @@ function saveLocalDatabase(db: DatabaseState) {
 
 export const getGasApiUrl = (): string => {
   const envUrl = (import.meta as any).env.VITE_GAS_API_URL;
-  if (envUrl && envUrl.trim() !== '') {
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '' && !isOldOrDefaultUrl(envUrl)) {
     return envUrl.trim();
   }
   const current = currentDatabase?.config?.gasApiUrl;
-  if (current && current.trim() !== '' && !isOldOrDefaultUrl(current)) {
+  if (current && typeof current === 'string' && current.trim() !== '' && !isOldOrDefaultUrl(current)) {
     return current.trim();
+  }
+  if (currentDatabase && currentDatabase.config) {
+    currentDatabase.config.gasApiUrl = DEFAULT_GAS_API_URL;
   }
   return DEFAULT_GAS_API_URL;
 };
 
 export const setGasApiUrl = (url: string) => {
-  const db = { ...currentDatabase };
-  db.config.gasApiUrl = url ? url.trim() : '';
+  const db = loadLocalDatabase();
+  let cleanUrl = url ? url.trim() : '';
+  if (isOldOrDefaultUrl(cleanUrl)) {
+    cleanUrl = DEFAULT_GAS_API_URL;
+  }
+  db.config.gasApiUrl = cleanUrl;
   saveLocalDatabase(db);
 };
 
@@ -838,6 +848,7 @@ let lastFetchSuccessful = false;
 export const apiService = {
   // Config
   getGasUrl: () => getGasApiUrl(),
+  getGasApiUrl: () => getGasApiUrl(),
   setGasUrl: (url: string) => setGasApiUrl(url),
   getSpreadsheetId: () => getSpreadsheetId(),
   setSpreadsheetId: (id: string) => setSpreadsheetId(id),
