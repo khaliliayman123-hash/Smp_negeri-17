@@ -379,16 +379,21 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     return l;
   });
 
-  // Update remisiPoin where the teacher giving it is old BK name
-  parsed.remisiPoin = parsed.remisiPoin.map((r: any) => {
-    if (!r) return r;
-    const normG = (r.guruPemberi || '').toString().toLowerCase();
-    if (normG.includes('sulaiman') || normG.includes('siti rahma')) {
-      r.guruPemberi = 'Nur Jamilah Purwaningsih, S.Psi';
-      migrated = true;
-    }
-    return r;
-  });
+  // Update remisiPoin where column names or teacher names need normalization
+  if (parsed.remisiPoin && Array.isArray(parsed.remisiPoin)) {
+    parsed.remisiPoin = parsed.remisiPoin.map((r: any) => {
+      if (!r || typeof r !== 'object') return r;
+      if (!r.jenisRemisi && r.jenisRemis) r.jenisRemisi = r.jenisRemis;
+      if (!r.guruPemberi && r.guruPember) r.guruPemberi = r.guruPember;
+      if (!r.id) r.id = 'rem-' + Math.random().toString(36).substr(2, 9);
+      const normG = (r.guruPemberi || '').toString().toLowerCase();
+      if (normG.includes('sulaiman') || normG.includes('siti rahma')) {
+        r.guruPemberi = 'Nur Jamilah Purwaningsih, S.Psi';
+        migrated = true;
+      }
+      return r;
+    });
+  }
 
   // Update class Wali Kelas distribution and repair Google Sheets date/time formatting errors in class names (e.g. Jam 8-5 -> Kelas 8-5)
   const redirectKelasIdMap: { [oldId: string]: string } = {};
@@ -1161,6 +1166,8 @@ export const apiService = {
                     apiCall('savePrestasi', { p: localItem, isNew: true }).catch(() => {});
                   } else if (collKey === 'konseling') {
                     apiCall('saveKonseling', { k: localItem, isNew: true }).catch(() => {});
+                  } else if (collKey === 'remisiPoin') {
+                    apiCall('saveRemisiPoin', { r: localItem, isNew: true }).catch(() => {});
                   }
                 }
               }
@@ -1450,6 +1457,7 @@ export const apiService = {
       db.remisiPoin = db.remisiPoin.map(item => item.id === r.id ? r : item);
     }
     saveLocalDatabase(db);
+    if (getGasApiUrl()) await apiCall('saveRemisiPoin', { r, isNew });
     return { success: true, message: 'Data Remisi Poin berhasil disimpan.' };
   },
 
@@ -1458,6 +1466,7 @@ export const apiService = {
     if (!db.remisiPoin) db.remisiPoin = [];
     db.remisiPoin = db.remisiPoin.filter(item => item.id !== id);
     saveLocalDatabase(db);
+    if (getGasApiUrl()) await apiCall('deleteRemisiPoin', { id });
     return { success: true, message: 'Data Remisi Poin berhasil dihapus.' };
   },
 
