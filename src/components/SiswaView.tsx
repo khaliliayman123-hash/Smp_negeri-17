@@ -91,6 +91,7 @@ export default function SiswaView({
   
   const canModify = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.GURU_BK;
   const isStudent = currentUser.role === UserRole.SISWA;
+  const canAccessCatatanWaliKelas = currentUser.role === UserRole.WALI_KELAS || currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.GURU_BK;
 
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -451,7 +452,7 @@ export default function SiswaView({
           <table class="grid-table">
             <tr><td class="lbl">Gaya Belajar & Cita-cita</td><td class="val">${psi?.gayaBelajar || '-'} / ${psi?.citaCita || '-'}</td><td class="lbl">Minat, Hobi & Bakat</td><td class="val">${psi?.minat || '-'}, ${psi?.hobi || '-'} / Bakat: ${psi?.bakat || '-'}</td></tr>
             <tr><td class="lbl">Skor IQ / Asesmen DCM</td><td class="val">IQ: ${ase?.iq || '-'} | DCM: ${ase?.dcm || '-'}</td><td class="lbl">Hasil AKPD & AUM</td><td class="val">AKPD: ${ase?.akpd || '-'} | AUM: ${ase?.aum || '-'}</td></tr>
-            <tr><td class="lbl">Nilai Rapor & Catatan Wali Kelas</td><td class="val" colspan="3">Rata-Rata Rapor: <b>${aka?.rataRataRaport || '-'}</b> | Catatan: ${aka?.catatanWaliKelas || '-'}</td></tr>
+            <tr><td class="lbl">Nilai Rapor & Catatan Wali Kelas</td><td class="val" colspan="3">Rata-Rata Rapor: <b>${aka?.rataRataRaport || '-'}</b> | Catatan: ${canAccessCatatanWaliKelas ? (aka?.catatanWaliKelas || '-') : '-'}</td></tr>
           </table>
           <table class="sig-container">
             <tr>
@@ -1073,7 +1074,7 @@ export default function SiswaView({
         
         // Akademik
         rataRataRapor: akad.rataRataRaport || 0,
-        catatanWaliKelas: akad.catatanWaliKelas || '-',
+        catatanWaliKelas: canAccessCatatanWaliKelas ? (akad.catatanWaliKelas || '-') : '-',
         poinPelanggaran: totalPoinPelanggaran,
         
         // Kesehatan
@@ -1810,7 +1811,11 @@ export default function SiswaView({
                         <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                           <p className="text-[10px] text-emerald-800 font-bold uppercase mb-1">Catatan Akademik</p>
                           <p className="font-medium text-slate-700">Rata-rata Rapor: <span className="font-bold text-emerald-600">{ak.rataRataRaport}</span></p>
-                          <p className="text-slate-500 mt-1 italic">&ldquo;{ak.catatanWaliKelas}&rdquo;</p>
+                          {canAccessCatatanWaliKelas ? (
+                            <p className="text-slate-500 mt-1 italic">&ldquo;{ak.catatanWaliKelas}&rdquo;</p>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 mt-1 italic">(Catatan Khusus Wali Kelas - Rahasia)</p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -3023,15 +3028,17 @@ export default function SiswaView({
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500">Catatan Khusus Wali Kelas</label>
-                    <textarea 
-                      value={formAkademik.catatanWaliKelas || ''} 
-                      onChange={(e) => setFormAkademik(prev => ({ ...prev, catatanWaliKelas: e.target.value }))}
-                      rows={2}
-                      className="p-2 border border-slate-200 rounded-lg w-full"
-                    />
-                  </div>
+                  {canAccessCatatanWaliKelas && (
+                    <div>
+                      <label className="block text-[10px] text-slate-500">Catatan Khusus Wali Kelas</label>
+                      <textarea 
+                        value={formAkademik.catatanWaliKelas || ''} 
+                        onChange={(e) => setFormAkademik(prev => ({ ...prev, catatanWaliKelas: e.target.value }))}
+                        rows={2}
+                        className="p-2 border border-slate-200 rounded-lg w-full"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3587,7 +3594,7 @@ export default function SiswaView({
                                 <td className="py-1 px-3 text-left font-bold text-emerald-700">{row.kelas}</td>
                                 <td className="py-1 px-3 text-left font-bold text-teal-700">{row.tahunPelajaran}</td>
                                 <td className="py-1 px-3 text-center font-bold text-blue-600 bg-blue-50/30">{row.rataRataRapor}</td>
-                                <td className="py-1 px-3 text-left text-slate-600 truncate max-w-[200px]" title={row.catatanWaliKelas}>{row.catatanWaliKelas}</td>
+                                <td className="py-1 px-3 text-left text-slate-600 truncate max-w-[200px]" title={canAccessCatatanWaliKelas ? row.catatanWaliKelas : '-'}>{canAccessCatatanWaliKelas ? row.catatanWaliKelas : '-'}</td>
                                 <td className="py-1 px-3 text-center font-bold text-rose-600 bg-rose-50/30">{row.poinPelanggaran} Poin</td>
                                 <td className="py-1 px-3 text-left text-slate-500">{row.tahunMasuk}</td>
                               </>
