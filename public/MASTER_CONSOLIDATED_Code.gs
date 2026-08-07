@@ -68,7 +68,7 @@ function setupHDSDatabaseSheets() {
       "id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"
     ],
     "RemisiPoin": [
-      "id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"
+      "id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan", "mingguKe", "bulan", "tahun"
     ],
     "Konseling": [
       "id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"
@@ -289,6 +289,14 @@ function handleRequest(e) {
       case "deletePelanggaran":
         responseData = deleteEntity(db, "Pelanggaran", postData.id);
         break;
+
+      case "saveRemisiPoin":
+        responseData = saveEntity(db, "RemisiPoin", postData.r, postData.isNew);
+        break;
+        
+      case "deleteRemisiPoin":
+        responseData = deleteEntity(db, "RemisiPoin", postData.id);
+        break;
         
       case "saveKonseling":
         responseData = saveEntity(db, "Konseling", postData.k, postData.isNew);
@@ -468,7 +476,7 @@ function fetchFullDatabase(db) {
     "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
     "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
     "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
-    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan", "mingguKe", "bulan", "tahun"],
     "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
     "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
@@ -611,6 +619,8 @@ function normalizeHeaderKey(header, standardHeaders) {
   if (cleanHeader === "bulan") return "bulan";
   if (cleanHeader === "tahun" || cleanHeader === "tahunpelajaran") return "tahun";
   if (cleanHeader === "siswaid" || cleanHeader === "penginput" || cleanHeader === "siswa") return "siswaId";
+  if (cleanHeader === "jenisremis" || cleanHeader === "jenisremisi") return "jenisRemisi";
+  if (cleanHeader === "gurupember" || cleanHeader === "gurupemberi") return "guruPemberi";
   if (cleanHeader === "rinciandetailjson" || cleanHeader === "rinciandetail" || cleanHeader === "json") return "rincianDetailJson";
   
   return header;
@@ -634,7 +644,7 @@ function getSheetDataAsJson(sheet) {
     "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
     "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
     "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
-    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan", "mingguKe", "bulan", "tahun"],
     "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
     "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
@@ -728,7 +738,7 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
     "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
     "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
-    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan", "mingguKe", "bulan", "tahun"],
     "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
     "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
@@ -929,7 +939,7 @@ function uploadFullDatabase(db, payload) {
     "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
     "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
     "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
-    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan", "mingguKe", "bulan", "tahun"],
     "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
     "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],

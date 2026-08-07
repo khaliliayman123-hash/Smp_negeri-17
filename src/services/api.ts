@@ -1457,7 +1457,15 @@ export const apiService = {
       db.remisiPoin = db.remisiPoin.map(item => item.id === r.id ? r : item);
     }
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('saveRemisiPoin', { r, isNew });
+    if (getGasApiUrl()) {
+      const remoteRes = await apiCall('saveRemisiPoin', { r, isNew });
+      if (!remoteRes.success) {
+        return {
+          success: false,
+          message: `Gagal menyimpan Remisi Poin ke Google Sheets.\n\nDetail Error: ${remoteRes.message || 'Koneksi ditolak.'}\n\nLangkah Solusi:\n1. Buka menu Pengaturan > Google Apps Script Integration.\n2. Unduh atau salin kode 'MASTER_CONSOLIDATED_Code.gs' terbaru.\n3. Tempelkan di editor Google Apps Script Anda, lalu Deploy ulang sebagai "Penerapan Baru" (Akses: Siapa Saja).`
+        };
+      }
+    }
     return { success: true, message: 'Data Remisi Poin berhasil disimpan.' };
   },
 
@@ -1466,7 +1474,15 @@ export const apiService = {
     if (!db.remisiPoin) db.remisiPoin = [];
     db.remisiPoin = db.remisiPoin.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteRemisiPoin', { id });
+    if (getGasApiUrl()) {
+      const remoteRes = await apiCall('deleteRemisiPoin', { id });
+      if (!remoteRes.success) {
+        return {
+          success: false,
+          message: `Gagal menghapus Remisi Poin dari Google Sheets: ${remoteRes.message}`
+        };
+      }
+    }
     return { success: true, message: 'Data Remisi Poin berhasil dihapus.' };
   },
 

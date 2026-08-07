@@ -283,6 +283,14 @@ function handleRequest(e) {
       case "deletePelanggaran":
         responseData = deleteEntity(db, "Pelanggaran", postData.id);
         break;
+
+      case "saveRemisiPoin":
+        responseData = saveEntity(db, "RemisiPoin", postData.r, postData.isNew);
+        break;
+        
+      case "deleteRemisiPoin":
+        responseData = deleteEntity(db, "RemisiPoin", postData.id);
+        break;
         
       case "saveKonseling":
         responseData = saveEntity(db, "Konseling", postData.k, postData.isNew);

@@ -228,6 +228,8 @@ function normalizeHeaderKey(header, standardHeaders) {
   if (cleanHeader === "kabupaten" || cleanHeader === "kota") return "kabupaten";
   if (cleanHeader === "provinsi") return "provinsi";
   if (cleanHeader === "email" || cleanHeader === "surel") return "email";
+  if (cleanHeader === "jenisremis" || cleanHeader === "jenisremisi") return "jenisRemisi";
+  if (cleanHeader === "gurupember" || cleanHeader === "gurupemberi") return "guruPemberi";
   
   return header;
 }
