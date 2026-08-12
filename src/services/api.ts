@@ -264,6 +264,11 @@ export const normalizeClassName = (rawName: string): string => {
   let name = String(rawName || '').trim();
   if (!name) return '';
 
+  // Ignore IDs, URLs, or non-class identifiers
+  if (name.startsWith('sis-') || name.startsWith('usr-') || name.startsWith('tp-') || name.startsWith('wk-') || name.startsWith('http')) {
+    return '';
+  }
+
   // Check kl-X IDs (e.g. kl-1 to kl-11 -> Kelas 7-1 to 7-11, kl-12 to kl-22 -> Kelas 8-1 to 8-11, kl-23 to kl-33 -> Kelas 9-1 to 9-11)
   const klMatch = name.match(/^kl-(\d+)$/i);
   if (klMatch) {
@@ -271,6 +276,7 @@ export const normalizeClassName = (rawName: string): string => {
     if (num >= 1 && num <= 11) return `Kelas 7-${num}`;
     if (num >= 12 && num <= 22) return `Kelas 8-${num - 11}`;
     if (num >= 23 && num <= 33) return `Kelas 9-${num - 22}`;
+    return '';
   }
 
   // Convert Roman numerals (VII, VIII, IX) to Arabic (7, 8, 9)
@@ -287,11 +293,11 @@ export const normalizeClassName = (rawName: string): string => {
     return `Kelas ${g}-${r}`;
   }
 
-  // Try finding grade 7-9 and rombel 1-12 anywhere in string
-  const matchAny = name.match(/([789])\s*[-.\/:_]?\s*(1[0-2]|[1-9])\b/i);
-  if (matchAny) {
-    const g = parseInt(matchAny[1], 10);
-    const r = parseInt(matchAny[2], 10);
+  // Strict standalone class pattern (e.g. "7-1" to "9-11", "7.1" to "9.11", "7/1" to "9/11")
+  const strictMatch = name.match(/^([789])\s*[-.\/:_]\s*(1[0-2]|[1-9])$/i);
+  if (strictMatch) {
+    const g = parseInt(strictMatch[1], 10);
+    const r = parseInt(strictMatch[2], 10);
     return `Kelas ${g}-${r}`;
   }
 
@@ -572,19 +578,21 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       migrated = true;
     }
     
-    // 2. Resolve standard class ID and clean class name from any class property (kelas, namaKelas, rombel, kelasId)
-    const rawClassVal = (s.kelas || s.namaKelas || s.rombel || s.kelasId || '').toString().trim();
+    // 2. Resolve standard class ID and clean class name from explicit class properties (rombel, namaKelas, kelas, or valid kl- ID)
+    const rawClassVal = (s.rombel || s.namaKelas || s.kelas || (s.kelasId && (s.kelasId.startsWith('kl-') || !s.kelasId.startsWith('sis-')) ? s.kelasId : '') || '').toString().trim();
     if (rawClassVal) {
       const cleanName = normalizeClassName(rawClassVal);
       const standardId = standardKelasMap[cleanName] || standardKelasMap[rawClassVal];
 
-      if (standardId && (s.kelasId !== standardId || !s.kelasId || !s.kelasId.startsWith('kl-'))) {
-        s.kelasId = standardId;
-        migrated = true;
-      }
-      if (cleanName && s.kelas !== cleanName) {
-        s.kelas = cleanName;
-        migrated = true;
+      if (standardId) {
+        if (s.kelasId !== standardId) {
+          s.kelasId = standardId;
+          migrated = true;
+        }
+        if (cleanName && s.kelas !== cleanName) {
+          s.kelas = cleanName;
+          migrated = true;
+        }
       }
     }
     

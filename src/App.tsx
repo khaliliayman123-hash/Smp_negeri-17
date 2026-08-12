@@ -910,21 +910,21 @@ export default function App() {
                       const sKlId = (s.kelasId || '').toString().toLowerCase().trim();
                       const sKlName = (s.kelas || (s as any).namaKelas || (s as any).rombel || '').toString().toLowerCase().trim();
 
-                      // 1. Exact class ID match e.g. "kl-1" === "kl-1" or "kl-10" === "kl-10"
-                      if (sKlId && sKlId === targetId) return true;
+                      // 1. Exact class ID match e.g. "kl-1" === "kl-1"
+                      if (sKlId && targetId && sKlId === targetId) return true;
 
                       // 2. Direct name match e.g. "kelas 7-10" === "kelas 7-10"
-                      if (sKlName && (sKlName === targetName || sKlId === targetName)) return true;
+                      if (sKlName && targetName && sKlName === targetName) return true;
 
                       // 3. Match using normalized class name
-                      const normS = normalizeClassName(sKlName || sKlId);
+                      const normS = normalizeClassName(sKlName) || (sKlId.startsWith('kl-') ? normalizeClassName(sKlId) : '');
                       if (normS && targetNorm && normS.toLowerCase() === targetNorm.toLowerCase()) {
                         return true;
                       }
 
                       // 4. Match using standardKelasMap
                       const stdSId = standardKelasMap[sKlName] || standardKelasMap[normS];
-                      if (stdSId && stdSId.toLowerCase() === targetId) {
+                      if (stdSId && targetId && stdSId.toLowerCase() === targetId) {
                         return true;
                       }
 
