@@ -33,7 +33,7 @@ import {
 
 // Sub views
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen, LaporanKejadian } from './types';
-import { apiService, WALI_KELAS_USERS, findSiswa, getSiswaInfo } from './services/api';
+import { apiService, WALI_KELAS_USERS, findSiswa, getSiswaInfo, normalizeClassName, standardKelasMap } from './services/api';
 import DashboardView from './components/DashboardView';
 import SiswaView from './components/SiswaView';
 import WaliKelasView from './components/WaliKelasView';
@@ -869,7 +869,12 @@ export default function App() {
                   <option value="">-- Pilih Kelas --</option>
                   {(db?.kelas || [])
                     .slice()
-                    .sort((a, b) => (a.namaKelas || '').localeCompare(b.namaKelas || '', undefined, { numeric: true }))
+                    .sort((a, b) => {
+                      const numA = parseInt((a.id || '').replace('kl-', ''), 10) || 0;
+                      const numB = parseInt((b.id || '').replace('kl-', ''), 10) || 0;
+                      if (numA !== numB) return numA - numB;
+                      return (a.namaKelas || '').localeCompare(b.namaKelas || '', undefined, { numeric: true });
+                    })
                     .map((k) => (
                       <option key={k.id} value={k.id}>
                         {k.namaKelas}
@@ -898,33 +903,29 @@ export default function App() {
                     const selectedKelasObj = (db?.kelas || []).find(k => k.id === selectedSiswaKelasId || k.namaKelas === selectedSiswaKelasId);
                     const targetId = (selectedKelasObj?.id || selectedSiswaKelasId).toLowerCase().trim();
                     const targetName = (selectedKelasObj?.namaKelas || selectedSiswaKelasId).toLowerCase().trim();
-
-                    // Helper to extract grade and rombel number cleanly e.g., "7-1", "7-10", "7-11"
-                    const extractRombel = (str: string): string => {
-                      if (!str) return '';
-                      const m = str.toLowerCase().trim().match(/([789])\s*[-.]\s*(\d+)/);
-                      return m ? `${m[1]}-${parseInt(m[2], 10)}` : '';
-                    };
-
-                    const targetRombel = extractRombel(targetName) || extractRombel(targetId);
+                    const targetNorm = normalizeClassName(targetName || targetId);
 
                     const filteredSiswa = (db?.siswa || []).filter((s) => {
                       if (!s) return false;
-                      const sKlRaw = (s.kelasId || '').toString().trim();
-                      const sKlLower = sKlRaw.toLowerCase();
+                      const sKlId = (s.kelasId || '').toString().toLowerCase().trim();
+                      const sKlName = (s.kelas || (s as any).namaKelas || (s as any).rombel || '').toString().toLowerCase().trim();
 
-                      if (sKlLower === targetId || sKlLower === targetName) return true;
+                      // 1. Exact class ID match e.g. "kl-1" === "kl-1" or "kl-10" === "kl-10"
+                      if (sKlId && sKlId === targetId) return true;
 
-                      const sClassObj = (db?.kelas || []).find(k => k.id.toLowerCase() === sKlLower || k.namaKelas.toLowerCase() === sKlLower);
-                      if (sClassObj && (sClassObj.id.toLowerCase() === targetId || sClassObj.namaKelas.toLowerCase() === targetName)) {
+                      // 2. Direct name match e.g. "kelas 7-10" === "kelas 7-10"
+                      if (sKlName && (sKlName === targetName || sKlId === targetName)) return true;
+
+                      // 3. Match using normalized class name
+                      const normS = normalizeClassName(sKlName || sKlId);
+                      if (normS && targetNorm && normS.toLowerCase() === targetNorm.toLowerCase()) {
                         return true;
                       }
 
-                      if (targetRombel) {
-                        const sRombel = extractRombel(sKlRaw) || (sClassObj ? extractRombel(sClassObj.namaKelas) : '');
-                        if (sRombel && sRombel === targetRombel) {
-                          return true;
-                        }
+                      // 4. Match using standardKelasMap
+                      const stdSId = standardKelasMap[sKlName] || standardKelasMap[normS];
+                      if (stdSId && stdSId.toLowerCase() === targetId) {
+                        return true;
                       }
 
                       return false;

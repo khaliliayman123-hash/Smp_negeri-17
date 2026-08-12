@@ -243,6 +243,85 @@ export function getSiswaInfo(db: DatabaseState | null | undefined, targetIdOrRef
   };
 }
 
+export const standardKelasMap: { [key: string]: string } = {};
+
+const mapGradeToMap = (gradeNum: number, startKlIndex: number) => {
+  for (let i = 1; i <= 11; i++) {
+    const klId = `kl-${startKlIndex + (i - 1)}`;
+    standardKelasMap[`${gradeNum}-${i}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum}-${i}`] = klId;
+    standardKelasMap[`${gradeNum}.${i}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum}.${i}`] = klId;
+    standardKelasMap[`${gradeNum}/${i}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum}/${i}`] = klId;
+  }
+};
+mapGradeToMap(7, 1);   // kl-1 to kl-11
+mapGradeToMap(8, 12);  // kl-12 to kl-22
+mapGradeToMap(9, 23);  // kl-23 to kl-33
+
+export const normalizeClassName = (rawName: string): string => {
+  let name = String(rawName || '').trim();
+  if (!name) return '';
+
+  // Check kl-X IDs (e.g. kl-1 to kl-11 -> Kelas 7-1 to 7-11, kl-12 to kl-22 -> Kelas 8-1 to 8-11, kl-23 to kl-33 -> Kelas 9-1 to 9-11)
+  const klMatch = name.match(/^kl-(\d+)$/i);
+  if (klMatch) {
+    const num = parseInt(klMatch[1], 10);
+    if (num >= 1 && num <= 11) return `Kelas 7-${num}`;
+    if (num >= 12 && num <= 22) return `Kelas 8-${num - 11}`;
+    if (num >= 23 && num <= 33) return `Kelas 9-${num - 22}`;
+  }
+
+  // Convert Roman numerals (VII, VIII, IX) to Arabic (7, 8, 9)
+  name = name.replace(/\bVII\b/gi, '7').replace(/\bVIII\b/gi, '8').replace(/\bIX\b/gi, '9');
+
+  // Remove prefixes "Jam ", "Kelas ", "Rombel "
+  name = name.replace(/^(jam|kelas|rombel)\s+/i, '').trim();
+
+  // Flexible extraction of Grade (7, 8, 9) and Rombel (1 to 12) with any separator (-, ., :, /, _, spaces)
+  const flexMatch = name.match(/^0?([789])\s*[-.\/:_]?\s*0?(1[0-2]|[1-9])(?:[:.]00)?$/i);
+  if (flexMatch) {
+    const g = parseInt(flexMatch[1], 10);
+    const r = parseInt(flexMatch[2], 10);
+    return `Kelas ${g}-${r}`;
+  }
+
+  // Try finding grade 7-9 and rombel 1-12 anywhere in string
+  const matchAny = name.match(/([789])\s*[-.\/:_]?\s*(1[0-2]|[1-9])\b/i);
+  if (matchAny) {
+    const g = parseInt(matchAny[1], 10);
+    const r = parseInt(matchAny[2], 10);
+    return `Kelas ${g}-${r}`;
+  }
+
+  // Date parser conversion for Excel/Google Sheets ISO dates or date strings
+  const datePattern = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:T.*)?$/;
+  const datePatternDMY = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:T.*)?$/;
+  let match = name.match(datePattern);
+  let year = 0, month = 0, day = 0;
+  if (match) {
+    year = parseInt(match[1], 10);
+    month = parseInt(match[2], 10);
+    day = parseInt(match[3], 10);
+  } else {
+    match = name.match(datePatternDMY);
+    if (match) {
+      day = parseInt(match[1], 10);
+      month = parseInt(match[2], 10);
+      year = parseInt(match[3], 10);
+    }
+  }
+  if (year > 0 && month > 0 && day > 0) {
+    if ((month >= 7 && month <= 9) && (day >= 1 && day <= 11)) return `Kelas ${month}-${day}`;
+    if ((day >= 7 && day <= 9) && (month >= 1 && month <= 11)) return `Kelas ${day}-${month}`;
+    if ((month >= 1 && month <= 3) && (day >= 1 && day <= 11)) return `Kelas ${month + 6}-${day}`;
+    if ((day >= 1 && day <= 3) && (month >= 1 && month <= 11)) return `Kelas ${day + 6}-${month}`;
+  }
+
+  return rawName;
+};
+
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {
   if (!parsed || typeof parsed !== 'object') {
     return { sanitized: JSON.parse(JSON.stringify(INITIAL_DATABASE)), migrated: true };
@@ -397,108 +476,6 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
 
   // Update class Wali Kelas distribution and repair Google Sheets date/time formatting errors in class names (e.g. Jam 8-5 -> Kelas 8-5)
   const redirectKelasIdMap: { [oldId: string]: string } = {};
-  const standardKelasMap: { [key: string]: string } = {};
-  
-  // Map our standard 33 class short names to standard IDs 'kl-1' through 'kl-33'
-  for (let i = 1; i <= 11; i++) {
-    standardKelasMap[`7-${i}`] = `kl-${i}`;
-    standardKelasMap[`Kelas 7-${i}`] = `kl-${i}`;
-  }
-  for (let i = 1; i <= 11; i++) {
-    standardKelasMap[`8-${i}`] = `kl-${i + 11}`;
-    standardKelasMap[`Kelas 8-${i}`] = `kl-${i + 11}`;
-  }
-  for (let i = 1; i <= 11; i++) {
-    standardKelasMap[`9-${i}`] = `kl-${i + 22}`;
-    standardKelasMap[`Kelas 9-${i}`] = `kl-${i + 22}`;
-  }
-
-  // Helper function to normalize any class name, handling all Google Sheets locale time and date parsing side-effects
-  const normalizeClassName = (rawName: string): string => {
-    let name = String(rawName || '').trim();
-
-    // Check kl-X IDs (e.g. kl-1 to kl-11 -> Kelas 7-1 to 7-11, kl-12 to kl-22 -> Kelas 8-1 to 8-11, kl-23 to kl-33 -> Kelas 9-1 to 9-11)
-    const klMatch = name.match(/^kl-(\d+)$/i) || String(rawName || '').trim().match(/^kl-(\d+)$/i);
-    if (klMatch) {
-      const num = parseInt(klMatch[1], 10);
-      if (num >= 1 && num <= 11) return `Kelas 7-${num}`;
-      if (num >= 12 && num <= 22) return `Kelas 8-${num - 11}`;
-      if (num >= 23 && num <= 33) return `Kelas 9-${num - 22}`;
-    }
-    
-    // Remove prefixes first to ensure standard parsing
-    if (name.startsWith('Jam ')) {
-      name = name.slice(4).trim();
-    }
-    if (name.startsWith('Kelas ')) {
-      name = name.slice(6).trim();
-    }
-    
-    // 1. Check if it matches a standard grade-rombel format e.g., "7-1" to "9-11"
-    const stdPattern = /^([789])-(1[0-2]|[1-9])$/;
-    const stdMatch = name.match(stdPattern);
-    if (stdMatch) {
-      return `Kelas ${stdMatch[1]}-${stdMatch[2]}`;
-    }
-
-    // 2. If it already matches "Kelas 7-1" to "Kelas 9-11"
-    const kelasPattern = /^Kelas\s+([789])-(1[0-2]|[1-9])$/i;
-    const kelasMatch = name.match(kelasPattern);
-    if (kelasMatch) {
-      return `Kelas ${kelasMatch[1]}-${kelasMatch[2]}`;
-    }
-    
-    // 3. Time/date parser conversion: e.g. "07:01:00", "08:05:00", "08.05", "8:5" -> "Kelas 8-5"
-    const timePattern = /^0?([789])[:.]0?(1[0-2]|[1-9])(?:[:.]00)?$/;
-    const timeMatch = name.match(timePattern);
-    if (timeMatch) {
-      const grade = parseInt(timeMatch[1], 10);
-      const rombel = parseInt(timeMatch[2], 10);
-      return `Kelas ${grade}-${rombel}`;
-    }
-    
-    // 4. Date parser conversion: e.g. "2026-01-07", "2026-07-01", "2026-01-03", "07/01/2026", "1/7/2026"
-    // Match standard YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY
-    const datePattern = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:T.*)?$/;
-    const datePatternDMY = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:T.*)?$/;
-    
-    let match = name.match(datePattern);
-    let year = 0, month = 0, day = 0;
-    
-    if (match) {
-      year = parseInt(match[1], 10);
-      month = parseInt(match[2], 10);
-      day = parseInt(match[3], 10);
-    } else {
-      match = name.match(datePatternDMY);
-      if (match) {
-        day = parseInt(match[1], 10);
-        month = parseInt(match[2], 10);
-        year = parseInt(match[3], 10);
-      }
-    }
-    
-    if (year > 0 && month > 0 && day > 0) {
-      // A. If Month is 7, 8, or 9 (Grade) and Day is 1-11 (Rombel)
-      if ((month === 7 || month === 8 || month === 9) && (day >= 1 && day <= 11)) {
-        return `Kelas ${month}-${day}`;
-      }
-      // B. If Day is 7, 8, or 9 (Grade) and Month is 1-11 (Rombel)
-      if ((day === 7 || day === 8 || day === 9) && (month >= 1 && month <= 11)) {
-        return `Kelas ${day}-${month}`;
-      }
-      // C. If Month is 1, 2, or 3 (Grade - 6) and Day is 1-11 (Rombel)
-      if ((month === 1 || month === 2 || month === 3) && (day >= 1 && day <= 11)) {
-        return `Kelas ${month + 6}-${day}`;
-      }
-      // D. If Day is 1, 2, or 3 (Grade - 6) and Month is 1-11 (Rombel)
-      if ((day === 1 || day === 2 || day === 3) && (month >= 1 && month <= 11)) {
-        return `Kelas ${day + 6}-${month}`;
-      }
-    }
-    
-    return rawName;
-  };
 
   // Pre-process and normalize class names
   parsed.kelas = parsed.kelas.map((k: any) => {
@@ -595,12 +572,18 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       migrated = true;
     }
     
-    // 2. Also handle if the student's kelasId is a raw name string instead of an ID (some Google Sheets sync can return name string)
-    if (s.kelasId && !s.kelasId.startsWith('kl-')) {
-      const cleanName = normalizeClassName(s.kelasId);
-      const standardId = standardKelasMap[cleanName];
-      if (standardId) {
+    // 2. Resolve standard class ID and clean class name from any class property (kelas, namaKelas, rombel, kelasId)
+    const rawClassVal = (s.kelas || s.namaKelas || s.rombel || s.kelasId || '').toString().trim();
+    if (rawClassVal) {
+      const cleanName = normalizeClassName(rawClassVal);
+      const standardId = standardKelasMap[cleanName] || standardKelasMap[rawClassVal];
+
+      if (standardId && (s.kelasId !== standardId || !s.kelasId || !s.kelasId.startsWith('kl-'))) {
         s.kelasId = standardId;
+        migrated = true;
+      }
+      if (cleanName && s.kelas !== cleanName) {
+        s.kelas = cleanName;
         migrated = true;
       }
     }

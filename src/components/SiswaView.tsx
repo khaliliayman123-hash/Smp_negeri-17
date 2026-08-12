@@ -48,7 +48,7 @@ import {
   Prestasi,
   Surat
 } from '../types';
-import { apiService } from '../services/api';
+import { apiService, normalizeClassName, standardKelasMap } from '../services/api';
 
 interface SiswaViewProps {
   db: DatabaseState;
@@ -600,9 +600,9 @@ export default function SiswaView({
               }
               return raw;
             };
-            const cleanRawKelas = normalizeClassNameLocal(rawKelas);
-            const matchKelas = db.kelas.find(k => k.namaKelas.toLowerCase().trim() === cleanRawKelas.toLowerCase().trim());
-            const kelasId = matchKelas ? matchKelas.id : (db.kelas[0]?.id || 'kelas-vii-a');
+            const cleanRawKelas = normalizeClassName(rawKelas) || normalizeClassNameLocal(rawKelas);
+            const matchKelas = db.kelas.find(k => k.namaKelas.toLowerCase().trim() === cleanRawKelas.toLowerCase().trim() || k.id === standardKelasMap[cleanRawKelas]);
+            const kelasId = matchKelas ? matchKelas.id : (standardKelasMap[cleanRawKelas] || standardKelasMap[rawKelas] || 'kl-1');
             const defaultTP = db.tahunPelajaran.find(tp => tp.isActive)?.tahun || '2025/2026';
 
             const sPack: Siswa = {
