@@ -566,15 +566,15 @@ export default function SiswaView({
               if (val.startsWith('Jam ')) val = val.slice(4).trim();
               if (val.startsWith('Kelas ')) val = val.slice(6).trim();
               
-              const stdPattern = /^([789])-([1-9]|1[01])$/;
+              const stdPattern = /^([789])-(1[0-2]|[1-9])$/;
               const stdMatch = val.match(stdPattern);
               if (stdMatch) return `Kelas ${stdMatch[1]}-${stdMatch[2]}`;
               
-              const kelasPattern = /^Kelas\s+([789])-([1-9]|1[01])$/i;
+              const kelasPattern = /^Kelas\s+([789])-(1[0-2]|[1-9])$/i;
               const kelasMatch = val.match(kelasPattern);
               if (kelasMatch) return `Kelas ${kelasMatch[1]}-${kelasMatch[2]}`;
               
-              const timePattern = /^0?([789])[:.]0?([1-9]|1[01])(?:[:.]00)?$/;
+              const timePattern = /^0?([789])[:.]0?(1[0-2]|[1-9])(?:[:.]00)?$/;
               const timeMatch = val.match(timePattern);
               if (timeMatch) {
                 return `Kelas ${parseInt(timeMatch[1], 10)}-${parseInt(timeMatch[2], 10)}`;

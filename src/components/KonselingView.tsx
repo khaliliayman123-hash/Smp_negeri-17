@@ -255,7 +255,13 @@ export default function KonselingView({
     } else if (activeTab === 'homevisit') {
       success = await onSaveHomeVisit(formHomeVisit as HomeVisit, isNew);
     } else if (activeTab === 'kehadiran' && onSaveKehadiran) {
-      success = await onSaveKehadiran(formKehadiran as Kehadiran, isNew);
+      const targetStudent = db.siswa.find(s => s.id === formKehadiran.siswaId);
+      const studentClass = targetStudent ? (db.kelas.find(k => k.id === targetStudent.kelasId)?.namaKelas || targetStudent.kelasId) : formKehadiran.kelas;
+      const payload: Kehadiran = {
+        ...formKehadiran,
+        kelas: studentClass || '-'
+      } as Kehadiran;
+      success = await onSaveKehadiran(payload, isNew);
     }
 
     if (success) {

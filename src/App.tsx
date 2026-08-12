@@ -898,8 +898,15 @@ export default function App() {
                     const selectedKelasObj = (db?.kelas || []).find(k => k.id === selectedSiswaKelasId || k.namaKelas === selectedSiswaKelasId);
                     const targetId = (selectedKelasObj?.id || selectedSiswaKelasId).toLowerCase().trim();
                     const targetName = (selectedKelasObj?.namaKelas || selectedSiswaKelasId).toLowerCase().trim();
-                    const matchTarget = targetName.match(/([789])\s*[-.]\s*([1-9]|1[01])/);
-                    const targetRombel = matchTarget ? `${matchTarget[1]}-${matchTarget[2]}` : '';
+
+                    // Helper to extract grade and rombel number cleanly e.g., "7-1", "7-10", "7-11"
+                    const extractRombel = (str: string): string => {
+                      if (!str) return '';
+                      const m = str.toLowerCase().trim().match(/([789])\s*[-.]\s*(\d+)/);
+                      return m ? `${m[1]}-${parseInt(m[2], 10)}` : '';
+                    };
+
+                    const targetRombel = extractRombel(targetName) || extractRombel(targetId);
 
                     const filteredSiswa = (db?.siswa || []).filter((s) => {
                       if (!s) return false;
@@ -914,8 +921,8 @@ export default function App() {
                       }
 
                       if (targetRombel) {
-                        const matchS = sKlRaw.match(/([789])\s*[-.]\s*([1-9]|1[01])/);
-                        if (matchS && `${matchS[1]}-${matchS[2]}` === targetRombel) {
+                        const sRombel = extractRombel(sKlRaw) || (sClassObj ? extractRombel(sClassObj.namaKelas) : '');
+                        if (sRombel && sRombel === targetRombel) {
                           return true;
                         }
                       }

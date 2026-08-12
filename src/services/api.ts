@@ -435,21 +435,21 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
     
     // 1. Check if it matches a standard grade-rombel format e.g., "7-1" to "9-11"
-    const stdPattern = /^([789])-([1-9]|1[01])$/;
+    const stdPattern = /^([789])-(1[0-2]|[1-9])$/;
     const stdMatch = name.match(stdPattern);
     if (stdMatch) {
       return `Kelas ${stdMatch[1]}-${stdMatch[2]}`;
     }
 
     // 2. If it already matches "Kelas 7-1" to "Kelas 9-11"
-    const kelasPattern = /^Kelas\s+([789])-([1-9]|1[01])$/i;
+    const kelasPattern = /^Kelas\s+([789])-(1[0-2]|[1-9])$/i;
     const kelasMatch = name.match(kelasPattern);
     if (kelasMatch) {
       return `Kelas ${kelasMatch[1]}-${kelasMatch[2]}`;
     }
     
     // 3. Time/date parser conversion: e.g. "07:01:00", "08:05:00", "08.05", "8:5" -> "Kelas 8-5"
-    const timePattern = /^0?([789])[:.]0?([1-9]|1[01])(?:[:.]00)?$/;
+    const timePattern = /^0?([789])[:.]0?(1[0-2]|[1-9])(?:[:.]00)?$/;
     const timeMatch = name.match(timePattern);
     if (timeMatch) {
       const grade = parseInt(timeMatch[1], 10);
@@ -1654,17 +1654,20 @@ export const apiService = {
     k.izin = Number(k.izin || (k as any).ijin || 0);
     k.alfa = Number(k.alfa || (k as any).alpha || 0);
 
-    // Derive class name if missing
+    // Derive class name if missing or empty
     if (!k.kelas && k.siswaId) {
       const student = db.siswa.find(s => s.id === k.siswaId);
-      if (student && student.kelasId) {
-        const cls = db.kelas.find(c => c.id === student.kelasId);
-        if (cls) {
-          k.kelas = cls.namaKelas;
+      if (student) {
+        if (student.kelasId) {
+          const cls = db.kelas.find(c => c.id === student.kelasId);
+          k.kelas = cls ? cls.namaKelas : student.kelasId;
         } else {
-          k.kelas = student.kelasId;
+          k.kelas = (student as any).kelas || (student as any).namaKelas || '-';
         }
       }
+    }
+    if (!k.kelas) {
+      k.kelas = '-';
     }
 
     if (isNew) {
