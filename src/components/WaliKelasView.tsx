@@ -1091,7 +1091,14 @@ export default function WaliKelasView({
     const eko = db.ekonomi?.find(e => e.id === id);
     const psi = db.psikologi?.find(p => p.id === id);
     const sos = db.sosial?.find(s => s.id === id);
-    const aka = db.akademik?.find(a => a.id === id);
+    const akaRaw1 = db.akademik?.find(a => a.id === id || (a as any).siswaId === id);
+    const cpLatest1 = (db.catatanPerkembangan || [])
+      .filter(c => c && (c.siswaId === id || (c as any).idSiswa === id))
+      .sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
+    const akaNote1 = (akaRaw1?.catatanWaliKelas && akaRaw1.catatanWaliKelas !== '-')
+      ? akaRaw1.catatanWaliKelas
+      : (cpLatest1?.catatan || (akaRaw1?.catatanWaliKelas || ''));
+    const aka = akaRaw1 ? { ...akaRaw1, catatanWaliKelas: akaNote1 } : (akaNote1 ? { id, semester: '1', rataRataRaport: 80, catatanWaliKelas: akaNote1 } as any : undefined);
     const ase = db.asesmen?.find(a => a.siswaId === id);
 
     let points = 0;
@@ -2604,7 +2611,14 @@ export default function WaliKelasView({
     const eko = db.ekonomi?.find(e => e.id === id);
     const psi = db.psikologi?.find(p => p.id === id);
     const sos = db.sosial?.find(s => s.id === id);
-    const aka = db.akademik?.find(a => a.id === id);
+    const akaRaw2 = db.akademik?.find(a => a.id === id || (a as any).siswaId === id);
+    const cpLatest2 = (db.catatanPerkembangan || [])
+      .filter(c => c && (c.siswaId === id || (c as any).idSiswa === id))
+      .sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
+    const akaNote2 = (akaRaw2?.catatanWaliKelas && akaRaw2.catatanWaliKelas !== '-')
+      ? akaRaw2.catatanWaliKelas
+      : (cpLatest2?.catatan || (akaRaw2?.catatanWaliKelas || ''));
+    const aka = akaRaw2 ? { ...akaRaw2, catatanWaliKelas: akaNote2 } : (akaNote2 ? { id, semester: '1', rataRataRaport: 80, catatanWaliKelas: akaNote2 } as any : undefined);
     const ase = db.asesmen?.find(a => a.siswaId === id);
 
     // Calculate individual student points

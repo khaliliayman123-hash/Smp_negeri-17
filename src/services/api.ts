@@ -685,6 +685,50 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
+  // Ensure every student has a valid akademik record and sync catatanWaliKelas with catatanPerkembangan
+  if (!parsed.catatanPerkembangan) parsed.catatanPerkembangan = [];
+  if (!parsed.akademik) parsed.akademik = [];
+
+  parsed.siswa.forEach((s: any) => {
+    if (!s || !s.id) return;
+
+    let aka = parsed.akademik.find((a: any) => a && (a.id === s.id || a.siswaId === s.id));
+    if (!aka) {
+      aka = {
+        id: s.id,
+        siswaId: s.id,
+        semester: '1',
+        rataRataRaport: 80,
+        catatanWaliKelas: ''
+      };
+      parsed.akademik.push(aka);
+      migrated = true;
+    } else {
+      if (!aka.siswaId) aka.siswaId = s.id;
+      if (!aka.id) aka.id = s.id;
+    }
+
+    const cpList = parsed.catatanPerkembangan.filter((c: any) => c && (c.siswaId === s.id || c.idSiswa === s.id));
+    const latestCp = cpList.sort((a: any, b: any) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
+
+    const akaNoteValid = aka.catatanWaliKelas && aka.catatanWaliKelas.toString().trim() !== '' && aka.catatanWaliKelas.toString().trim() !== '-';
+    const cpNoteValid = latestCp && latestCp.catatan && latestCp.catatan.toString().trim() !== '' && latestCp.catatan.toString().trim() !== '-';
+
+    if (!akaNoteValid && cpNoteValid) {
+      aka.catatanWaliKelas = latestCp.catatan;
+      migrated = true;
+    } else if (akaNoteValid && !cpNoteValid) {
+      parsed.catatanPerkembangan.push({
+        id: `cp-${s.id}-${Date.now()}`,
+        siswaId: s.id,
+        tanggal: new Date().toISOString().split('T')[0],
+        catatan: aka.catatanWaliKelas,
+        guruBkId: 'walikelas'
+      });
+      migrated = true;
+    }
+  });
+
   // Ensure user attendance records are preserved and valid
   if (parsed.kehadiran && Array.isArray(parsed.kehadiran)) {
     parsed.kehadiran = parsed.kehadiran.filter((k: any) => k && (k.id || k.siswaId));
@@ -1260,6 +1304,24 @@ export const apiService = {
       db.psikologi = updateOrInsert(db.psikologi, psikologiData);
       db.sosial = updateOrInsert(db.sosial, sosialData);
       db.akademik = updateOrInsert(db.akademik, akademikData);
+    }
+
+    if (akademikData && akademikData.catatanWaliKelas && akademikData.catatanWaliKelas.toString().trim() !== '' && akademikData.catatanWaliKelas.toString().trim() !== '-') {
+      if (!db.catatanPerkembangan) db.catatanPerkembangan = [];
+      const cpIndex = db.catatanPerkembangan.findIndex(c => c.siswaId === siswaData.id);
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (cpIndex >= 0) {
+        db.catatanPerkembangan[cpIndex].catatan = akademikData.catatanWaliKelas;
+        db.catatanPerkembangan[cpIndex].tanggal = todayStr;
+      } else {
+        db.catatanPerkembangan.push({
+          id: `cp-${siswaData.id}-${Date.now()}`,
+          siswaId: siswaData.id,
+          tanggal: todayStr,
+          catatan: akademikData.catatanWaliKelas,
+          guruBkId: 'walikelas'
+        });
+      }
     }
 
     saveLocalDatabase(db);

@@ -834,11 +834,20 @@ export default function SiswaView({
         pendidikanOrangTua: otData.pendidikanOrangTua || 'SMA',
       });
 
-      setFormKesehatan(db.kesehatan.find(k => k.id === siswa.id) || { id: siswa.id });
-      setFormEkonomi(db.ekonomi.find(e => e.id === siswa.id) || { id: siswa.id });
-      setFormPsikologi(db.psikologi.find(p => p.id === siswa.id) || { id: siswa.id });
-      setFormSosial(db.sosial.find(s => s.id === siswa.id) || { id: siswa.id });
-      setFormAkademik(db.akademik.find(a => a.id === siswa.id) || { id: siswa.id });
+      setFormKesehatan(db.kesehatan.find(k => k.id === siswa.id || (k as any).siswaId === siswa.id) || { id: siswa.id, siswaId: siswa.id });
+      setFormEkonomi(db.ekonomi.find(e => e.id === siswa.id || (e as any).siswaId === siswa.id) || { id: siswa.id, siswaId: siswa.id });
+      setFormPsikologi(db.psikologi.find(p => p.id === siswa.id || (p as any).siswaId === siswa.id) || { id: siswa.id, siswaId: siswa.id });
+      setFormSosial(db.sosial.find(s => s.id === siswa.id || (s as any).siswaId === siswa.id) || { id: siswa.id, siswaId: siswa.id });
+      
+      const akFound = db.akademik.find(a => a.id === siswa.id || (a as any).siswaId === siswa.id);
+      const cpFound = (db.catatanPerkembangan || [])
+        .filter(c => c && (c.siswaId === siswa.id || (c as any).idSiswa === siswa.id))
+        .sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
+      const noteVal = (akFound?.catatanWaliKelas && akFound.catatanWaliKelas !== '-')
+        ? akFound.catatanWaliKelas
+        : (cpFound?.catatan || (akFound?.catatanWaliKelas || ''));
+
+      setFormAkademik(akFound ? { ...akFound, catatanWaliKelas: noteVal } : { id: siswa.id, siswaId: siswa.id, semester: '1', rataRataRaport: 80, catatanWaliKelas: noteVal });
       setPhotoPreview(siswa.foto || '');
     } else {
       // New Student Template
