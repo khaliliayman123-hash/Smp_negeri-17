@@ -45,7 +45,7 @@ import {
   Save
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran } from '../types';
-import { findSiswa, getSiswaInfo } from '../services/api';
+import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
 
 interface HdsDetailDrawerProps {
   siswa: Siswa;
@@ -725,21 +725,6 @@ export default function WaliKelasView({
       (k) => k.id === s.kelasId || k.namaKelas.toLowerCase().trim() === s.kelasId?.toLowerCase().trim()
     );
     return match ? match.namaKelas : s.kelasId;
-  };
-
-  // Helper to normalize class names for perfect comparison (e.g. "Kelas 8-9", "8.9", "VIII-9" -> "8-9")
-  const normalizeClassName = (name: string): string => {
-    if (!name) return '';
-    return name
-      .toLowerCase()
-      .replace(/kelas/g, '')
-      .replace(/viii/g, '8')
-      .replace(/vii/g, '7')
-      .replace(/ix/g, '9')
-      .replace(/[.\s/]+/g, '-')
-      .replace(/[^0-9-]/g, '')
-      .replace(/-+/g, '-')
-      .trim();
   };
 
   // Function to download Student HDS Data and Remisi Poin as Word Doc

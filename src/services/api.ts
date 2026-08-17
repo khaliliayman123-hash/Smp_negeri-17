@@ -248,12 +248,42 @@ export const standardKelasMap: { [key: string]: string } = {};
 const mapGradeToMap = (gradeNum: number, startKlIndex: number) => {
   for (let i = 1; i <= 11; i++) {
     const klId = `kl-${startKlIndex + (i - 1)}`;
+    const roman = gradeNum === 7 ? 'VII' : gradeNum === 8 ? 'VIII' : 'IX';
+    
+    // Arabic variations
     standardKelasMap[`${gradeNum}-${i}`] = klId;
     standardKelasMap[`Kelas ${gradeNum}-${i}`] = klId;
     standardKelasMap[`${gradeNum}.${i}`] = klId;
     standardKelasMap[`Kelas ${gradeNum}.${i}`] = klId;
     standardKelasMap[`${gradeNum}/${i}`] = klId;
     standardKelasMap[`Kelas ${gradeNum}/${i}`] = klId;
+    standardKelasMap[`${gradeNum} ${i}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum} ${i}`] = klId;
+    standardKelasMap[`${gradeNum}_${i}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum}_${i}`] = klId;
+
+    // Two-digit format (01..11)
+    const padI = i < 10 ? `0${i}` : `${i}`;
+    standardKelasMap[`${gradeNum}-${padI}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum}-${padI}`] = klId;
+    standardKelasMap[`${gradeNum}.${padI}`] = klId;
+    standardKelasMap[`Kelas ${gradeNum}.${padI}`] = klId;
+
+    // Roman numeral variations
+    standardKelasMap[`${roman}-${i}`] = klId;
+    standardKelasMap[`Kelas ${roman}-${i}`] = klId;
+    standardKelasMap[`${roman}.${i}`] = klId;
+    standardKelasMap[`Kelas ${roman}.${i}`] = klId;
+    standardKelasMap[`${roman} ${i}`] = klId;
+    standardKelasMap[`Kelas ${roman} ${i}`] = klId;
+    standardKelasMap[`${roman}/${i}`] = klId;
+    standardKelasMap[`Kelas ${roman}/${i}`] = klId;
+    standardKelasMap[`${roman}_${i}`] = klId;
+    standardKelasMap[`Kelas ${roman}_${i}`] = klId;
+    standardKelasMap[`${roman}-${padI}`] = klId;
+    standardKelasMap[`Kelas ${roman}-${padI}`] = klId;
+    standardKelasMap[`${roman}.${padI}`] = klId;
+    standardKelasMap[`Kelas ${roman}.${padI}`] = klId;
   }
 };
 mapGradeToMap(7, 1);   // kl-1 to kl-11
@@ -279,6 +309,18 @@ export const normalizeClassName = (rawName: string): string => {
     return '';
   }
 
+  // Direct lookup in standardKelasMap for raw name
+  if (standardKelasMap[name]) {
+    const stdKl = standardKelasMap[name];
+    const stdMatch = stdKl.match(/^kl-(\d+)$/i);
+    if (stdMatch) {
+      const num = parseInt(stdMatch[1], 10);
+      if (num >= 1 && num <= 11) return `Kelas 7-${num}`;
+      if (num >= 12 && num <= 22) return `Kelas 8-${num - 11}`;
+      if (num >= 23 && num <= 33) return `Kelas 9-${num - 22}`;
+    }
+  }
+
   // Convert Roman numerals (VII, VIII, IX) to Arabic (7, 8, 9)
   name = name.replace(/\bVII\b/gi, '7').replace(/\bVIII\b/gi, '8').replace(/\bIX\b/gi, '9');
 
@@ -294,7 +336,7 @@ export const normalizeClassName = (rawName: string): string => {
   }
 
   // Strict standalone class pattern (e.g. "7-1" to "9-11", "7.1" to "9.11", "7/1" to "9/11")
-  const strictMatch = name.match(/^([789])\s*[-.\/:_]\s*(1[0-2]|[1-9])$/i);
+  const strictMatch = name.match(/^([789])\s*[-.\/:_ ]\s*0?(1[0-2]|[1-9])$/i);
   if (strictMatch) {
     const g = parseInt(strictMatch[1], 10);
     const r = parseInt(strictMatch[2], 10);
@@ -326,6 +368,50 @@ export const normalizeClassName = (rawName: string): string => {
   }
 
   return rawName;
+};
+
+export const getStudentsForClass = (allSiswa: Siswa[], kelasIdOrName: string, allKelas: Kelas[] = []): Siswa[] => {
+  if (!allSiswa || !Array.isArray(allSiswa) || !kelasIdOrName) return [];
+
+  const cleanInput = kelasIdOrName.trim();
+  const selectedKelasObj = (allKelas || []).find(k => k.id === cleanInput || (k.namaKelas && k.namaKelas.toLowerCase().trim() === cleanInput.toLowerCase().trim()));
+  const targetId = (selectedKelasObj?.id || cleanInput).toLowerCase().trim();
+  const targetName = (selectedKelasObj?.namaKelas || cleanInput).toLowerCase().trim();
+  const targetNorm = normalizeClassName(targetName || targetId);
+
+  return allSiswa.filter((s) => {
+    if (!s) return false;
+    const sKlId = (s.kelasId || '').toString().toLowerCase().trim();
+    const sKlName = ((s as any).kelas || (s as any).namaKelas || (s as any).rombel || '').toString().toLowerCase().trim();
+
+    // 1. Exact class ID match (e.g. "kl-2" === "kl-2")
+    if (sKlId && targetId && sKlId === targetId) return true;
+
+    // 2. Direct name match (e.g. "kelas 7-2" === "kelas 7-2")
+    if (sKlName && targetName && sKlName === targetName) return true;
+
+    // 3. Match normalized class names
+    const normSName = normalizeClassName(sKlName);
+    const normSId = sKlId.startsWith('kl-') ? normalizeClassName(sKlId) : '';
+    const normS = normSName || normSId;
+    if (normS && targetNorm && normS.toLowerCase() === targetNorm.toLowerCase()) {
+      return true;
+    }
+
+    // 4. Match using standardKelasMap
+    const stdSId = standardKelasMap[sKlName] || (normS ? standardKelasMap[normS] : undefined);
+    if (stdSId && targetId && stdSId.toLowerCase() === targetId) {
+      return true;
+    }
+
+    // 5. Match if target is standardKelasMap of sKlId
+    const stdTargetId = standardKelasMap[targetName] || (targetNorm ? standardKelasMap[targetNorm] : undefined);
+    if (stdTargetId && sKlId && stdTargetId.toLowerCase() === sKlId) {
+      return true;
+    }
+
+    return false;
+  }).sort((a, b) => (a.nama || '').localeCompare(b.nama || '', undefined, { sensitivity: 'base', numeric: true }));
 };
 
 export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; migrated: boolean } {

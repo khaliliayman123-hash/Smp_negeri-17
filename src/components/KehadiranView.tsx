@@ -18,7 +18,7 @@ import {
   Printer
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Kehadiran, Siswa } from '../types';
-import { findSiswa, getSiswaInfo } from '../services/api';
+import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
 
 interface KehadiranViewProps {
   db: DatabaseState | null;
@@ -94,19 +94,6 @@ export default function KehadiranView({
     alfa: 0,
     keterangan: 'Presensi minggu terdata'
   });
-
-  // Normalize class name for robust matching
-  const normalizeClassName = (name: string): string => {
-    if (!name) return '';
-    return name
-      .toLowerCase()
-      .replace(/kelas/g, '')
-      .replace(/vii/g, '7')
-      .replace(/viii/g, '8')
-      .replace(/ix/g, '9')
-      .replace(/[^0-9-]/g, '')
-      .trim();
-  };
 
   // Helper to extract student's class name
   const getStudentClassName = (student: Siswa): string => {
