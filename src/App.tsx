@@ -61,6 +61,7 @@ export default function App() {
   const [selectedSiswaKelasId, setSelectedSiswaKelasId] = useState('');
   const [selectedSiswaId, setSelectedSiswaId] = useState('');
   const [siswaSearchQuery, setSiswaSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   // Application Data States
   const [db, setDb] = useState<DatabaseState | null>(null);
@@ -900,105 +901,234 @@ export default function App() {
 
               {/* Pemilihan Siswa & Filter Pencarian */}
               {(() => {
-                const studentsInClass = selectedSiswaKelasId
-                  ? getStudentsForClass(db?.siswa || [], selectedSiswaKelasId, db?.kelas || [])
-                  : [];
-                
-                const filteredList = studentsInClass.filter((s) => {
-                  if (!siswaSearchQuery.trim()) return true;
-                  const q = siswaSearchQuery.toLowerCase().trim();
-                  return (
-                    (s.nama && s.nama.toLowerCase().includes(q)) ||
-                    (s.nis && s.nis.toString().includes(q)) ||
-                    (s.nisn && s.nisn.toString().includes(q))
-                  );
-                });
+                const allSiswa = db?.siswa || [];
+                const allKelas = db?.kelas || [];
+                const q = siswaSearchQuery.toLowerCase().trim();
 
-                const selectedStudentObj = studentsInClass.find((s) => s.id === selectedSiswaId);
+                // Base student pool: if class selected, filter to that class; otherwise all students
+                const basePool = selectedSiswaKelasId 
+                  ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas)
+                  : allSiswa;
+
+                // Precision scored search
+                const scoredResults = basePool
+                  .map((s) => {
+                    const nameLower = (s.nama || '').toLowerCase().trim();
+                    const nisStr = (s.nis || '').toString().trim();
+                    const nisnStr = (s.nisn || '').toString().trim();
+                    const nameWords = nameLower.split(/\s+/);
+
+                    if (!q) {
+                      return { student: s, score: 1 };
+                    }
+
+                    let score = 0;
+                    if (nameLower.startsWith(q)) {
+                      score = 100; // Match start of full name (Nama Depan)
+                    } else if (nameWords.some((w) => w.startsWith(q))) {
+                      score = 85; // Match start of any word in name
+                    } else if (nameLower.includes(q)) {
+                      score = 60; // Substring in name
+                    } else if (nisStr.startsWith(q) || nisnStr.startsWith(q)) {
+                      score = 75; // Prefix in NIS or NISN
+                    } else if (nisStr.includes(q) || nisnStr.includes(q)) {
+                      score = 40; // Substring in NIS or NISN
+                    }
+
+                    return { student: s, score };
+                  })
+                  .filter((item) => item.score > 0)
+                  .sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return (a.student.nama || '').localeCompare(b.student.nama || '', undefined, { sensitivity: 'base', numeric: true });
+                  });
+
+                const filteredList = scoredResults.map((item) => item.student);
+                const selectedStudentObj = allSiswa.find((s) => s.id === selectedSiswaId);
+
+                // Helper to highlight matching characters
+                const renderHighlightedName = (text: string, query: string) => {
+                  if (!query || !text) return text;
+                  const lowerText = text.toLowerCase();
+                  const lowerQuery = query.trim().toLowerCase();
+                  const idx = lowerText.indexOf(lowerQuery);
+                  if (idx === -1) return text;
+                  return (
+                    <>
+                      {text.substring(0, idx)}
+                      <span className="bg-amber-200 text-amber-950 font-bold px-0.5 rounded-xs">
+                        {text.substring(idx, idx + query.length)}
+                      </span>
+                      {text.substring(idx + query.length)}
+                    </>
+                  );
+                };
 
                 return (
                   <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <label className="block font-semibold text-slate-700">2. Pilih Nama Siswa</label>
-                      {selectedSiswaKelasId && studentsInClass.length > 0 && (
-                        <span className="text-[10px] text-slate-400">
-                          {filteredList.length} dari {studentsInClass.length} nama
-                        </span>
-                      )}
-                    </div>
+                    {/* Search Input with Floating Suggestions */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block font-semibold text-slate-700">2. Cari & Pilih Nama Siswa</label>
+                        {selectedSiswaKelasId && (
+                          <span className="text-[10px] text-slate-500">
+                            {basePool.length} Siswa Terdaftar
+                          </span>
+                        )}
+                      </div>
 
-                    {selectedSiswaKelasId && studentsInClass.length > 5 && (
                       <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-slate-400" size={13} />
+                        <Search className="absolute left-3 top-3 text-slate-400" size={14} />
                         <input
                           type="text"
-                          placeholder="Ketik nama atau NIS untuk mencari..."
+                          placeholder={selectedSiswaKelasId ? "Ketik nama depan atau NIS siswa..." : "Ketik nama depan siswa (cth: Ahmad, Siti, dsb)..."}
                           value={siswaSearchQuery}
-                          onChange={(e) => setSiswaSearchQuery(e.target.value)}
-                          className="w-full pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-emerald-500 font-medium"
+                          onFocus={() => setIsSearchFocused(true)}
+                          onChange={(e) => {
+                            setSiswaSearchQuery(e.target.value);
+                            setIsSearchFocused(true);
+                            if (selectedSiswaId) {
+                              setSelectedSiswaId('');
+                              setPassword('');
+                            }
+                          }}
+                          className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 font-medium shadow-xs"
                         />
                         {siswaSearchQuery && (
                           <button
                             type="button"
-                            onClick={() => setSiswaSearchQuery('')}
-                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            onClick={() => {
+                              setSiswaSearchQuery('');
+                              setIsSearchFocused(false);
+                            }}
+                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
                           >
-                            <X size={13} />
+                            <X size={14} />
                           </button>
                         )}
+
+                        {/* Floating Live Autocomplete Dropdown */}
+                        {isSearchFocused && (
+                          <>
+                            {/* Backdrop to close on outside click */}
+                            <div 
+                              className="fixed inset-0 z-40" 
+                              onClick={() => setIsSearchFocused(false)} 
+                            />
+                            
+                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+                              <div className="p-2 bg-slate-50 text-[10px] font-semibold text-slate-500 flex items-center justify-between sticky top-0 border-b border-slate-100 z-10">
+                                <span>
+                                  {q ? `Hasil pencarian "${siswaSearchQuery}" (${filteredList.length})` : `Pilihan Siswa (${filteredList.length})`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsSearchFocused(false)}
+                                  className="text-slate-400 hover:text-slate-700 font-bold"
+                                >
+                                  Tutup
+                                </button>
+                              </div>
+
+                              {filteredList.length === 0 ? (
+                                <div className="p-4 text-center text-slate-400 text-xs">
+                                  Tidak ditemukan nama siswa yang cocok dengan &quot;{siswaSearchQuery}&quot;
+                                  {selectedSiswaKelasId && (
+                                    <div className="mt-1 text-[10px] text-slate-400">
+                                      Coba kosongkan pilihan kelas untuk mencari di semua kelas.
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                filteredList.slice(0, 30).map((s) => {
+                                  const sKelasObj = allKelas.find(k => k.id === s.kelasId || k.namaKelas === s.kelasId);
+                                  const sKelasNama = sKelasObj?.namaKelas || s.kelasId || 'Kelas -';
+                                  const isSelected = s.id === selectedSiswaId;
+
+                                  return (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedSiswaId(s.id);
+                                        // Auto-sync class selection if not yet selected
+                                        if (s.kelasId && s.kelasId !== selectedSiswaKelasId) {
+                                          setSelectedSiswaKelasId(s.kelasId);
+                                        }
+                                        setSiswaSearchQuery(s.nama);
+                                        setIsSearchFocused(false);
+                                        setLoginError('');
+                                      }}
+                                      className={`w-full text-left p-2.5 hover:bg-emerald-50/80 transition flex items-center justify-between gap-2 cursor-pointer ${
+                                        isSelected ? 'bg-emerald-50 border-l-3 border-emerald-600' : ''
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-[11px] shrink-0">
+                                          {s.nama ? s.nama.charAt(0).toUpperCase() : 'S'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="font-semibold text-slate-800 text-xs truncate">
+                                            {renderHighlightedName(s.nama, siswaSearchQuery)}
+                                          </p>
+                                          <p className="text-[10px] text-slate-500">
+                                            NIS: {s.nis || '-'} {s.nisn ? `| NISN: ${s.nisn}` : ''}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <span className="shrink-0 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md">
+                                        {sKelasNama}
+                                      </span>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
+                    </div>
 
-                    <select
-                      value={selectedSiswaId}
-                      onChange={(e) => {
-                        setSelectedSiswaId(e.target.value);
-                        setLoginError('');
-                      }}
-                      disabled={!selectedSiswaKelasId || studentsInClass.length === 0}
-                      className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium disabled:bg-slate-50 disabled:text-slate-400 cursor-pointer shadow-xs"
-                    >
-                      <option value="" disabled hidden selected>
-                        {selectedSiswaKelasId
-                          ? studentsInClass.length === 0
-                            ? '-- Belum Ada Data Siswa di Kelas Ini --'
-                            : `-- Pilih Nama Siswa (${studentsInClass.length} Siswa) --`
-                          : 'Pilih Kelas Terlebih Dahulu'}
-                      </option>
-                      <option value="" disabled>
-                        {selectedSiswaKelasId
-                          ? studentsInClass.length === 0
-                            ? '-- Belum Ada Data Siswa di Kelas Ini --'
-                            : `-- Pilih Nama Siswa (${studentsInClass.length} Siswa) --`
-                          : 'Pilih Kelas Terlebih Dahulu'}
-                      </option>
-
-                      {filteredList.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.nama} {s.nis ? `(NIS: ${s.nis})` : ''}
-                        </option>
-                      ))}
-
-                      {filteredList.length === 0 && studentsInClass.length > 0 && (
-                        <option value="" disabled>
-                          -- Tidak ditemukan nama yang cocok --
-                        </option>
-                      )}
-                    </select>
+                    {/* Standard Fallback Dropdown */}
+                    <div className="space-y-1">
+                      <select
+                        value={selectedSiswaId}
+                        onChange={(e) => {
+                          const pickedId = e.target.value;
+                          setSelectedSiswaId(pickedId);
+                          const picked = allSiswa.find(s => s.id === pickedId);
+                          if (picked) {
+                            setSiswaSearchQuery(picked.nama);
+                            if (picked.kelasId && picked.kelasId !== selectedSiswaKelasId) {
+                              setSelectedSiswaKelasId(picked.kelasId);
+                            }
+                          }
+                          setLoginError('');
+                        }}
+                        className="p-2 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium cursor-pointer shadow-xs"
+                      >
+                        <option value="">-- Atau Pilih Nama dari Daftar ({basePool.length} Siswa) --</option>
+                        {basePool.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.nama} {s.nis ? `(NIS: ${s.nis})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
                     {/* Selected Student Confirmation Card */}
                     {selectedStudentObj && (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between animate-in fade-in duration-150">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
                             {selectedStudentObj.nama.charAt(0)}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-800 text-[11px] leading-tight">
+                            <p className="font-bold text-slate-800 text-xs leading-tight">
                               {selectedStudentObj.nama}
                             </p>
-                            <p className="text-[10px] text-emerald-700">
-                              NIS: {selectedStudentObj.nis || '-'} | NISN: {selectedStudentObj.nisn || '-'}
+                            <p className="text-[10px] text-emerald-800 font-medium">
+                              NIS: {selectedStudentObj.nis || '-'} | {allKelas.find(k => k.id === selectedStudentObj.kelasId)?.namaKelas || selectedStudentObj.kelasId || 'Kelas -'}
                             </p>
                           </div>
                         </div>
@@ -1006,11 +1136,12 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setSelectedSiswaId('');
+                            setSiswaSearchQuery('');
                             setPassword('');
                           }}
-                          className="text-[10px] text-slate-400 hover:text-rose-600 font-bold px-1.5 py-0.5 rounded cursor-pointer"
+                          className="text-[10px] text-slate-500 hover:text-rose-600 font-bold px-2 py-1 bg-white border border-slate-200 rounded-lg cursor-pointer transition shadow-2xs"
                         >
-                          Ganti
+                          Ganti Siswa
                         </button>
                       </div>
                     )}
