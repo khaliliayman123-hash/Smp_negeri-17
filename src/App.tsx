@@ -981,7 +981,7 @@ export default function App() {
                         <Search className="absolute left-3 top-3 text-slate-400" size={14} />
                         <input
                           type="text"
-                          placeholder={selectedSiswaKelasId ? "Ketik nama depan atau NIS siswa..." : "Ketik nama depan siswa (cth: Ahmad, Siti, dsb)..."}
+                          placeholder={selectedSiswaKelasId ? "Ketik nama depan siswa..." : "Ketik nama depan siswa (cth: Ahmad, Siti, dsb)..."}
                           value={siswaSearchQuery}
                           onFocus={() => setIsSearchFocused(true)}
                           onChange={(e) => {
@@ -1071,8 +1071,8 @@ export default function App() {
                                           <p className="font-semibold text-slate-800 text-xs truncate">
                                             {renderHighlightedName(s.nama, siswaSearchQuery)}
                                           </p>
-                                          <p className="text-[10px] text-slate-500">
-                                            NIS: {s.nis || '-'} {s.nisn ? `| NISN: ${s.nisn}` : ''}
+                                          <p className="text-[10px] text-slate-400">
+                                            Siswa Terdaftar • {sKelasNama}
                                           </p>
                                         </div>
                                       </div>
@@ -1110,7 +1110,7 @@ export default function App() {
                         <option value="">-- Atau Pilih Nama dari Daftar ({basePool.length} Siswa) --</option>
                         {basePool.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.nama} {s.nis ? `(NIS: ${s.nis})` : ''}
+                            {s.nama}
                           </option>
                         ))}
                       </select>
@@ -1128,7 +1128,7 @@ export default function App() {
                               {selectedStudentObj.nama}
                             </p>
                             <p className="text-[10px] text-emerald-800 font-medium">
-                              NIS: {selectedStudentObj.nis || '-'} | {allKelas.find(k => k.id === selectedStudentObj.kelasId)?.namaKelas || selectedStudentObj.kelasId || 'Kelas -'}
+                              Siswa Terverifikasi • {allKelas.find(k => k.id === selectedStudentObj.kelasId)?.namaKelas || selectedStudentObj.kelasId || 'Kelas -'}
                             </p>
                           </div>
                         </div>
