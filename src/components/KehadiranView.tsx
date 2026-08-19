@@ -369,7 +369,7 @@ export default function KehadiranView({
   const handleDownloadKelasDoc = (targetClassName: string) => {
     if (!db) return;
     const targetKelas = db.kelas.find(c => c.namaKelas.toLowerCase().trim() === targetClassName.toLowerCase().trim() || c.id === targetClassName);
-    const namaKelas = targetKelas?.namaKelas || targetClassName;
+    const namaKelas = targetKelas?.namaKelas || (targetClassName === 'ALL' ? 'Semua Kelas' : targetClassName);
     const waliKelas = db.users.find(u => u.id === targetKelas?.waliKelasId) || currentUser;
     const waliKelasName = waliKelas?.nama || 'Wali Kelas';
     const guruBkName = db.users.find(u => (u.role as string) === 'bk' || ((u as any).jabatan && String((u as any).jabatan).toLowerCase().includes('bk')))?.nama || 'Guru BK';
@@ -380,8 +380,21 @@ export default function KehadiranView({
       year: 'numeric'
     });
 
+    const activeBulanLabel = attendanceFilterBulan === 'ALL' ? 'Semua Bulan' : attendanceFilterBulan;
+    const activeMingguLabel = attendanceFilterMinggu === 'ALL' ? 'Semua Minggu' : attendanceFilterMinggu;
+
     const studentRowsHtml = activeStudents.length > 0 ? activeStudents.map((s, idx) => {
-      const records = db.kehadiran.filter(k => k.siswaId === s.id);
+      let records = db.kehadiran.filter(k => k.siswaId === s.id);
+      
+      // Filter records by Month if selected
+      if (attendanceFilterBulan !== 'ALL') {
+        records = records.filter(k => String(k.bulan || '').toLowerCase().trim() === attendanceFilterBulan.toLowerCase().trim());
+      }
+      // Filter records by Week if selected
+      if (attendanceFilterMinggu !== 'ALL') {
+        records = records.filter(k => String(k.mingguKe || '').toLowerCase().trim() === attendanceFilterMinggu.toLowerCase().trim());
+      }
+
       let h = 0, sk = 0, iz = 0, al = 0;
       records.forEach(item => {
         h += Number(item.hadir || 0);
@@ -390,13 +403,27 @@ export default function KehadiranView({
         al += Number(item.alfa || 0);
       });
       const tot = h + sk + iz + al;
-      const pct = tot > 0 ? Math.round((h / tot) * 100) : 100;
+      const pct = tot > 0 ? Math.round((h / tot) * 100) : (records.length > 0 ? 100 : 100);
+
+      // Determine text for Bulan column
+      let bulanColText = activeBulanLabel;
+      if (attendanceFilterBulan === 'ALL') {
+        if (records.length > 0) {
+          const uniqueMonths = Array.from(new Set(records.map(r => r.bulan).filter(Boolean)));
+          bulanColText = uniqueMonths.length > 0 ? uniqueMonths.join(', ') : 'Semua Bulan';
+        } else {
+          bulanColText = '-';
+        }
+      } else if (attendanceFilterMinggu !== 'ALL') {
+        bulanColText = `${attendanceFilterBulan} (${attendanceFilterMinggu})`;
+      }
 
       return `
         <tr>
           <td style="text-align: center;">${idx + 1}</td>
           <td><b>${s.nama}</b></td>
           <td style="text-align: center;">${s.nisn || s.nis || '-'}</td>
+          <td style="text-align: center; font-weight: bold; color: #1e293b;">${bulanColText}</td>
           <td style="text-align: center; color: #047857; font-weight: bold;">${h} Hari</td>
           <td style="text-align: center; color: #0284c7;">${sk} Hari</td>
           <td style="text-align: center; color: #d97706;">${iz} Hari</td>
@@ -406,7 +433,7 @@ export default function KehadiranView({
       `;
     }).join('') : `
       <tr>
-        <td colspan="8" style="text-align: center; padding: 15px; color: #888;">Belum ada siswa terdaftar di kelas ini.</td>
+        <td colspan="9" style="text-align: center; padding: 15px; color: #888;">Belum ada siswa terdaftar di kelas ini.</td>
       </tr>
     `;
 
@@ -440,19 +467,20 @@ export default function KehadiranView({
 
         <div class="doc-title">
           <h3>LAPORAN REKAPITULASI PRESENSI KELAS KESELURUHAN</h3>
-          <p>KELAS: <b>${namaKelas.toUpperCase()}</b> | TANGGAL CETAK: <b>${dateTodayStr}</b></p>
+          <p>KELAS: <b>${namaKelas.toUpperCase()}</b> | BULAN: <b>${activeBulanLabel.toUpperCase()}</b> | MINGGU: <b>${activeMingguLabel.toUpperCase()}</b> | TANGGAL CETAK: <b>${dateTodayStr}</b></p>
         </div>
 
         <table class="data-table">
           <thead>
             <tr>
               <th style="width: 5%;">No</th>
-              <th style="width: 30%;">Nama Siswa</th>
-              <th style="width: 15%;">NIS / NISN</th>
-              <th style="width: 10%;">Hadir</th>
-              <th style="width: 10%;">Sakit</th>
-              <th style="width: 10%;">Izin</th>
-              <th style="width: 10%;">Alfa</th>
+              <th style="width: 25%;">Nama Siswa</th>
+              <th style="width: 14%;">NIS / NISN</th>
+              <th style="width: 14%;">Bulan</th>
+              <th style="width: 8%;">Hadir</th>
+              <th style="width: 8%;">Sakit</th>
+              <th style="width: 8%;">Izin</th>
+              <th style="width: 8%;">Alfa</th>
               <th style="width: 10%;">% Kehadiran</th>
             </tr>
           </thead>
@@ -492,7 +520,10 @@ export default function KehadiranView({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Laporan_Rekap_Kehadiran_Kelas_${namaKelas.replace(/\s+/g, '_')}.doc`;
+    const safeKelas = namaKelas.replace(/\s+/g, '_');
+    const safeBulan = attendanceFilterBulan !== 'ALL' ? `_${attendanceFilterBulan}` : '';
+    const safeMinggu = attendanceFilterMinggu !== 'ALL' ? `_${attendanceFilterMinggu.replace(/\s+/g, '')}` : '';
+    link.download = `Laporan_Rekap_Kehadiran_Kelas_${safeKelas}${safeBulan}${safeMinggu}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -853,7 +884,8 @@ export default function KehadiranView({
                 <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                   <th className="p-3.5">Nama Siswa & NIS</th>
                   <th className="p-3.5">Kelas</th>
-                  <th className="p-3.5">Minggu & Periode</th>
+                  <th className="p-3.5 text-center">Bulan</th>
+                  <th className="p-3.5 text-center">Minggu</th>
                   <th className="p-3.5 text-center">Hadir</th>
                   <th className="p-3.5 text-center">Sakit</th>
                   <th className="p-3.5 text-center">Izin</th>
@@ -877,9 +909,15 @@ export default function KehadiranView({
                           {att.kelas || info.kelasName || selectedClassId}
                         </span>
                       </td>
-                      <td className="p-3.5">
-                        <p className="font-extrabold text-slate-800">{att.mingguKe}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{att.bulan} {att.tahun}</p>
+                      <td className="p-3.5 text-center">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-100 text-slate-800">
+                          {att.bulan} {att.tahun || '2026'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-100">
+                          {att.mingguKe}
+                        </span>
                       </td>
                       <td className="p-3.5 text-center">
                         <span className="bg-emerald-50 text-emerald-700 font-extrabold px-2.5 py-1 rounded-md border border-emerald-100 text-[10px]">
