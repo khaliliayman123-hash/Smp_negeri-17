@@ -44,7 +44,7 @@ import {
   Medal,
   Save
 } from 'lucide-react';
-import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran } from '../types';
+import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran, CatatanPerkembangan } from '../types';
 import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
 
 interface HdsDetailDrawerProps {
@@ -57,6 +57,7 @@ interface HdsDetailDrawerProps {
     sos?: Sosial;
     aka?: Akademik;
     ase?: Asesmen;
+    catatanList?: CatatanPerkembangan[];
     points: number;
     counselingCount: number;
     achievementsCount: number;
@@ -409,6 +410,41 @@ function HdsDetailDrawer({ siswa, hds, onClose, getStudentClassName, onDownloadP
                     <p className="text-slate-400 italic text-center">Belum ada data nilai akademis rapor.</p>
                   )}
                 </div>
+
+                {/* 7. CATATAN PERKEMBANGAN SISWA */}
+                <div className="space-y-2.5">
+                  <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-emerald-800">
+                    <FileText size={13} className="text-emerald-600" /> 7. CATATAN PERKEMBANGAN SISWA ({(hds.catatanList || []).length})
+                  </h3>
+                  {hds.catatanList && hds.catatanList.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {hds.catatanList.map((cp) => (
+                        <div key={cp.id} className="bg-emerald-50/40 border border-emerald-200/60 rounded-xl p-3 space-y-1.5 text-xs">
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                              {cp.kategori || 'Perkembangan'}
+                            </span>
+                            <span className="text-slate-400 font-medium">📅 {cp.tanggal}</span>
+                          </div>
+                          <p className="text-slate-700 whitespace-pre-line leading-relaxed font-medium">
+                            {cp.catatan}
+                          </p>
+                          {cp.rekomendasi && (
+                            <div className="bg-amber-50/70 border border-amber-200/50 p-2 rounded text-[11px] text-amber-900">
+                              <span className="font-bold text-amber-800">💡 Rekomendasi: </span>
+                              <span>{cp.rekomendasi}</span>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-slate-400 italic text-right">
+                            Dicatat oleh: {cp.namaGuru || 'Guru'} ({cp.roleGuru || 'Wali Kelas'})
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 italic text-center py-2 text-xs">Belum ada catatan perkembangan khusus untuk siswa ini.</p>
+                  )}
+                </div>
               </div>
 
               {/* Footer Button */}
@@ -439,6 +475,8 @@ interface WaliKelasViewProps {
   onDeletePrestasi?: (id: string) => Promise<boolean>;
   onSaveKehadiran?: (k: Kehadiran, isNew: boolean) => Promise<boolean>;
   onDeleteKehadiran?: (id: string) => Promise<boolean>;
+  onSaveCatatanPerkembangan?: (c: CatatanPerkembangan, isNew: boolean) => Promise<boolean>;
+  onDeleteCatatanPerkembangan?: (id: string) => Promise<boolean>;
 }
 
 type ClassLevel = '7' | '8' | '9';
@@ -456,7 +494,9 @@ export default function WaliKelasView({
   onSavePrestasi,
   onDeletePrestasi,
   onSaveKehadiran,
-  onDeleteKehadiran
+  onDeleteKehadiran,
+  onSaveCatatanPerkembangan,
+  onDeleteCatatanPerkembangan
 }: WaliKelasViewProps) {
   // Allowed class lookup for each Wali Kelas
   const allowedClassName = useMemo(() => {
@@ -650,12 +690,26 @@ export default function WaliKelasView({
   const [selectedSiswaId, setSelectedSiswaId] = useState<string | null>(null);
 
   // Integrated sub-feature tabs and chart hover state
-  const [activeSubFeature, setActiveSubFeature] = useState<'hds' | 'kedisiplinan' | 'remisi' | 'ringkasan_remisi' | 'rekap_grafik' | 'prestasi' | 'kehadiran' | 'laporan'>('rekap_grafik');
+  const [activeSubFeature, setActiveSubFeature] = useState<'hds' | 'kedisiplinan' | 'remisi' | 'ringkasan_remisi' | 'rekap_grafik' | 'prestasi' | 'kehadiran' | 'catatan_perkembangan' | 'laporan'>('rekap_grafik');
   const [hoveredBar, setHoveredBar] = useState<{ month: string; value: number; x: number; y: number } | null>(null);
 
   // Filters for Ringkasan Remisi Poin
   const [filterRemisiClass, setFilterRemisiClass] = useState<string>('ALL');
   const [filterRemisiSiswaId, setFilterRemisiSiswaId] = useState<string>('ALL');
+
+  // Catatan Perkembangan Filter & Modal State
+  const [catatanFilterKategori, setCatatanFilterKategori] = useState<string>('ALL');
+  const [showCatatanModal, setShowCatatanModal] = useState(false);
+  const [editingCatatan, setEditingCatatan] = useState<CatatanPerkembangan | null>(null);
+  const [formCatatan, setFormCatatan] = useState({
+    siswaId: '',
+    tanggal: new Date().toISOString().split('T')[0],
+    kategori: 'Perilaku & Karakter',
+    catatan: '',
+    rekomendasi: '',
+    namaGuru: currentUser.nama || 'Wali Kelas',
+    roleGuru: currentUser.role
+  });
 
   // Modal State & Forms for Full Access CRUD
   const [showPelanggaranModal, setShowPelanggaranModal] = useState(false);
@@ -685,13 +739,21 @@ export default function WaliKelasView({
 
   const [showPrestasiModal, setShowPrestasiModal] = useState(false);
   const [editingPrestasi, setEditingPrestasi] = useState<Prestasi | null>(null);
-  const [formPrestasi, setFormPrestasi] = useState({
+  const [formPrestasi, setFormPrestasi] = useState<{
+    siswaId: string;
+    namaPrestasi: string;
+    tingkat: string;
+    tahun: string;
+    juara: string;
+    kategori: string;
+    sertifikat: string;
+  }>({
     siswaId: '',
     namaPrestasi: '',
     tingkat: 'Sekolah',
     tahun: new Date().getFullYear().toString(),
     juara: 'Juara 1',
-    kategori: 'Akademik' as 'Akademik' | 'Non Akademik',
+    kategori: 'Akademik',
     sertifikat: ''
   });
 
@@ -705,7 +767,8 @@ export default function WaliKelasView({
     hadir: 5,
     sakit: 0,
     izin: 0,
-    alfa: 0
+    alfa: 0,
+    keterangan: ''
   });
 
   // Determine currently selected full class name based on active level
@@ -2435,6 +2498,36 @@ export default function WaliKelasView({
     });
   }, [classKehadiran, searchQuery, attendanceFilterBulan, attendanceFilterMinggu, db]);
 
+  // Filter class catatan perkembangan (Catatan Perkembangan Tab)
+  const classCatatanPerkembangan = useMemo(() => {
+    if (!db || !db.catatanPerkembangan) return [];
+    const studentIds = new Set(classStudents.map(s => s.id));
+    return db.catatanPerkembangan.filter(c => {
+      if (studentIds.has(c.siswaId)) return true;
+      const student = findSiswa(db, c.siswaId, c);
+      return student && studentIds.has(student.id);
+    });
+  }, [db, classStudents]);
+
+  // Search and filter for Catatan Perkembangan
+  const filteredCatatanPerkembangan = useMemo(() => {
+    return classCatatanPerkembangan.filter(c => {
+      const student = findSiswa(db, c.siswaId, c);
+      const studentName = (student?.nama || (c as any).namaSiswa || '').toLowerCase();
+      const text = (c.catatan || '').toLowerCase();
+      const rec = (c.rekomendasi || '').toLowerCase();
+      const q = searchQuery.toLowerCase();
+      const matchSearch = !q || studentName.includes(q) || text.includes(q) || rec.includes(q);
+
+      let matchKat = true;
+      if (catatanFilterKategori !== 'ALL') {
+        matchKat = c.kategori === catatanFilterKategori;
+      }
+
+      return matchSearch && matchKat;
+    }).sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+  }, [classCatatanPerkembangan, searchQuery, catatanFilterKategori, db]);
+
   // Weekly attendance breakdown stats (Minggu 1 s.d. Minggu 5)
   const weeklyBreakdownStats = useMemo(() => {
     const weeks = ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'];
@@ -2621,6 +2714,9 @@ export default function WaliKelasView({
 
     const counselingCount = db.konseling?.filter(k => k.siswaId === id).length || 0;
     const achievementsCount = db.prestasi?.filter(p => p.siswaId === id).length || 0;
+    const catatanList = (db.catatanPerkembangan || [])
+      .filter(c => c.siswaId === id || (c as any).idSiswa === id)
+      .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
 
     return {
       ortu,
@@ -2630,6 +2726,7 @@ export default function WaliKelasView({
       sos,
       aka,
       ase,
+      catatanList,
       points,
       counselingCount,
       achievementsCount
@@ -2907,6 +3004,24 @@ export default function WaliKelasView({
             }`}
           >
             🏆 Rekam Prestasi
+          </button>
+
+          <button
+            onClick={() => { setActiveSubFeature('kehadiran'); setSearchQuery(''); }}
+            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+              activeSubFeature === 'kehadiran' ? 'bg-white text-indigo-700 shadow-xs border border-slate-100 font-black' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            📅 Rekap Presensi
+          </button>
+
+          <button
+            onClick={() => { setActiveSubFeature('catatan_perkembangan'); setSearchQuery(''); }}
+            className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+              activeSubFeature === 'catatan_perkembangan' ? 'bg-emerald-600 text-white shadow-xs font-black' : 'bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/80 border border-emerald-200/50'
+            }`}
+          >
+            📝 Catatan Perkembangan ({classCatatanPerkembangan.length})
           </button>
 
           <button
@@ -3802,7 +3917,8 @@ export default function WaliKelasView({
                         hadir: 5,
                         sakit: 0,
                         izin: 0,
-                        alfa: 0
+                        alfa: 0,
+                        keterangan: ''
                       });
                       setShowKehadiranModal(true);
                     }}
@@ -3903,7 +4019,8 @@ export default function WaliKelasView({
                                         hadir: att.hadir,
                                         sakit: att.sakit,
                                         izin: att.izin,
-                                        alfa: att.alfa
+                                        alfa: att.alfa,
+                                        keterangan: att.keterangan || ''
                                       });
                                       setShowKehadiranModal(true);
                                     }}

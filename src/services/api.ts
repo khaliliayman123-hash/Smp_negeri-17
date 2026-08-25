@@ -22,6 +22,7 @@ import {
   Surat,
   Dokumen,
   CatatanPerkembangan,
+  PengaduanSiswa,
   TahunPelajaran,
   Kelas,
   LogAktivitas,
@@ -167,6 +168,7 @@ const INITIAL_DATABASE: DatabaseState = {
   surat: [],
   dokumen: [],
   catatanPerkembangan: [],
+  pengaduanSiswa: [],
   logAktivitas: [],
   kehadiran: [],
   laporanKejadian: []
@@ -453,7 +455,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     'users', 'siswa', 'orangTua', 'akademik', 'kesehatan', 'ekonomi', 
     'psikologi', 'sosial', 'prestasi', 'pelanggaran', 'remisiPoin', 
     'konseling', 'asesmen', 'homeVisit', 'surat', 'dokumen', 
-    'catatanPerkembangan', 'tahunPelajaran', 'kelas', 'jurusan', 'logAktivitas', 'kehadiran', 'laporanKejadian'
+    'catatanPerkembangan', 'pengaduanSiswa', 'tahunPelajaran', 'kelas', 'jurusan', 'logAktivitas', 'kehadiran', 'laporanKejadian'
   ];
 
   listKeys.forEach(key => {
@@ -1851,5 +1853,75 @@ export const apiService = {
       }
     }
     return { success: true, message: 'Status laporan berhasil diperbarui.' };
+  },
+
+  // 17. PENGADUAN SISWA CRUD (Sheets: Pengaduan_Siswa)
+  savePengaduan: async (p: PengaduanSiswa, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    const db = loadLocalDatabase();
+    if (!db.pengaduanSiswa) db.pengaduanSiswa = [];
+    if (!p.id) {
+      p.id = `aduan-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    }
+    if (isNew) {
+      db.pengaduanSiswa.unshift(p);
+    } else {
+      db.pengaduanSiswa = db.pengaduanSiswa.map(item => item.id === p.id ? p : item);
+    }
+    saveLocalDatabase(db);
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('savePengaduan', { p, isNew });
+      } catch (e) {
+        console.warn('Google Sheets savePengaduan warning:', e);
+      }
+    }
+    return { success: true, message: 'Pengaduan siswa berhasil dikirim dan tersimpan secara permanen.' };
+  },
+
+  deletePengaduan: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const db = loadLocalDatabase();
+    if (!db.pengaduanSiswa) db.pengaduanSiswa = [];
+    db.pengaduanSiswa = db.pengaduanSiswa.filter(item => item.id !== id);
+    saveLocalDatabase(db);
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('deletePengaduan', { id });
+      } catch (e) {
+        console.warn('Google Sheets deletePengaduan warning:', e);
+      }
+    }
+    return { success: true, message: 'Data Pengaduan berhasil dihapus.' };
+  },
+
+  updatePengaduanStatus: async (
+    id: string, 
+    status: 'Menunggu Respon' | 'Sedang Ditangani' | 'Selesai' | 'Ditolak',
+    tanggapanBk?: string,
+    petugasBk?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const db = loadLocalDatabase();
+    if (!db.pengaduanSiswa) db.pengaduanSiswa = [];
+    const tgl = new Date().toISOString().split('T')[0];
+    db.pengaduanSiswa = db.pengaduanSiswa.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          status,
+          ...(tanggapanBk !== undefined ? { tanggapanBk } : {}),
+          ...(petugasBk !== undefined ? { petugasBk } : {}),
+          tanggalTanggapan: tgl
+        };
+      }
+      return item;
+    });
+    saveLocalDatabase(db);
+    if (getGasApiUrl()) {
+      try {
+        await apiCall('updatePengaduanStatus', { id, status, tanggapanBk, petugasBk, tanggalTanggapan: tgl });
+      } catch (e) {
+        console.warn('Google Sheets updatePengaduanStatus warning:', e);
+      }
+    }
+    return { success: true, message: 'Tanggapan & Status Pengaduan berhasil diperbarui.' };
   }
 };

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Component, ReactNode, ErrorInfo } from 'react';
 import { 
   Users, 
   GraduationCap, 
@@ -29,11 +29,12 @@ import {
   Download,
   RefreshCw,
   Calendar,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 
 // Sub views
-import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen, LaporanKejadian } from './types';
+import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen, LaporanKejadian, CatatanPerkembangan, PengaduanSiswa } from './types';
 import { apiService, WALI_KELAS_USERS, findSiswa, getSiswaInfo, normalizeClassName, standardKelasMap, getStudentsForClass } from './services/api';
 import DashboardView from './components/DashboardView';
 import SiswaView from './components/SiswaView';
@@ -42,6 +43,61 @@ import KehadiranView from './components/KehadiranView';
 import KonselingView from './components/KonselingView';
 import DokumenSuratView from './components/DokumenSuratView';
 import MasterLaporanView from './components/MasterLaporanView';
+import PengaduanView from './components/PengaduanView';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallbackTitle?: string;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  errorMessage: string;
+}
+
+class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public override state: ErrorBoundaryState = {
+    hasError: false,
+    errorMessage: ''
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, errorMessage: error?.message || 'Terjadi kesalahan sistem' };
+  }
+
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught error:', error, errorInfo);
+  }
+
+  public override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 max-w-xl mx-auto my-12 bg-white rounded-2xl border border-rose-200 shadow-xl text-center space-y-4">
+          <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertTriangle size={28} />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">
+            {this.props.fallbackTitle || 'Halaman Mengalami Kendala'}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono text-left break-all">
+            {this.state.errorMessage}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ hasError: false, errorMessage: '' });
+              window.location.reload();
+            }}
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer inline-flex items-center gap-2"
+          >
+            <RefreshCw size={14} /> Muat Ulang Halaman
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   // Session States
@@ -166,6 +222,17 @@ export default function App() {
       surat: filterByStudent(db.surat),
       dokumen: filterByStudent(db.dokumen),
       catatanPerkembangan: filterByStudent(db.catatanPerkembangan),
+      pengaduanSiswa: (db.pengaduanSiswa || []).filter(item => {
+        if (!item) return false;
+        const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
+        const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
+        const isClassMatch = item.kelas && (
+          assignedClassIds.has(item.kelas) || 
+          assignedClassNamesLower.has(item.kelas.toString().trim().toLowerCase()) ||
+          Array.from(assignedClassNamesLower).some(c => c.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() === itemKelasNorm)
+        );
+        return isStudentMatch || isClassMatch;
+      }),
       kehadiran: (db.kehadiran || []).filter(item => {
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
         const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
@@ -210,7 +277,7 @@ export default function App() {
   };
 
   // Navigations routing states
-  const [activeMenu, setActiveMenu] = useState<'dashboard' | 'siswa' | 'kehadiran' | 'walikelas' | 'layanan' | 'dokumen' | 'master' | 'pengaturan'>(() => {
+  const [activeMenu, setActiveMenu] = useState<'dashboard' | 'siswa' | 'kehadiran' | 'walikelas' | 'layanan' | 'dokumen' | 'master' | 'pengaturan' | 'pengaduan'>(() => {
     try {
       const saved = localStorage.getItem('hds_current_user');
       if (saved) {
@@ -259,11 +326,11 @@ export default function App() {
 
   // Enforce Wali Kelas restricted view
   useEffect(() => {
-    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard' && activeMenu !== 'siswa' && activeMenu !== 'kehadiran') {
+    if (currentUser && currentUser.role === UserRole.WALI_KELAS && activeMenu !== 'walikelas' && activeMenu !== 'dashboard' && activeMenu !== 'siswa' && activeMenu !== 'kehadiran' && activeMenu !== 'pengaduan') {
       setActiveMenu('walikelas');
     }
     if (currentUser && currentUser.role === UserRole.GURU_PIKET) {
-      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan' && activeMenu !== 'kehadiran') {
+      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan' && activeMenu !== 'kehadiran' && activeMenu !== 'pengaduan') {
         setActiveMenu('dashboard');
       }
     }
@@ -1212,12 +1279,20 @@ export default function App() {
           {/* Nav links */}
           <nav className="flex flex-col gap-1 text-xs font-semibold">
             {currentUser.role === UserRole.SISWA ? (
-              <button 
-                onClick={() => { setActiveMenu('siswa'); }}
-                className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'siswa' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
-              >
-                <BookOpen size={16} /> Profil Saya (HDS)
-              </button>
+              <>
+                <button 
+                  onClick={() => { setActiveMenu('siswa'); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'siswa' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <BookOpen size={16} /> Profil Saya (HDS)
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <AlertCircle size={16} /> Layanan Pengaduan
+                </button>
+              </>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
               <>
                 <button 
@@ -1244,6 +1319,12 @@ export default function App() {
                 >
                   <BookOpen size={16} /> Direktori Siswa (HDS)
                 </button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <AlertCircle size={16} /> Layanan Pengaduan
+                </button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
@@ -1264,6 +1345,12 @@ export default function App() {
                   className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'layanan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
                   <MessageSquare size={16} /> Layanan BK & Disiplin
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <AlertCircle size={16} /> Layanan Pengaduan
                 </button>
               </>
             ) : (
@@ -1297,6 +1384,12 @@ export default function App() {
                   className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'layanan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
                   <MessageSquare size={16} /> Layanan BK & Disiplin
+                </button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); }}
+                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <AlertCircle size={16} /> Layanan Pengaduan
                 </button>
                 <button 
                   onClick={() => { setActiveMenu('dokumen'); }}
@@ -1457,19 +1550,24 @@ export default function App() {
         {mobileMenuOpen && (
           <div className="absolute top-full left-0 right-0 bg-slate-900 border-b border-slate-800 p-4 flex flex-col gap-2 text-xs font-semibold">
             {currentUser.role === UserRole.SISWA ? (
-              <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Profil Saya (HDS)</button>
+              <>
+                <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Profil Saya (HDS)</button>
+                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800 text-emerald-400">Layanan Pengaduan</button>
+              </>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
                 <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
+                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan Pengaduan</button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
                 <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
+                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan Pengaduan</button>
               </>
             ) : (
               <>
@@ -1478,6 +1576,7 @@ export default function App() {
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
                 <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
+                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan Pengaduan</button>
                 <button onClick={() => { setActiveMenu('dokumen'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Arsip & Surat Resmi</button>
                 <button onClick={() => { setActiveMenu('master'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Pelaporan & Master</button>
                 <button onClick={() => { setActiveMenu('pengaturan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Koneksi Google Sheets</button>
@@ -1739,6 +1838,41 @@ export default function App() {
                 showToast('Gagal menghapus dokumen surat.', 'error');
               });
               return true;
+            }}
+            onSaveCatatanPerkembangan={async (c, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const currentList = prev.catatanPerkembangan || [];
+                const list = isNew 
+                  ? [c, ...currentList] 
+                  : currentList.map(item => item.id === c.id ? c : item);
+                return { ...prev, catatanPerkembangan: list };
+              });
+              try {
+                const res = await apiService.saveCatatanPerkembangan(c, isNew);
+                showToast(res.message, res.success ? 'success' : 'error');
+                return res.success;
+              } catch {
+                showToast('Gagal menyimpan Catatan Perkembangan.', 'error');
+                return false;
+              }
+            }}
+            onDeleteCatatanPerkembangan={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  catatanPerkembangan: (prev.catatanPerkembangan || []).filter(item => item.id !== id)
+                };
+              });
+              try {
+                const res = await apiService.deleteCatatanPerkembangan(id);
+                showToast(res.message, res.success ? 'success' : 'error');
+                return res.success;
+              } catch {
+                showToast('Gagal menghapus Catatan Perkembangan.', 'error');
+                return false;
+              }
             }}
           />
         )}
@@ -2251,6 +2385,78 @@ export default function App() {
               return true;
             }}
           />
+        )}
+
+        {/* VIEW: LAYANAN PENGADUAN SISWA */}
+        {activeMenu === 'pengaduan' && (
+          <AppErrorBoundary fallbackTitle="Layanan Pengaduan Siswa">
+            <PengaduanView
+              db={filteredDb}
+              currentUser={currentUser}
+              onSavePengaduan={async (p, isNew) => {
+                setDb(prev => {
+                  if (!prev) return prev;
+                  const currentList = prev.pengaduanSiswa || [];
+                  const list = isNew 
+                    ? [p, ...currentList] 
+                    : currentList.map(item => item.id === p.id ? p : item);
+                  return { ...prev, pengaduanSiswa: list };
+                });
+                try {
+                  const res = await apiService.savePengaduan(p, isNew);
+                  showToast(res.message, res.success ? 'success' : 'error');
+                  return res.success;
+                } catch {
+                  showToast('Gagal mengirim/menyimpan pengaduan.', 'error');
+                  return false;
+                }
+              }}
+              onDeletePengaduan={async (id) => {
+                setDb(prev => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    pengaduanSiswa: (prev.pengaduanSiswa || []).filter(item => item.id !== id)
+                  };
+                });
+                try {
+                  const res = await apiService.deletePengaduan(id);
+                  showToast(res.message, res.success ? 'success' : 'error');
+                  return res.success;
+                } catch {
+                  showToast('Gagal menghapus pengaduan.', 'error');
+                  return false;
+                }
+              }}
+              onUpdateStatus={async (id, status, tanggapan, petugas) => {
+                const tgl = new Date().toISOString().split('T')[0];
+                setDb(prev => {
+                  if (!prev) return prev;
+                  const list = (prev.pengaduanSiswa || []).map(item => {
+                    if (item.id === id) {
+                      return {
+                        ...item,
+                        status,
+                        ...(tanggapan !== undefined ? { tanggapanBk: tanggapan } : {}),
+                        ...(petugas !== undefined ? { petugasBk: petugas } : {}),
+                        tanggalTanggapan: tgl
+                      };
+                    }
+                    return item;
+                  });
+                  return { ...prev, pengaduanSiswa: list };
+                });
+                try {
+                  const res = await apiService.updatePengaduanStatus(id, status, tanggapan, petugas);
+                  showToast(res.message, res.success ? 'success' : 'error');
+                  return res.success;
+                } catch {
+                  showToast('Gagal memperbarui status pengaduan.', 'error');
+                  return false;
+                }
+              }}
+            />
+          </AppErrorBoundary>
         )}
 
         {/* VIEW 6: GOOGLE SHEETS / GAS CONNECTION SETTINGS */}

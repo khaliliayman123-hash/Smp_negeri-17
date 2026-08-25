@@ -85,8 +85,11 @@ function setupHDSDatabaseSheets() {
     "Dokumen": [
       "id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"
     ],
-    "CatatanPerkembangan": [
-      "id", "siswaId", "tanggal", "catatan", "guruBkId"
+    "Catatan_Perkembangan": [
+      "id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"
+    ],
+    "Pengaduan_Siswa": [
+      "id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"
     ],
     "TahunPelajaran": [
       "id", "tahun", "semester", "isActive"
@@ -333,11 +336,23 @@ function handleRequest(e) {
         break;
         
       case "saveCatatanPerkembangan":
-        responseData = saveEntity(db, "CatatanPerkembangan", postData.c, postData.isNew);
+        responseData = saveEntity(db, "Catatan_Perkembangan", postData.c, postData.isNew);
         break;
         
       case "deleteCatatanPerkembangan":
-        responseData = deleteEntity(db, "CatatanPerkembangan", postData.id);
+        responseData = deleteEntity(db, "Catatan_Perkembangan", postData.id);
+        break;
+
+      case "savePengaduan":
+        responseData = saveEntity(db, "Pengaduan_Siswa", postData.p, postData.isNew);
+        break;
+
+      case "deletePengaduan":
+        responseData = deleteEntity(db, "Pengaduan_Siswa", postData.id);
+        break;
+
+      case "updatePengaduanStatus":
+        responseData = updatePengaduanStatusRow(db, postData.id, postData.status, postData.tanggapanBk, postData.petugasBk, postData.tanggalTanggapan);
         break;
         
       case "saveKehadiran":
@@ -476,7 +491,8 @@ function fetchFullDatabase(db) {
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
-    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
     "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
     "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
@@ -549,7 +565,11 @@ function fetchFullDatabase(db) {
     "HomeVisit": "homeVisit",
     "Surat": "surat",
     "Dokumen": "dokumen",
+    "Catatan_Perkembangan": "catatanPerkembangan",
     "CatatanPerkembangan": "catatanPerkembangan",
+    "Pengaduan_Siswa": "pengaduanSiswa",
+    "PengaduanSiswa": "pengaduanSiswa",
+    "Pengaduan": "pengaduanSiswa",
     "Kehadiran": "kehadiran",
     "LaporanKejadian": "laporanKejadian",
     "TahunPelajaran": "tahunPelajaran",
@@ -800,6 +820,33 @@ function deleteEntity(db, sheetName, id) {
   }
   
   return { success: false, message: "ID tidak ditemukan di sheet " + sheetName };
+}
+
+function updatePengaduanStatusRow(db, id, status, tanggapanBk, petugasBk, tanggalTanggapan) {
+  db = db || getDatabaseSheets();
+  let sheet = db.getSheetByName("Pengaduan_Siswa") || db.getSheetByName("PengaduanSiswa") || db.getSheetByName("Pengaduan");
+  if (!sheet) {
+    return { success: false, message: "Sheet Pengaduan_Siswa tidak ditemukan." };
+  }
+  
+  const headers = sheet.getDataRange().getValues()[0];
+  const statusCol = headers.indexOf("status");
+  const tanggapanCol = headers.indexOf("tanggapanBk");
+  const petugasCol = headers.indexOf("petugasBk");
+  const tanggalCol = headers.indexOf("tanggalTanggapan");
+  
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] == id) {
+      const row = i + 1;
+      if (statusCol !== -1 && status) sheet.getRange(row, statusCol + 1).setValue(status);
+      if (tanggapanCol !== -1 && tanggapanBk !== undefined) sheet.getRange(row, tanggapanCol + 1).setValue(tanggapanBk);
+      if (petugasCol !== -1 && petugasBk !== undefined) sheet.getRange(row, petugasCol + 1).setValue(petugasBk);
+      if (tanggalCol !== -1 && tanggalTanggapan) sheet.getRange(row, tanggalCol + 1).setValue(tanggalTanggapan);
+      return { success: true, message: "Status & Tanggapan pengaduan berhasil diperbarui." };
+    }
+  }
+  return { success: false, message: "Pengaduan tidak ditemukan." };
 }
 
 function saveUser(db, user, isNew) {

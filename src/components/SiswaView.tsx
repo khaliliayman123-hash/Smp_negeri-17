@@ -46,7 +46,8 @@ import {
   User, 
   UserRole,
   Prestasi,
-  Surat
+  Surat,
+  CatatanPerkembangan
 } from '../types';
 import { apiService, normalizeClassName, standardKelasMap } from '../services/api';
 
@@ -73,6 +74,8 @@ interface SiswaViewProps {
   preSelectedSubTab?: string;
   onSaveSurat?: (s: Surat, isNew: boolean) => Promise<boolean>;
   onDeleteSurat?: (id: string) => Promise<boolean>;
+  onSaveCatatanPerkembangan?: (c: CatatanPerkembangan, isNew: boolean) => Promise<boolean>;
+  onDeleteCatatanPerkembangan?: (id: string) => Promise<boolean>;
 }
 
 export default function SiswaView({ 
@@ -86,7 +89,9 @@ export default function SiswaView({
   preSelectedSiswaId,
   preSelectedSubTab,
   onSaveSurat,
-  onDeleteSurat
+  onDeleteSurat,
+  onSaveCatatanPerkembangan,
+  onDeleteCatatanPerkembangan
 }: SiswaViewProps) {
   
   const canModify = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.GURU_BK;
@@ -196,6 +201,20 @@ export default function SiswaView({
     tahun: new Date().getFullYear().toString(),
     juara: '',
     kategori: 'Akademik',
+  });
+
+  // Catatan Perkembangan State (Guru BK & Wali Kelas only)
+  const [isCatatanFormOpen, setIsCatatanFormOpen] = useState(false);
+  const [editingCatatanId, setEditingCatatanId] = useState<string | null>(null);
+  const [isRekapCatatanOpen, setIsRekapCatatanOpen] = useState(false);
+  const [rekapSearchQuery, setRekapSearchQuery] = useState('');
+  const [rekapSelectedKelas, setRekapSelectedKelas] = useState('All');
+  const [rekapSelectedKategori, setRekapSelectedKategori] = useState('All');
+  const [formCatatan, setFormCatatan] = useState<Partial<CatatanPerkembangan>>({
+    tanggal: new Date().toISOString().split('T')[0],
+    kategori: 'Perilaku & Karakter',
+    catatan: '',
+    rekomendasi: ''
   });
 
   // Spreadsheet / Excel View State
@@ -1298,6 +1317,17 @@ export default function SiswaView({
               />
             </label>
           )}
+          {canAccessCatatanWaliKelas && (
+            <button
+              type="button"
+              onClick={() => setIsRekapCatatanOpen(true)}
+              className="flex-1 sm:flex-initial bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+              title="Buka Rekapitulasi dan Manajemen Catatan Perkembangan Siswa"
+            >
+              <FileText size={16} className="text-emerald-700" />
+              <span>Catatan Perkembangan ({(db.catatanPerkembangan || []).length})</span>
+            </button>
+          )}
           {!isStudent && (
             <button
               type="button"
@@ -1457,6 +1487,25 @@ export default function SiswaView({
                               >
                                 <Eye size={14} />
                               </button>
+                              {canAccessCatatanWaliKelas && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewingSiswa(s);
+                                    setActiveDetailTab('catatan_perkembangan');
+                                  }}
+                                  title={`Catatan Perkembangan Siswa (${(db.catatanPerkembangan || []).filter(c => c.siswaId === s.id).length} Catatan)`}
+                                  className="px-2 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg transition text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <FileText size={13} className="text-emerald-700" />
+                                  <span>Catatan</span>
+                                  {(db.catatanPerkembangan || []).filter(c => c.siswaId === s.id).length > 0 && (
+                                    <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                                      {(db.catatanPerkembangan || []).filter(c => c.siswaId === s.id).length}
+                                    </span>
+                                  )}
+                                </button>
+                              )}
                               {canModify && (
                                 <>
                                   <button 
@@ -1639,6 +1688,26 @@ export default function SiswaView({
                 >
                   Surat BK
                 </button>
+                {/* Catatan Perkembangan Subtab: Strictly for Guru BK, Wali Kelas, and Admin. Hidden from students! */}
+                {canAccessCatatanWaliKelas && (
+                  <button 
+                    type="button"
+                    onClick={() => setActiveDetailTab('catatan_perkembangan')}
+                    className={`flex-1 py-2 px-3 border-b-2 text-center transition truncate flex items-center justify-center gap-1.5 ${
+                      activeDetailTab === 'catatan_perkembangan' 
+                        ? 'border-emerald-600 text-emerald-800 bg-emerald-50/60 font-bold' 
+                        : 'border-transparent hover:bg-emerald-50/30 text-emerald-700 font-semibold'
+                    }`}
+                  >
+                    <FileText size={12} className="text-emerald-600 shrink-0" />
+                    <span>Catatan Perkembangan</span>
+                    {((db.catatanPerkembangan || []).filter(c => c.siswaId === viewingSiswa.id)).length > 0 && (
+                      <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                        {((db.catatanPerkembangan || []).filter(c => c.siswaId === viewingSiswa.id)).length}
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Sub-tab Detail Displays */}
@@ -2210,6 +2279,213 @@ export default function SiswaView({
                           ))
                         ) : (
                           <p className="text-[10px] text-slate-400 italic text-center py-4">Siswa belum memiliki catatan prestasi.</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 8. CATATAN PERKEMBANGAN SISWA (Guru BK & Wali Kelas ONLY, Siswa cannot see) */}
+                {activeDetailTab === 'catatan_perkembangan' && canAccessCatatanWaliKelas && (() => {
+                  const catatanList = (db.catatanPerkembangan || [])
+                    .filter(c => c.siswaId === viewingSiswa.id)
+                    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+                  
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                        <div>
+                          <p className="text-[11px] uppercase font-bold text-emerald-800 tracking-wider flex items-center gap-1.5">
+                            <FileText size={13} className="text-emerald-600" />
+                            Catatan Perkembangan Siswa ({catatanList.length})
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Hanya dapat diakses & dilihat oleh Guru BK dan Wali Kelas.
+                          </p>
+                        </div>
+                        {!isCatatanFormOpen && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormCatatan({
+                                siswaId: viewingSiswa.id,
+                                tanggal: new Date().toISOString().split('T')[0],
+                                kategori: 'Perilaku & Karakter',
+                                catatan: '',
+                                rekomendasi: '',
+                                namaGuru: currentUser.nama,
+                                roleGuru: currentUser.role
+                              });
+                              setEditingCatatanId(null);
+                              setIsCatatanFormOpen(true);
+                            }}
+                            className="text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
+                          >
+                            <Plus size={11} /> Tambah Catatan
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Catatan Form */}
+                      {isCatatanFormOpen && (
+                        <div className="p-3.5 bg-emerald-50/50 border border-emerald-200/60 rounded-xl space-y-3">
+                          <p className="font-bold text-[11px] text-emerald-900 flex items-center gap-1">
+                            📝 {editingCatatanId ? 'EDIT CATATAN PERKEMBANGAN' : 'CATATAN PERKEMBANGAN BARU'}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Tanggal</label>
+                              <input
+                                type="date"
+                                value={formCatatan.tanggal || ''}
+                                onChange={(e) => setFormCatatan(prev => ({ ...prev, tanggal: e.target.value }))}
+                                className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Kategori Perkembangan</label>
+                              <select
+                                value={formCatatan.kategori || 'Perilaku & Karakter'}
+                                onChange={(e) => setFormCatatan(prev => ({ ...prev, kategori: e.target.value }))}
+                                className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs"
+                              >
+                                <option value="Perilaku & Karakter">Perilaku & Karakter</option>
+                                <option value="Akademik & Belajar">Akademik & Belajar</option>
+                                <option value="Sosial & Emosional">Sosial & Emosional</option>
+                                <option value="Kedisiplinan & Kehadiran">Kedisiplinan & Kehadiran</option>
+                                <option value="Motivasi & Minat">Motivasi & Minat</option>
+                                <option value="Lainnya">Lainnya</option>
+                              </select>
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Catatan Perkembangan (Format Teks) <span className="text-red-500">*</span>
+                              </label>
+                              <textarea
+                                value={formCatatan.catatan || ''}
+                                onChange={(e) => setFormCatatan(prev => ({ ...prev, catatan: e.target.value }))}
+                                rows={4}
+                                className="p-2.5 border border-slate-200 bg-white rounded-lg w-full text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                placeholder="Tuliskan catatan perkembangan, perubahan perilaku, kendala belajar, atau observasi perkembangan siswa secara rinci..."
+                                required
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Rekomendasi / Tindak Lanjut Pembinaan (Opsional)
+                              </label>
+                              <textarea
+                                value={formCatatan.rekomendasi || ''}
+                                onChange={(e) => setFormCatatan(prev => ({ ...prev, rekomendasi: e.target.value }))}
+                                rows={2}
+                                className="p-2 border border-slate-200 bg-white rounded-lg w-full text-xs"
+                                placeholder="Rekomendasi tindakan atau koordinasi lebih lanjut untuk wali kelas / guru BK..."
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setIsCatatanFormOpen(false)}
+                              className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg font-bold text-xs cursor-pointer"
+                            >
+                              Batal
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!formCatatan.catatan?.trim()) {
+                                  alert('Kolom Catatan Perkembangan wajib diisi!');
+                                  return;
+                                }
+                                if (onSaveCatatanPerkembangan) {
+                                  const payload: CatatanPerkembangan = {
+                                    id: editingCatatanId || 'cp-' + Date.now(),
+                                    siswaId: viewingSiswa.id,
+                                    tanggal: formCatatan.tanggal || new Date().toISOString().split('T')[0],
+                                    kategori: formCatatan.kategori || 'Perilaku & Karakter',
+                                    catatan: formCatatan.catatan || '',
+                                    rekomendasi: formCatatan.rekomendasi || '',
+                                    guruBkId: currentUser.id,
+                                    namaGuru: currentUser.nama || currentUser.username,
+                                    roleGuru: currentUser.role
+                                  };
+                                  const ok = await onSaveCatatanPerkembangan(payload, !editingCatatanId);
+                                  if (ok) {
+                                    setIsCatatanFormOpen(false);
+                                  }
+                                }
+                              }}
+                              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs cursor-pointer transition shadow-sm"
+                            >
+                              Simpan Catatan
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Catatan List */}
+                      <div className="space-y-2.5">
+                        {catatanList.length > 0 ? (
+                          catatanList.map(c => (
+                            <div key={c.id} className="p-3 bg-emerald-50/20 border border-emerald-100/50 rounded-xl space-y-2">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                    {c.kategori || 'Perkembangan'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-medium">
+                                    📅 {c.tanggal}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    ✍️ {c.namaGuru || 'Guru BK/Wali Kelas'} ({c.roleGuru || 'Guru'})
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormCatatan(c);
+                                      setEditingCatatanId(c.id);
+                                      setIsCatatanFormOpen(true);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition"
+                                    title="Edit Catatan"
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                  {onDeleteCatatanPerkembangan && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        if (window.confirm('Yakin ingin menghapus catatan perkembangan ini?')) {
+                                          await onDeleteCatatanPerkembangan(c.id);
+                                        }
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
+                                      title="Hapus Catatan"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed bg-white/70 p-2.5 rounded-lg border border-slate-100">
+                                {c.catatan}
+                              </p>
+                              {c.rekomendasi && (
+                                <div className="p-2 bg-amber-50/60 border border-amber-100 rounded-lg text-[11px] text-amber-900">
+                                  <span className="font-bold">💡 Rekomendasi/Tindak Lanjut: </span>
+                                  <span>{c.rekomendasi}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic text-center py-6">
+                            Belum ada catatan perkembangan untuk siswa ini.
+                          </p>
                         )}
                       </div>
                     </div>
@@ -3763,6 +4039,258 @@ export default function SiswaView({
           </div>
         </div>
       )}
+
+      {/* Modal Rekapitulasi Catatan Perkembangan Siswa */}
+      {isRekapCatatanOpen && canAccessCatatanWaliKelas && (() => {
+        const allCatatan = (db.catatanPerkembangan || []).filter(c => {
+          const student = findSiswa(db, c.siswaId, c);
+          const studentName = (student?.nama || (c as any).namaSiswa || '').toLowerCase();
+          const noteText = (c.catatan || '').toLowerCase();
+          const recText = (c.rekomendasi || '').toLowerCase();
+          const q = rekapSearchQuery.toLowerCase();
+          
+          const matchQuery = !q || studentName.includes(q) || noteText.includes(q) || recText.includes(q);
+          
+          let matchClass = true;
+          if (rekapSelectedKelas !== 'All') {
+            const studentClass = student ? getStudentClassName(student) : ((c as any).kelas || '');
+            matchClass = normalizeClassName(studentClass) === normalizeClassName(rekapSelectedKelas);
+          }
+
+          let matchKategori = true;
+          if (rekapSelectedKategori !== 'All') {
+            matchKategori = c.kategori === rekapSelectedKategori;
+          }
+
+          return matchQuery && matchClass && matchKategori;
+        }).sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+            <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 my-8 animate-scale-up max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 text-base">
+                      REKAPITULASI CATATAN PERKEMBANGAN SISWA
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Daftar dan evaluasi perkembangan seluruh siswa bimbingan (Akses: Admin, Guru BK, & Wali Kelas).
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormCatatan({
+                        siswaId: db.siswa[0]?.id || '',
+                        tanggal: new Date().toISOString().split('T')[0],
+                        kategori: 'Perilaku & Karakter',
+                        catatan: '',
+                        rekomendasi: '',
+                        namaGuru: currentUser.nama,
+                        roleGuru: currentUser.role
+                      });
+                      setEditingCatatanId(null);
+                      setIsCatatanFormOpen(true);
+                      if (db.siswa[0]) {
+                        setViewingSiswa(db.siswa[0]);
+                      }
+                      setActiveDetailTab('catatan_perkembangan');
+                      setIsRekapCatatanOpen(false);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <Plus size={14} /> + Catatan Baru
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsRekapCatatanOpen(false)}
+                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">Cari Siswa / Kata Kunci</label>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama siswa atau isi catatan..."
+                      value={rekapSearchQuery}
+                      onChange={(e) => setRekapSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">Filter Kelas</label>
+                  <select
+                    value={rekapSelectedKelas}
+                    onChange={(e) => setRekapSelectedKelas(e.target.value)}
+                    className="w-full py-1.5 px-3 bg-white border border-slate-200 rounded-lg text-xs"
+                  >
+                    <option value="All">Semua Kelas</option>
+                    {availableClasses.map(cls => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">Filter Kategori</label>
+                  <select
+                    value={rekapSelectedKategori}
+                    onChange={(e) => setRekapSelectedKategori(e.target.value)}
+                    className="w-full py-1.5 px-3 bg-white border border-slate-200 rounded-lg text-xs"
+                  >
+                    <option value="All">Semua Kategori</option>
+                    <option value="Perilaku & Karakter">Perilaku & Karakter</option>
+                    <option value="Akademik & Belajar">Akademik & Belajar</option>
+                    <option value="Sosial & Emosional">Sosial & Emosional</option>
+                    <option value="Kedisiplinan & Kehadiran">Kedisiplinan & Kehadiran</option>
+                    <option value="Motivasi & Minat">Motivasi & Minat</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Content List */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {allCatatan.length > 0 ? (
+                  allCatatan.map((c) => {
+                    const student = findSiswa(db, c.siswaId, c);
+                    const studentClass = student ? getStudentClassName(student) : ((c as any).kelas || '-');
+                    return (
+                      <div
+                        key={c.id}
+                        className="bg-white p-4 rounded-xl border border-slate-200 hover:border-emerald-300 transition shadow-xs space-y-2.5"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs">
+                              {(student?.nama || 'S').charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-extrabold text-slate-800 text-xs flex items-center gap-2">
+                                <span>{student?.nama || 'Siswa'}</span>
+                                <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-semibold border border-indigo-100">
+                                  {studentClass}
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                NIS: {student?.nis || '-'} | NISN: {student?.nisn || '-'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {c.kategori || 'Perkembangan'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              📅 {c.tanggal}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed bg-slate-50/70 p-3 rounded-lg border border-slate-100">
+                          {c.catatan}
+                        </div>
+
+                        {c.rekomendasi && (
+                          <div className="bg-amber-50/70 border border-amber-200/60 p-2.5 rounded-lg text-xs text-amber-900">
+                            <span className="font-bold text-[11px] text-amber-800">💡 Rekomendasi / Tindak Lanjut: </span>
+                            <span>{c.rekomendasi}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                          <div className="flex items-center gap-1.5">
+                            <span>Oleh: <strong>{c.namaGuru || 'Guru'}</strong></span>
+                            {c.roleGuru && (
+                              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[9px] font-bold">
+                                {c.roleGuru}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (student) {
+                                  setViewingSiswa(student);
+                                }
+                                setActiveDetailTab('catatan_perkembangan');
+                                setFormCatatan({
+                                  siswaId: c.siswaId,
+                                  tanggal: c.tanggal,
+                                  kategori: c.kategori,
+                                  catatan: c.catatan,
+                                  rekomendasi: c.rekomendasi || '',
+                                  namaGuru: c.namaGuru,
+                                  roleGuru: c.roleGuru
+                                });
+                                setEditingCatatanId(c.id);
+                                setIsCatatanFormOpen(true);
+                                setIsRekapCatatanOpen(false);
+                              }}
+                              className="px-2.5 py-1 text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 rounded-lg font-bold text-[10px] transition cursor-pointer"
+                            >
+                              ✏️ Buka / Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm('Hapus catatan perkembangan ini?')) {
+                                  if (onDeleteCatatanPerkembangan) {
+                                    await onDeleteCatatanPerkembangan(c.id);
+                                  }
+                                }
+                              }}
+                              className="px-2.5 py-1 text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg font-bold text-[10px] transition cursor-pointer"
+                            >
+                              🗑️ Hapus
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center text-slate-400 space-y-2">
+                    <FileText size={36} className="mx-auto opacity-30 text-slate-400" />
+                    <p className="font-semibold text-xs">Belum ada catatan perkembangan yang sesuai filter.</p>
+                    <p className="text-[10px]">Klik tombol "+ Catatan Baru" untuk menambahkan catatan baru bagi siswa.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+                <span className="text-slate-500 font-medium">
+                  Total Ditemukan: <strong>{allCatatan.length} Catatan</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsRekapCatatanOpen(false)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition cursor-pointer"
+                >
+                  Tutup Rekap
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

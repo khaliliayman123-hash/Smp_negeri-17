@@ -82,6 +82,7 @@ export interface OrangTua {
 
 export interface Akademik {
   id: string; // matches Siswa.id
+  siswaId?: string;
   semester: string;
   rataRataRaport: number;
   catatanWaliKelas: string;
@@ -89,6 +90,7 @@ export interface Akademik {
 
 export interface Kesehatan {
   id: string; // matches Siswa.id
+  siswaId?: string;
   tinggiBadan: number; // cm
   beratBadan: number; // kg
   golonganDarah: string;
@@ -99,6 +101,7 @@ export interface Kesehatan {
 
 export interface Ekonomi {
   id: string; // matches Siswa.id
+  siswaId?: string;
   statusRumah: string; // Milik Sendiri, Sewa, dll.
   penghasilan: string;
   kendaraan: string;
@@ -109,6 +112,7 @@ export interface Ekonomi {
 
 export interface Psikologi {
   id: string; // matches Siswa.id
+  siswaId?: string;
   minat: string;
   bakat: string;
   hobi: string;
@@ -119,6 +123,7 @@ export interface Psikologi {
 
 export interface Sosial {
   id: string; // matches Siswa.id
+  siswaId?: string;
   hubunganTeman: string;
   organisasi?: string;
   masalahSosial?: string;
@@ -132,7 +137,7 @@ export interface Prestasi {
   tahun: string;
   juara: string;
   sertifikat?: string; // Base64 data or filename
-  kategori?: 'Akademik' | 'Non Akademik';
+  kategori?: 'Akademik' | 'Non Akademik' | string;
 }
 
 export interface Pelanggaran {
@@ -221,8 +226,32 @@ export interface CatatanPerkembangan {
   id: string;
   siswaId: string;
   tanggal: string;
-  catatan: string;
-  guruBkId: string;
+  catatan: string; // format teks
+  rekomendasi?: string;
+  guruBkId?: string;
+  namaGuru?: string;
+  roleGuru?: string;
+  kategori?: string; // 'Akademik' | 'Perilaku' | 'Karakter' | 'Sosial' | 'Lainnya'
+}
+
+export interface PengaduanSiswa {
+  id: string;
+  siswaId: string;
+  namaSiswa: string;
+  nis: string;
+  kelas: string;
+  tanggalKejadian: string;
+  tanggalPengaduan: string;
+  judulPengaduan: string;
+  kategori?: string; // 'Perundungan / Bullying' | 'Fasilitas Belajar' | 'Kedisiplinan' | 'Akademik' | 'Lainnya'
+  kronologis: string; // Kolom Kronologis Kejadian format teks
+  buktiFoto?: string; // Base64 data URI atau URL foto (maksimal 1 MB)
+  namaFoto?: string;
+  ukuranFoto?: number; // bytes
+  status: 'Menunggu Respon' | 'Sedang Ditangani' | 'Selesai' | 'Ditolak';
+  tanggapanBk?: string;
+  tanggalTanggapan?: string;
+  petugasBk?: string;
 }
 
 export interface TahunPelajaran {
@@ -298,6 +327,7 @@ export interface DatabaseState {
   surat: Surat[];
   dokumen: Dokumen[];
   catatanPerkembangan: CatatanPerkembangan[];
+  pengaduanSiswa?: PengaduanSiswa[];
   tahunPelajaran: TahunPelajaran[];
   kelas: Kelas[];
   jurusan: Jurusan[];
