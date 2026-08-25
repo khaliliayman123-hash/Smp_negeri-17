@@ -1254,7 +1254,32 @@ export const apiService = {
         }
 
         // Google Sheets is the authoritative remote database.
-        // Synchronize local cache with remote data without resurrecting deleted items.
+        // Synchronize local cache with remote data without losing local offline/un-synced records.
+        const remoteComplaints = sanitized.pengaduanSiswa || [];
+        const localComplaints = localDb.pengaduanSiswa || [];
+        const remoteComplaintIds = new Set(remoteComplaints.map((p: any) => p && p.id).filter(Boolean));
+        const mergedComplaints = [
+          ...remoteComplaints,
+          ...localComplaints.filter((p: any) => p && p.id && !remoteComplaintIds.has(p.id))
+        ];
+        sanitized.pengaduanSiswa = mergedComplaints;
+
+        const remoteKehadiran = sanitized.kehadiran || [];
+        const localKehadiran = localDb.kehadiran || [];
+        const remoteKehadiranIds = new Set(remoteKehadiran.map((k: any) => k && k.id).filter(Boolean));
+        sanitized.kehadiran = [
+          ...remoteKehadiran,
+          ...localKehadiran.filter((k: any) => k && k.id && !remoteKehadiranIds.has(k.id))
+        ];
+
+        const remoteLaporan = sanitized.laporanKejadian || [];
+        const localLaporan = localDb.laporanKejadian || [];
+        const remoteLaporanIds = new Set(remoteLaporan.map((l: any) => l && l.id).filter(Boolean));
+        sanitized.laporanKejadian = [
+          ...remoteLaporan,
+          ...localLaporan.filter((l: any) => l && l.id && !remoteLaporanIds.has(l.id))
+        ];
+
         const updated = {
           ...sanitized,
           config: { ...localDb.config, gasApiUrl: getGasApiUrl(), spreadsheetId: getSpreadsheetId() }
@@ -1813,19 +1838,32 @@ export const apiService = {
   saveLaporanKejadian: async (l: LaporanKejadian, isNew: boolean): Promise<{ success: boolean; message: string }> => {
     const db = loadLocalDatabase();
     if (!db.laporanKejadian) db.laporanKejadian = [];
+    if (!l.id) {
+      l.id = `lap-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    }
     if (isNew) {
-      db.laporanKejadian.push(l);
+      const existingIdx = db.laporanKejadian.findIndex(item => item.id === l.id);
+      if (existingIdx !== -1) {
+        db.laporanKejadian[existingIdx] = l;
+      } else {
+        db.laporanKejadian.unshift(l);
+      }
     } else {
       db.laporanKejadian = db.laporanKejadian.map(item => item.id === l.id ? l : item);
     }
     saveLocalDatabase(db);
-    // Since Google sheets won't have standard support for LaporanKejadian unless we update GAS,
-    // we safely send it to Gas but wrap it so it doesn't crash if the endpoint isn't there.
+    
     if (getGasApiUrl()) {
       try {
-        await apiCall('saveLaporanKejadian', { l, isNew });
-      } catch (e) {
-        console.warn('Google Sheet does not support saveLaporanKejadian yet, saved locally.', e);
+        const res = await apiCall('saveLaporanKejadian', { l, isNew });
+        if (res.success) {
+          return { success: true, message: 'Laporan Kejadian berhasil dikirim dan tersimpan di Google Sheets & Aplikasi.' };
+        } else {
+          return { success: true, message: 'Laporan Kejadian tersimpan di aplikasi. Status Sheets: ' + (res.message || 'Harap update script Apps Script.') };
+        }
+      } catch (e: any) {
+        console.warn('Google Sheet saveLaporanKejadian warning:', e);
+        return { success: true, message: 'Laporan Kejadian tersimpan lokal di aplikasi. Hubungkan/perbarui Apps Script untuk sinkronisasi Google Sheets.' };
       }
     }
     return { success: true, message: 'Laporan Kejadian berhasil dikirim ke Admin & Guru BK.' };
@@ -1869,19 +1907,38 @@ export const apiService = {
       p.id = `aduan-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     }
     if (isNew) {
-      db.pengaduanSiswa.unshift(p);
+      // Avoid duplicate ID if already exists
+      const existingIdx = db.pengaduanSiswa.findIndex(item => item.id === p.id);
+      if (existingIdx !== -1) {
+        db.pengaduanSiswa[existingIdx] = p;
+      } else {
+        db.pengaduanSiswa.unshift(p);
+      }
     } else {
       db.pengaduanSiswa = db.pengaduanSiswa.map(item => item.id === p.id ? p : item);
     }
     saveLocalDatabase(db);
+    
     if (getGasApiUrl()) {
       try {
-        await apiCall('savePengaduan', { p, isNew });
-      } catch (e) {
+        const res = await apiCall('savePengaduan', { p, isNew });
+        if (res.success) {
+          return { success: true, message: 'Pengaduan siswa berhasil dikirim dan tersimpan di Google Sheets & Aplikasi.' };
+        } else {
+          return { 
+            success: true, 
+            message: 'Pengaduan tersimpan di aplikasi. Catatan Sheets: ' + (res.message || 'Harap update script Apps Script Anda.') 
+          };
+        }
+      } catch (e: any) {
         console.warn('Google Sheets savePengaduan warning:', e);
+        return { 
+          success: true, 
+          message: 'Pengaduan tersimpan di aplikasi (Offline/Lokal). Hubungkan atau perbarui Apps Script untuk sinkronisasi Google Sheets.' 
+        };
       }
     }
-    return { success: true, message: 'Pengaduan siswa berhasil dikirim dan tersimpan secara permanen.' };
+    return { success: true, message: 'Pengaduan siswa berhasil dikirim dan tersimpan secara permanen di aplikasi.' };
   },
 
   deletePengaduan: async (id: string): Promise<{ success: boolean; message: string }> => {

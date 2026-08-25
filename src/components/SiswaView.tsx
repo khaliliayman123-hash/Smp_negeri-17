@@ -145,7 +145,7 @@ export default function SiswaView({
     const fromClasses = (db.kelas || []).map(k => k.namaKelas);
     const fromStudents = (db.siswa || []).map(s => {
       const cls = db.kelas?.find(k => k.id === s.kelasId || k.namaKelas === s.kelasId);
-      return cls ? cls.namaKelas : (s.kelas || s.kelasId || '');
+      return cls ? cls.namaKelas : ((s as any).kelas || s.kelasId || '');
     }).filter(Boolean);
     return Array.from(new Set([...fromClasses, ...fromStudents])).filter(Boolean);
   }, [db.kelas, db.siswa]);
@@ -153,7 +153,7 @@ export default function SiswaView({
   const getStudentClassName = (student: Siswa | null | undefined): string => {
     if (!student) return '-';
     const cls = db.kelas?.find(k => k.id === student.kelasId || k.namaKelas === student.kelasId);
-    return cls ? cls.namaKelas : (student.kelas || student.kelasId || '-');
+    return cls ? cls.namaKelas : ((student as any).kelas || student.kelasId || '-');
   };
   
   // Sorting State

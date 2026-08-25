@@ -102,7 +102,11 @@ function fetchFullDatabase(db) {
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
-    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
@@ -173,7 +177,13 @@ function fetchFullDatabase(db) {
     "HomeVisit": "homeVisit",
     "Surat": "surat",
     "Dokumen": "dokumen",
+    "Catatan_Perkembangan": "catatanPerkembangan",
     "CatatanPerkembangan": "catatanPerkembangan",
+    "Pengaduan_Siswa": "pengaduanSiswa",
+    "PengaduanSiswa": "pengaduanSiswa",
+    "Pengaduan": "pengaduanSiswa",
+    "Kehadiran": "kehadiran",
+    "LaporanKejadian": "laporanKejadian",
     "TahunPelajaran": "tahunPelajaran",
     "Kelas": "kelas",
     "LogAktivitas": "logAktivitas"
@@ -258,7 +268,11 @@ function getSheetDataAsJson(sheet) {
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
-    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
@@ -328,9 +342,52 @@ function getSheetDataAsJson(sheet) {
 // Universal Entity Save Row Handler
 function saveRowEntity(db, sheetName, entity, isNew) {
   db = db || getDatabaseSheets();
-  const sheet = db.getSheetByName(sheetName);
+  let sheet = db.getSheetByName(sheetName);
+  
+  // Check common aliases
   if (!sheet) {
-    throw new Error("Sheet '" + sheetName + "' tidak ditemukan.");
+    if (sheetName === "Pengaduan_Siswa") sheet = db.getSheetByName("PengaduanSiswa") || db.getSheetByName("Pengaduan");
+    if (sheetName === "Catatan_Perkembangan") sheet = db.getSheetByName("CatatanPerkembangan");
+    if (sheetName === "LaporanKejadian") sheet = db.getSheetByName("Laporan_Kejadian");
+  }
+
+  // AUTO CREATE SHEET ON THE FLY IF IT DOES NOT EXIST
+  if (!sheet) {
+    const schema = {
+      "Users": ["id", "username", "nama", "role", "email", "isActive"],
+      "Siswa": ["id", "nis", "nisn", "nama", "foto", "tempatLahir", "tanggalLahir", "jenisKelamin", "agama", "alamat", "desa", "kecamatan", "kabupaten", "provinsi", "nomorHp", "email", "kelasId", "tahunMasuk"],
+      "OrangTua": ["id", "namaAyah", "statusAyah", "tempatLahirAyah", "tanggalLahirAyah", "alamatAyah", "agamaAyah", "pendidikanAyah", "pekerjaanAyah", "noHpAyah", "namaIbu", "statusIbu", "tempatLahirIbu", "tanggalLahirIbu", "alamatIbu", "agamaIbu", "pendidikanIbu", "pekerjaanIbu", "noHpIbu", "wali", "statusWali", "tempatLahirWali", "tanggalLahirWali", "alamatWali", "agamaWali", "pendidikanWali", "pekerjaanWali", "noHpWali", "penghasilan", "pendidikanOrangTua"],
+      "Akademik": ["id", "semester", "rataRataRaport", "catatanWaliKelas"],
+      "Kesehatan": ["id", "tinggiBadan", "beratBadan", "golonganDarah", "penyakit", "alergi", "disabilitas"],
+      "Ekonomi": ["id", "statusRumah", "penghasilan", "kendaraan", "pip", "pkh", "kip"],
+      "Psikologi": ["id", "minat", "bakat", "hobi", "gayaBelajar", "citaCita", "kepribadian"],
+      "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
+      "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
+      "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
+      "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+      "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
+      "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
+      "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
+      "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
+      "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
+      "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+      "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+      "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
+      "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+      "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
+      "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
+      "Kelas": ["id", "namaKelas", "waliKelasId"],
+      "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
+    };
+    try {
+      sheet = db.insertSheet(sheetName);
+      const defaultHeaders = schema[sheetName] || (entity ? Object.keys(entity) : ["id"]);
+      sheet.getRange(1, 1, 1, defaultHeaders.length).setValues([defaultHeaders]);
+      sheet.getRange(1, 1, 1, defaultHeaders.length).setFontWeight("bold").setBackground("#e2e8f0");
+    } catch (e) {
+      sheet = db.getSheetByName(sheetName);
+      if (!sheet) throw new Error("Gagal membuat/menemukan Sheet '" + sheetName + "': " + e.toString());
+    }
   }
   
   const headers = sheet.getDataRange().getValues()[0];
@@ -492,7 +549,11 @@ function uploadFullDatabase(db, payload) {
     "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
     "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
     "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
-    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "guruBkId"],
+    "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
     "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
     "Kelas": ["id", "namaKelas", "waliKelasId"],
     "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
@@ -504,10 +565,12 @@ function uploadFullDatabase(db, payload) {
     // Capitalize first letter to get sheet name
     var sheetName = key.charAt(0).toUpperCase() + key.slice(1);
     
-    // Khusus logAktivitas -> LogAktivitas
-    if (key === "logAktivitas") {
-      sheetName = "LogAktivitas";
-    }
+    // Mapping khusus
+    if (key === "logAktivitas") sheetName = "LogAktivitas";
+    if (key === "pengaduanSiswa") sheetName = "Pengaduan_Siswa";
+    if (key === "catatanPerkembangan") sheetName = "Catatan_Perkembangan";
+    if (key === "laporanKejadian") sheetName = "LaporanKejadian";
+    if (key === "kehadiran") sheetName = "Kehadiran";
     
     if (!schema[sheetName]) continue; // Skip keys that are not part of the schema (like 'action')
     
@@ -569,4 +632,76 @@ function uploadFullDatabase(db, payload) {
   } catch (e) {}
   
   return { success: true, message: "Seluruh data lokal berhasil diunggah dan disinkronkan ke Google Spreadsheet!" };
+}
+
+function updatePengaduanStatusRow(db, id, status, tanggapanBk, petugasBk) {
+  db = db || getDatabaseSheets();
+  var sheet = db.getSheetByName("Pengaduan_Siswa") || db.getSheetByName("PengaduanSiswa") || db.getSheetByName("Pengaduan");
+  if (!sheet) {
+    return { success: false, message: "Sheet Pengaduan_Siswa tidak ditemukan." };
+  }
+  
+  var headers = sheet.getDataRange().getValues()[0];
+  var idColIdx = headers.indexOf("id");
+  var statusColIdx = headers.indexOf("status");
+  var tanggapanColIdx = headers.indexOf("tanggapanBk");
+  var tanggalColIdx = headers.indexOf("tanggalTanggapan");
+  var petugasColIdx = headers.indexOf("petugasBk");
+  
+  if (idColIdx === -1) {
+    return { success: false, message: "Kolom 'id' tidak ditemukan pada sheet Pengaduan_Siswa." };
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][idColIdx] == id) {
+      var rowIndex = i + 1;
+      if (statusColIdx !== -1 && status) {
+        sheet.getRange(rowIndex, statusColIdx + 1).setValue(status);
+      }
+      if (tanggapanColIdx !== -1 && tanggapanBk !== undefined) {
+        sheet.getRange(rowIndex, tanggapanColIdx + 1).setValue(tanggapanBk);
+      }
+      if (tanggalColIdx !== -1) {
+        sheet.getRange(rowIndex, tanggalColIdx + 1).setValue(new Date().toISOString().split('T')[0]);
+      }
+      if (petugasColIdx !== -1 && petugasBk) {
+        sheet.getRange(rowIndex, petugasColIdx + 1).setValue(petugasBk);
+      }
+      return { success: true, message: "Status pengaduan siswa berhasil diperbarui." };
+    }
+  }
+  
+  return { success: false, message: "Data pengaduan siswa dengan ID '" + id + "' tidak ditemukan." };
+}
+
+function updateLaporanKejadianStatusRow(db, id, status) {
+  return updateLaporanStatusRow(db, id, status);
+}
+
+function updateLaporanStatusRow(db, id, status) {
+  db = db || getDatabaseSheets();
+  var sheet = db.getSheetByName("LaporanKejadian") || db.getSheetByName("Laporan_Kejadian");
+  if (!sheet) {
+    return { success: false, message: "Sheet LaporanKejadian tidak ditemukan." };
+  }
+  
+  var headers = sheet.getDataRange().getValues()[0];
+  var idColIdx = headers.indexOf("id");
+  var statusColIdx = headers.indexOf("status");
+  
+  if (idColIdx === -1 || statusColIdx === -1) {
+    return { success: false, message: "Kolom 'id' atau 'status' tidak ditemukan." };
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][idColIdx] == id) {
+      var rowIndex = i + 1;
+      sheet.getRange(rowIndex, statusColIdx + 1).setValue(status);
+      return { success: true, message: "Status laporan kejadian berhasil diperbarui di Google Sheets." };
+    }
+  }
+  
+  return { success: false, message: "Data laporan kejadian tidak ditemukan di Google Sheets." };
 }
