@@ -31,7 +31,15 @@ import {
   CheckCircle,
   AlertTriangle,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  PieChart as PieChartIcon,
+  BarChart2,
+  TrendingUp,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  ShieldCheck
 } from 'lucide-react';
 
 interface PengaduanViewProps {
@@ -46,6 +54,15 @@ interface PengaduanViewProps {
     petugas?: string
   ) => Promise<boolean>;
 }
+
+// Color palette for Categories
+const CATEGORY_COLORS: Record<string, { bg: string; fill: string; stroke: string; text: string; hex: string }> = {
+  'Perundungan / Bullying': { bg: 'bg-rose-50', fill: 'fill-rose-500', stroke: 'stroke-rose-600', text: 'text-rose-700', hex: '#f43f5e' },
+  'Fasilitas Belajar': { bg: 'bg-amber-50', fill: 'fill-amber-500', stroke: 'stroke-amber-600', text: 'text-amber-700', hex: '#f59e0b' },
+  'Kedisiplinan & Ketertiban': { bg: 'bg-indigo-50', fill: 'fill-indigo-500', stroke: 'stroke-indigo-600', text: 'text-indigo-700', hex: '#6366f1' },
+  'Masalah Akademik & Kelas': { bg: 'bg-emerald-50', fill: 'fill-emerald-500', stroke: 'stroke-emerald-600', text: 'text-emerald-700', hex: '#10b981' },
+  'Lainnya': { bg: 'bg-sky-50', fill: 'fill-sky-500', stroke: 'stroke-sky-600', text: 'text-sky-700', hex: '#0ea5e9' },
+};
 
 export default function PengaduanView({
   db,
@@ -79,6 +96,8 @@ export default function PengaduanView({
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'form' | 'list'>(isStudent ? 'form' : 'list');
+  const [showAnalytics, setShowAnalytics] = useState(true);
+  const [activeHoverCategory, setActiveHoverCategory] = useState<string | null>(null);
 
   // Form State for new complaint
   const [judulPengaduan, setJudulPengaduan] = useState('');
@@ -218,11 +237,9 @@ export default function PengaduanView({
     }
   };
 
-  // Filter complaints list
-  const complaintsList = useMemo(() => {
+  // Base list of complaints
+  const rawComplaintsList = useMemo(() => {
     let list = (db && db.pengaduanSiswa) ? [...db.pengaduanSiswa] : [];
-
-    // If student, only show complaints submitted by this student
     if (isStudent) {
       const sId = currentSiswa?.id || currentUser.id;
       const sName = (currentSiswa?.nama || currentUser.nama || '').toLowerCase().trim();
@@ -235,6 +252,12 @@ export default function PengaduanView({
         )
       );
     }
+    return list;
+  }, [db, isStudent, currentSiswa, currentUser]);
+
+  // Filtered complaints list
+  const complaintsList = useMemo(() => {
+    let list = [...rawComplaintsList];
 
     // Filters for teachers/admin
     if (searchQuery.trim()) {
@@ -255,7 +278,7 @@ export default function PengaduanView({
     }
 
     if (kategoriFilter !== 'Semua') {
-      list = list.filter(item => item && item.kategori === kategoriFilter);
+      list = list.filter(item => item && (item.kategori === kategoriFilter || (kategoriFilter === 'Fasilitas Belajar' && item.kategori?.includes('Fasilitas'))));
     }
 
     if (kelasFilter !== 'Semua') {
@@ -263,13 +286,148 @@ export default function PengaduanView({
     }
 
     return list;
-  }, [db, isStudent, currentSiswa, currentUser, searchQuery, statusFilter, kategoriFilter, kelasFilter]);
+  }, [rawComplaintsList, searchQuery, statusFilter, kategoriFilter, kelasFilter]);
 
-  // Summary counts
-  const totalCount = complaintsList.length;
-  const waitingCount = complaintsList.filter(c => c.status === 'Menunggu Respon').length;
-  const inProgressCount = complaintsList.filter(c => c.status === 'Sedang Ditangani').length;
-  const resolvedCount = complaintsList.filter(c => c.status === 'Selesai').length;
+  // Statistical calculations for Pie Charts and Percentages
+  const analyticsData = useMemo(() => {
+    const list = rawComplaintsList;
+    const total = list.length;
+
+    // Status counts
+    const waiting = list.filter(c => c.status === 'Menunggu Respon').length;
+    const inProgress = list.filter(c => c.status === 'Sedang Ditangani').length;
+    const resolved = list.filter(c => c.status === 'Selesai').length;
+    const rejected = list.filter(c => c.status === 'Ditolak').length;
+
+    const waitingPct = total > 0 ? (waiting / total) * 100 : 0;
+    const inProgressPct = total > 0 ? (inProgress / total) * 100 : 0;
+    const resolvedPct = total > 0 ? (resolved / total) * 100 : 0;
+    const rejectedPct = total > 0 ? (rejected / total) * 100 : 0;
+
+    // Category distribution
+    const categories = [
+      'Perundungan / Bullying',
+      'Fasilitas Belajar',
+      'Kedisiplinan & Ketertiban',
+      'Masalah Akademik & Kelas',
+      'Lainnya'
+    ];
+
+    const categoryMap: Record<string, number> = {};
+    categories.forEach(cat => { categoryMap[cat] = 0; });
+
+    list.forEach(item => {
+      const rawCat = item.kategori || 'Lainnya';
+      if (rawCat.includes('Bullying') || rawCat.includes('Perundungan')) {
+        categoryMap['Perundungan / Bullying']++;
+      } else if (rawCat.includes('Fasilitas')) {
+        categoryMap['Fasilitas Belajar']++;
+      } else if (rawCat.includes('Kedisiplinan') || rawCat.includes('Ketertiban')) {
+        categoryMap['Kedisiplinan & Ketertiban']++;
+      } else if (rawCat.includes('Akademik') || rawCat.includes('Kelas')) {
+        categoryMap['Masalah Akademik & Kelas']++;
+      } else {
+        categoryMap['Lainnya']++;
+      }
+    });
+
+    const categoryList = categories.map(cat => {
+      const count = categoryMap[cat] || 0;
+      const percent = total > 0 ? (count / total) * 100 : 0;
+      return {
+        name: cat,
+        count,
+        percent,
+        percentFormatted: percent.toFixed(1),
+        colorInfo: CATEGORY_COLORS[cat] || CATEGORY_COLORS['Lainnya']
+      };
+    });
+
+    // Class level distribution (Grade 7, 8, 9)
+    let grade7 = 0;
+    let grade8 = 0;
+    let grade9 = 0;
+    let otherGrade = 0;
+
+    list.forEach(item => {
+      const k = (item.kelas || '').toLowerCase();
+      if (k.includes('7') || k.includes('vii')) grade7++;
+      else if (k.includes('8') || k.includes('viii')) grade8++;
+      else if (k.includes('9') || k.includes('ix')) grade9++;
+      else otherGrade++;
+    });
+
+    const grade7Pct = total > 0 ? (grade7 / total) * 100 : 0;
+    const grade8Pct = total > 0 ? (grade8 / total) * 100 : 0;
+    const grade9Pct = total > 0 ? (grade9 / total) * 100 : 0;
+
+    return {
+      total,
+      waiting,
+      waitingPct,
+      inProgress,
+      inProgressPct,
+      resolved,
+      resolvedPct,
+      rejected,
+      rejectedPct,
+      categoryList,
+      grade7,
+      grade7Pct,
+      grade8,
+      grade8Pct,
+      grade9,
+      grade9Pct
+    };
+  }, [rawComplaintsList]);
+
+  // Helper to calculate SVG Pie Chart slice paths
+  const pieSlices = useMemo(() => {
+    const total = analyticsData.total;
+    if (total === 0) return [];
+
+    let accumulatedAngle = 0;
+    const radius = 80;
+    const cx = 100;
+    const cy = 100;
+
+    return analyticsData.categoryList
+      .filter(cat => cat.count > 0)
+      .map((cat) => {
+        const sliceAngle = (cat.count / total) * 360;
+        const startAngle = accumulatedAngle;
+        const endAngle = accumulatedAngle + sliceAngle;
+        accumulatedAngle += sliceAngle;
+
+        // Convert angles to radians
+        const startRad = ((startAngle - 90) * Math.PI) / 180;
+        const endRad = ((endAngle - 90) * Math.PI) / 180;
+
+        const x1 = cx + radius * Math.cos(startRad);
+        const y1 = cy + radius * Math.sin(startRad);
+        const x2 = cx + radius * Math.cos(endRad);
+        const y2 = cy + radius * Math.sin(endRad);
+
+        const largeArc = sliceAngle > 180 ? 1 : 0;
+
+        // Full circle case
+        if (cat.count === total) {
+          return {
+            ...cat,
+            d: `M ${cx} ${cy - radius} A ${radius} ${radius} 0 1 1 ${cx - 0.001} ${cy - radius} Z`,
+            middleAngle: 180
+          };
+        }
+
+        const pathData = `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+        return {
+          ...cat,
+          d: pathData,
+          middleAngle: startAngle + sliceAngle / 2
+        };
+      });
+  }, [analyticsData]);
 
   const handleDownloadPhoto = (dataUrl: string, filename: string = 'bukti-pengaduan.jpg') => {
     const link = document.createElement('a');
@@ -352,50 +510,406 @@ export default function PengaduanView({
         </div>
       </div>
 
-      {/* Stats row for Teachers/Admins */}
-      {isTeacherOrAdmin && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Pengaduan</p>
-              <p className="text-2xl font-bold text-slate-800 mt-0.5">{totalCount}</p>
+      {/* Analytics & Pie Chart Presentation Section */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden transition-all duration-200">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
+              <PieChartIcon size={18} />
             </div>
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
-              <FileText size={20} />
+            <div>
+              <h2 className="font-bold text-slate-800 text-sm md:text-base flex items-center gap-2">
+                Analisis & Visualisasi Data Pengaduan Siswa
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md">
+                  Persentase & Grafik Pie Real-time
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isStudent 
+                  ? 'Distribusi statistik laporan dan status penanganan pengaduan Anda.'
+                  : 'Distribusi persentase laporan berdasarkan kategori, status penyelesaian, dan tingkat kelas.'}
+              </p>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-amber-100 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Menunggu Respon</p>
-              <p className="text-2xl font-bold text-amber-600 mt-0.5">{waitingCount}</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Clock size={20} />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-sky-100 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-semibold text-sky-600 uppercase tracking-wider">Sedang Ditangani</p>
-              <p className="text-2xl font-bold text-sky-600 mt-0.5">{inProgressCount}</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
-              <AlertCircle size={20} />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Selesai / Teratasi</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-0.5">{resolvedCount}</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle size={20} />
-            </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={() => setShowAnalytics(!showAnalytics)}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              {showAnalytics ? (
+                <>
+                  <ChevronUp size={14} /> Sembunyikan Grafik
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={14} /> Tampilkan Grafik & Persentase
+                </>
+              )}
+            </button>
           </div>
         </div>
-      )}
+
+        {showAnalytics && (
+          <div className="p-5 space-y-6">
+            {/* Top Metric Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/70 p-4 rounded-xl border border-slate-200/70 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Pengaduan</span>
+                  <div className="w-8 h-8 rounded-lg bg-slate-200/80 text-slate-700 flex items-center justify-center">
+                    <FileText size={16} />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-slate-800">{analyticsData.total}</span>
+                  <span className="text-xs font-semibold text-slate-500">laporan</span>
+                </div>
+                <div className="mt-2 text-[10.5px] text-slate-500 flex items-center gap-1">
+                  <ShieldCheck size={13} className="text-emerald-600" />
+                  <span>Tercatat di Google Sheets & App</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-amber-50/60 to-amber-100/40 p-4 rounded-xl border border-amber-200/70 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Menunggu Respon</span>
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                    <Clock size={16} />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-amber-700">{analyticsData.waiting}</span>
+                  <span className="text-xs font-bold text-amber-600 px-1.5 py-0.5 bg-amber-100/80 rounded-md">
+                    {analyticsData.waitingPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="mt-2 w-full bg-amber-200/60 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${analyticsData.waitingPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-sky-50/60 to-sky-100/40 p-4 rounded-xl border border-sky-200/70 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-sky-700 uppercase tracking-wider">Sedang Ditangani</span>
+                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
+                    <AlertCircle size={16} />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-sky-700">{analyticsData.inProgress}</span>
+                  <span className="text-xs font-bold text-sky-600 px-1.5 py-0.5 bg-sky-100/80 rounded-md">
+                    {analyticsData.inProgressPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="mt-2 w-full bg-sky-200/60 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-sky-500 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${analyticsData.inProgressPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-emerald-50/60 to-emerald-100/40 p-4 rounded-xl border border-emerald-200/70 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Selesai / Teratasi</span>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <CheckCircle size={16} />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-emerald-700">{analyticsData.resolved}</span>
+                  <span className="text-xs font-bold text-emerald-600 px-1.5 py-0.5 bg-emerald-100/80 rounded-md">
+                    {analyticsData.resolvedPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="mt-2 w-full bg-emerald-200/60 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${analyticsData.resolvedPct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Charts Grid: 1. SVG Pie Chart with Category Percentages & 2. Status & Grade Distributions */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2">
+              {/* LEFT: SVG Pie Chart & Category Breakdown (7 Cols) */}
+              <div className="lg:col-span-7 bg-slate-50/60 rounded-2xl p-5 border border-slate-200/80 flex flex-col justify-between">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-xs md:text-sm flex items-center gap-1.5">
+                      <PieChartIcon size={15} className="text-emerald-600" />
+                      Grafik Pie: Persentase Kategori Pengaduan Siswa
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Arahkan kursor atau klik kategori untuk memfilter data laporan di bawah
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                    {analyticsData.total} Data Teranalisis
+                  </span>
+                </div>
+
+                {analyticsData.total === 0 ? (
+                  <div className="py-12 text-center text-slate-400 space-y-2">
+                    <PieChartIcon size={40} className="mx-auto text-slate-300 stroke-1" />
+                    <p className="text-xs font-bold text-slate-600">Belum Ada Data untuk Digambarkan</p>
+                    <p className="text-[11px] text-slate-400">
+                      Grafik pie dan persentase akan muncul secara otomatis saat pengaduan pertama dilaporkan.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center pt-4">
+                    {/* SVG Pie Representation */}
+                    <div className="sm:col-span-5 flex flex-col items-center justify-center relative">
+                      <div className="relative w-48 h-48 drop-shadow-xs">
+                        <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
+                          {pieSlices.map((slice, index) => {
+                            const isHovered = activeHoverCategory === slice.name;
+                            return (
+                              <path
+                                key={slice.name}
+                                d={slice.d}
+                                fill={slice.colorInfo.hex}
+                                className={`transition-all duration-300 cursor-pointer hover:opacity-90 ${
+                                  isHovered ? 'scale-105 stroke-white stroke-2' : 'stroke-white stroke-1.5'
+                                }`}
+                                onMouseEnter={() => setActiveHoverCategory(slice.name)}
+                                onMouseLeave={() => setActiveHoverCategory(null)}
+                                onClick={() => {
+                                  if (kategoriFilter === slice.name) {
+                                    setKategoriFilter('Semua');
+                                  } else {
+                                    setKategoriFilter(slice.name);
+                                  }
+                                }}
+                              >
+                                <title>{`${slice.name}: ${slice.count} aduan (${slice.percentFormatted}%)`}</title>
+                              </path>
+                            );
+                          })}
+                          {/* Inner circle cutout for modern Donut / Pie appearance */}
+                          <circle cx="100" cy="100" r="46" fill="#f8fafc" className="stroke-white stroke-2" />
+                        </svg>
+
+                        {/* Center text badge */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                          <span className="text-[10px] uppercase font-bold text-slate-400">Total</span>
+                          <span className="text-xl font-black text-slate-800 leading-none">{analyticsData.total}</span>
+                          <span className="text-[9.5px] font-semibold text-emerald-700 mt-0.5">Laporan</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-2 text-center">
+                        *Klik irisan diagram untuk filter langsung
+                      </p>
+                    </div>
+
+                    {/* Category Legend & Exact Percentages */}
+                    <div className="sm:col-span-7 space-y-2">
+                      {analyticsData.categoryList.map((cat) => {
+                        const isSelected = kategoriFilter === cat.name;
+                        const isHovered = activeHoverCategory === cat.name;
+
+                        return (
+                          <div
+                            key={cat.name}
+                            onClick={() => {
+                              if (kategoriFilter === cat.name) {
+                                setKategoriFilter('Semua');
+                              } else {
+                                setKategoriFilter(cat.name);
+                              }
+                            }}
+                            onMouseEnter={() => setActiveHoverCategory(cat.name)}
+                            onMouseLeave={() => setActiveHoverCategory(null)}
+                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                              isSelected 
+                                ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' 
+                                : isHovered
+                                  ? 'bg-white border-slate-300 shadow-xs'
+                                  : 'bg-white/80 hover:bg-white border-slate-200/80'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span 
+                                className="w-3 h-3 rounded-full shrink-0 shadow-2xs" 
+                                style={{ backgroundColor: cat.colorInfo.hex }}
+                              />
+                              <span className="text-xs font-bold text-slate-700 truncate">
+                                {cat.name}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-semibold text-slate-500">
+                                {cat.count} aduan
+                              </span>
+                              <span 
+                                className="text-[11px] font-bold px-2 py-0.5 rounded-md min-w-[50px] text-right"
+                                style={{ 
+                                  backgroundColor: `${cat.colorInfo.hex}18`, 
+                                  color: cat.colorInfo.hex 
+                                }}
+                              >
+                                {cat.percentFormatted}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* RIGHT: Status Completion & Level Distribution (5 Cols) */}
+              <div className="lg:col-span-5 space-y-4 flex flex-col justify-between">
+                {/* 1. Status Penyelesaian Pengaduan */}
+                <div className="bg-slate-50/60 rounded-2xl p-4.5 border border-slate-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <TrendingUp size={14} className="text-emerald-600" />
+                      Tingkat & Status Penanganan
+                    </h4>
+                    <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Rasio Selesai: {analyticsData.resolvedPct.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  {/* Multi-segment status progress bar */}
+                  <div className="space-y-1.5">
+                    <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden flex shadow-inner">
+                      {analyticsData.resolved > 0 && (
+                        <div 
+                          className="bg-emerald-500 h-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.resolvedPct}%` }}
+                          title={`Selesai: ${analyticsData.resolved} (${analyticsData.resolvedPct.toFixed(1)}%)`}
+                        />
+                      )}
+                      {analyticsData.inProgress > 0 && (
+                        <div 
+                          className="bg-sky-500 h-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.inProgressPct}%` }}
+                          title={`Sedang Ditangani: ${analyticsData.inProgress} (${analyticsData.inProgressPct.toFixed(1)}%)`}
+                        />
+                      )}
+                      {analyticsData.waiting > 0 && (
+                        <div 
+                          className="bg-amber-500 h-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.waitingPct}%` }}
+                          title={`Menunggu Respon: ${analyticsData.waiting} (${analyticsData.waitingPct.toFixed(1)}%)`}
+                        />
+                      )}
+                      {analyticsData.rejected > 0 && (
+                        <div 
+                          className="bg-rose-500 h-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.rejectedPct}%` }}
+                          title={`Ditolak: ${analyticsData.rejected} (${analyticsData.rejectedPct.toFixed(1)}%)`}
+                        />
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-[10.5px]">
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>Selesai ({analyticsData.resolvedPct.toFixed(0)}%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+                        <span>Ditangani ({analyticsData.inProgressPct.toFixed(0)}%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span>Menunggu ({analyticsData.waitingPct.toFixed(0)}%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Distribusi Pengaduan per Tingkat Kelas (7, 8, 9) */}
+                <div className="bg-slate-50/60 rounded-2xl p-4.5 border border-slate-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <BarChart2 size={14} className="text-indigo-600" />
+                      Distribusi Tingkat Kelas Siswa
+                    </h4>
+                    <span className="text-[10px] text-slate-400">Jenjang SMP</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* Kelas 7 */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-bold text-slate-700">Kelas 7 (Tingkat VII)</span>
+                        <span className="font-semibold text-slate-600">{analyticsData.grade7} aduan ({analyticsData.grade7Pct.toFixed(1)}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-indigo-500 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.grade7Pct}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Kelas 8 */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-bold text-slate-700">Kelas 8 (Tingkat VIII)</span>
+                        <span className="font-semibold text-slate-600">{analyticsData.grade8} aduan ({analyticsData.grade8Pct.toFixed(1)}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-teal-500 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.grade8Pct}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Kelas 9 */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-bold text-slate-700">Kelas 9 (Tingkat IX)</span>
+                        <span className="font-semibold text-slate-600">{analyticsData.grade9} aduan ({analyticsData.grade9Pct.toFixed(1)}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${analyticsData.grade9Pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter quick status indicator if active */}
+                {(kategoriFilter !== 'Semua' || statusFilter !== 'Semua' || kelasFilter !== 'Semua' || searchQuery.trim() !== '') && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px] text-emerald-800">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Filter size={12} />
+                      Filter Aktif: {kategoriFilter !== 'Semua' ? kategoriFilter : ''} {statusFilter !== 'Semua' ? `(${statusFilter})` : ''} {kelasFilter !== 'Semua' ? `[${kelasFilter}]` : ''}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setKategoriFilter('Semua');
+                        setStatusFilter('Semua');
+                        setKelasFilter('Semua');
+                        setSearchQuery('');
+                      }}
+                      className="font-bold underline hover:text-emerald-950 cursor-pointer"
+                    >
+                      Reset Filter
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* VIEW 1: STUDENT FORM (AJUKAN PENGADUAN) */}
       {isStudent && activeTab === 'form' && (

@@ -68,8 +68,17 @@ function setupHDSDatabaseSheets() {
     "Dokumen": [
       "id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"
     ],
-    "CatatanPerkembangan": [
-      "id", "siswaId", "tanggal", "catatan", "guruBkId"
+    "Catatan_Perkembangan": [
+      "id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"
+    ],
+    "Pengaduan_Siswa": [
+      "id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"
+    ],
+    "Kehadiran": [
+      "id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"
+    ],
+    "LaporanKejadian": [
+      "id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"
     ],
     "TahunPelajaran": [
       "id", "tahun", "semester", "isActive"

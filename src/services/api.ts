@@ -817,9 +817,15 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
-  // Ensure user attendance records are preserved and valid
+  // Ensure user attendance and complaint records are preserved and valid
   if (parsed.kehadiran && Array.isArray(parsed.kehadiran)) {
     parsed.kehadiran = parsed.kehadiran.filter((k: any) => k && (k.id || k.siswaId));
+  }
+
+  if (!parsed.pengaduanSiswa || !Array.isArray(parsed.pengaduanSiswa)) {
+    parsed.pengaduanSiswa = [];
+  } else {
+    parsed.pengaduanSiswa = parsed.pengaduanSiswa.filter((p: any) => p && (p.id || p.judulPengaduan || p.kronologis));
   }
 
   parsed._sanitized_v11 = true;

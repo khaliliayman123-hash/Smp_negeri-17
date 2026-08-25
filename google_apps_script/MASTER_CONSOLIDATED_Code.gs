@@ -370,6 +370,10 @@ function handleRequest(e) {
       case "deleteLaporanKejadian":
         responseData = deleteEntity(db, "LaporanKejadian", postData.id);
         break;
+
+      case "updateLaporanKejadianStatus":
+        responseData = updateLaporanStatusRow(db, postData.id, postData.status);
+        break;
         
       case "addLog":
         responseData = appendLog(db, postData);

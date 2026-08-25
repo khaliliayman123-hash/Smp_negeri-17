@@ -157,11 +157,43 @@ function handleRequest(e) {
         break;
         
       case "saveCatatanPerkembangan":
-        responseData = saveEntity(db, "CatatanPerkembangan", postData.c, postData.isNew);
+        responseData = saveEntity(db, "Catatan_Perkembangan", postData.c, postData.isNew);
         break;
         
       case "deleteCatatanPerkembangan":
-        responseData = deleteEntity(db, "CatatanPerkembangan", postData.id);
+        responseData = deleteEntity(db, "Catatan_Perkembangan", postData.id);
+        break;
+
+      case "savePengaduan":
+        responseData = saveEntity(db, "Pengaduan_Siswa", postData.p, postData.isNew);
+        break;
+        
+      case "deletePengaduan":
+        responseData = deleteEntity(db, "Pengaduan_Siswa", postData.id);
+        break;
+
+      case "updatePengaduanStatus":
+        responseData = updatePengaduanStatusRow(db, postData.id, postData.status, postData.tanggapanBk, postData.petugasBk, postData.tanggalTanggapan);
+        break;
+
+      case "saveKehadiran":
+        responseData = saveEntity(db, "Kehadiran", postData.k, postData.isNew);
+        break;
+
+      case "deleteKehadiran":
+        responseData = deleteEntity(db, "Kehadiran", postData.id);
+        break;
+
+      case "saveLaporanKejadian":
+        responseData = saveEntity(db, "LaporanKejadian", postData.l, postData.isNew);
+        break;
+
+      case "deleteLaporanKejadian":
+        responseData = deleteEntity(db, "LaporanKejadian", postData.id);
+        break;
+
+      case "updateLaporanKejadianStatus":
+        responseData = updateLaporanStatusRow(db, postData.id, postData.status);
         break;
         
       case "addLog":

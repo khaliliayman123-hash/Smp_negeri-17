@@ -49,7 +49,7 @@ import {
   Surat,
   CatatanPerkembangan
 } from '../types';
-import { apiService, normalizeClassName, standardKelasMap } from '../services/api';
+import { apiService, normalizeClassName, standardKelasMap, findSiswa, getSiswaInfo } from '../services/api';
 
 interface SiswaViewProps {
   db: DatabaseState;
@@ -139,6 +139,22 @@ export default function SiswaView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedKelas, setSelectedKelas] = useState('All');
   const [selectedGender, setSelectedGender] = useState('All');
+
+  // List of available unique classes
+  const availableClasses = useMemo(() => {
+    const fromClasses = (db.kelas || []).map(k => k.namaKelas);
+    const fromStudents = (db.siswa || []).map(s => {
+      const cls = db.kelas?.find(k => k.id === s.kelasId || k.namaKelas === s.kelasId);
+      return cls ? cls.namaKelas : (s.kelas || s.kelasId || '');
+    }).filter(Boolean);
+    return Array.from(new Set([...fromClasses, ...fromStudents])).filter(Boolean);
+  }, [db.kelas, db.siswa]);
+
+  const getStudentClassName = (student: Siswa | null | undefined): string => {
+    if (!student) return '-';
+    const cls = db.kelas?.find(k => k.id === student.kelasId || k.namaKelas === student.kelasId);
+    return cls ? cls.namaKelas : (student.kelas || student.kelasId || '-');
+  };
   
   // Sorting State
   const [sortBy, setSortBy] = useState<'nama' | 'nis' | 'kelas'>('nama');
