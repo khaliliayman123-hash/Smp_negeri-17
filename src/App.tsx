@@ -222,7 +222,7 @@ export default function App() {
       surat: filterByStudent(db.surat),
       dokumen: filterByStudent(db.dokumen),
       catatanPerkembangan: filterByStudent(db.catatanPerkembangan),
-      pengaduanSiswa: (db.pengaduanSiswa || []).filter(item => {
+      pengaduanSiswa: isWaliKelas ? (db.pengaduanSiswa || []).filter(item => {
         if (!item) return false;
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
         const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
@@ -232,7 +232,7 @@ export default function App() {
           Array.from(assignedClassNamesLower).some(c => c.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() === itemKelasNorm)
         );
         return isStudentMatch || isClassMatch;
-      }),
+      }) : (db.pengaduanSiswa || []),
       kehadiran: (db.kehadiran || []).filter(item => {
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
         const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
@@ -2391,7 +2391,7 @@ export default function App() {
         {activeMenu === 'pengaduan' && (
           <AppErrorBoundary fallbackTitle="Layanan Pengaduan Siswa">
             <PengaduanView
-              db={filteredDb}
+              db={db}
               currentUser={currentUser}
               onSavePengaduan={async (p, isNew) => {
                 setDb(prev => {

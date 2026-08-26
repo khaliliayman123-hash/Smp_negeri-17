@@ -87,7 +87,6 @@ export const isOldOrDefaultUrl = (url?: string): boolean => {
   if (trimmed === DEFAULT_GAS_API_URL) return false;
   if (trimmed.includes('AKfycbwL5nTSIsbpgFE6JxD2STMWQiFezjN8Dw6xTg_ktbtVUOHTvLinLFuu6ojYe0QP9bZm')) return true;
   if (trimmed.includes('AKfycbwBbd5COo3yw1rij0XNuqSR62c22IuaFf7ty5Zqb-7PcCnTvHD1nHzss4gjKQWNiF10')) return true;
-  if (trimmed.includes('AKfycbw')) return true;
   return false;
 };
 
