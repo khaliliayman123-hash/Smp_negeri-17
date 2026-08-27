@@ -1883,6 +1883,41 @@ export default function App() {
             db={filteredDb}
             currentUser={currentUser}
             onNavigateToSiswa={handleNavigateToSiswa}
+            onSaveCatatanPerkembangan={async (c, isNew) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                const currentList = prev.catatanPerkembangan || [];
+                const list = isNew 
+                  ? [c, ...currentList] 
+                  : currentList.map(item => item.id === c.id ? c : item);
+                return { ...prev, catatanPerkembangan: list };
+              });
+              try {
+                const res = await apiService.saveCatatanPerkembangan(c, isNew);
+                showToast(res.message, res.success ? 'success' : 'error');
+                return res.success;
+              } catch {
+                showToast('Gagal menyimpan Catatan Perkembangan.', 'error');
+                return false;
+              }
+            }}
+            onDeleteCatatanPerkembangan={async (id) => {
+              setDb(prev => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  catatanPerkembangan: (prev.catatanPerkembangan || []).filter(item => item.id !== id)
+                };
+              });
+              try {
+                const res = await apiService.deleteCatatanPerkembangan(id);
+                showToast(res.message, res.success ? 'success' : 'error');
+                return res.success;
+              } catch {
+                showToast('Gagal menghapus Catatan Perkembangan.', 'error');
+                return false;
+              }
+            }}
             onSaveLaporanKejadian={async (l, isNew) => {
               setDb(prev => {
                 if (!prev) return prev;

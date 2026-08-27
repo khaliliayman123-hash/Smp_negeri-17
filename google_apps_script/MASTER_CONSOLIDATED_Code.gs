@@ -680,14 +680,19 @@ function getSheetDataAsJson(sheet) {
   });
   
   const jsonArray = [];
+  const cleanSheetName = sheetName.toLowerCase().replace(/[^a-z0-9]/g, '');
   
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const obj = {};
+    let hasAnyValue = false;
     
     mappedHeaders.forEach(function(header, idx) {
       if (header) {
         let val = row[idx];
+        if (val !== undefined && val !== null && String(val).trim() !== "") {
+          hasAnyValue = true;
+        }
         if (val instanceof Date) {
           val = val.toISOString().split('T')[0];
         } else if (val === "true") {
@@ -698,6 +703,18 @@ function getSheetDataAsJson(sheet) {
         obj[header] = val;
       }
     });
+    
+    // Skip completely empty rows
+    if (!hasAnyValue) continue;
+
+    // Filter CatatanPerkembangan / Catatan_Perkembangan: if ID is empty or catatan is blank, treat as deleted/invalid
+    if (cleanSheetName === "catatanperkembangan") {
+      const cleanId = String(obj.id || "").trim();
+      const cleanCatatan = String(obj.catatan || "").trim();
+      if (!cleanId || !cleanCatatan) {
+        continue;
+      }
+    }
     
     // Auto-heal missing ID in Siswa row to keep database references secure and prevent duplicate sync rows
     if (sheetName === "Siswa" && (!obj.id || obj.id.toString().trim() === "")) {

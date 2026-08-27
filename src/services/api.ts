@@ -155,14 +155,15 @@ export async function processPendingDeletionsQueue(): Promise<{ processed: numbe
   return { processed: processedCount, remaining: remainingTasks.length };
 }
 
+export function isTombstoned(id?: string | number | null): boolean {
+  if (!id && id !== 0) return false;
+  const tombstones = getDeletedTombstones();
+  return tombstones.has(String(id).trim());
+}
+
 export function filterOutTombstones(db: DatabaseState): DatabaseState {
   const tombstones = getDeletedTombstones();
   if (tombstones.size === 0) return db;
-
-  const isTombstoned = (id?: string | number | null) => {
-    if (!id && id !== 0) return false;
-    return tombstones.has(String(id).trim());
-  };
 
   return {
     ...db,
@@ -603,7 +604,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   }
 
-  if (parsed._sanitized_v11 && !migrated) {
+  if (parsed._sanitized_v12 && !migrated) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
 
@@ -930,8 +931,20 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
-  // Ensure every student has a valid akademik record and sync catatanWaliKelas with catatanPerkembangan
-  if (!parsed.catatanPerkembangan) parsed.catatanPerkembangan = [];
+  // Strictly filter catatanPerkembangan to discard empty rows, missing IDs, or blank content
+  if (parsed.catatanPerkembangan && Array.isArray(parsed.catatanPerkembangan)) {
+    parsed.catatanPerkembangan = parsed.catatanPerkembangan.filter((c: any) => {
+      if (!c || typeof c !== 'object') return false;
+      const cleanId = String(c.id || '').trim();
+      const cleanCatatan = String(c.catatan || '').trim();
+      const cleanSiswaId = String(c.siswaId || c.idSiswa || '').trim();
+      if (!cleanId || !cleanCatatan || !cleanSiswaId) return false;
+      if (isTombstoned(cleanId) || isTombstoned(cleanSiswaId)) return false;
+      return true;
+    });
+  } else {
+    parsed.catatanPerkembangan = [];
+  }
   if (!parsed.akademik) parsed.akademik = [];
 
   parsed.siswa.forEach((s: any) => {
@@ -956,21 +969,18 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     const cpList = parsed.catatanPerkembangan.filter((c: any) => c && (c.siswaId === s.id || c.idSiswa === s.id));
     const latestCp = cpList.sort((a: any, b: any) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
 
-    const akaNoteValid = aka.catatanWaliKelas && aka.catatanWaliKelas.toString().trim() !== '' && aka.catatanWaliKelas.toString().trim() !== '-';
-    const cpNoteValid = latestCp && latestCp.catatan && latestCp.catatan.toString().trim() !== '' && latestCp.catatan.toString().trim() !== '-';
-
-    if (!akaNoteValid && cpNoteValid) {
-      aka.catatanWaliKelas = latestCp.catatan;
-      migrated = true;
-    } else if (akaNoteValid && !cpNoteValid) {
-      parsed.catatanPerkembangan.push({
-        id: `cp-${s.id}-${Date.now()}`,
-        siswaId: s.id,
-        tanggal: new Date().toISOString().split('T')[0],
-        catatan: aka.catatanWaliKelas,
-        guruBkId: 'walikelas'
-      });
-      migrated = true;
+    // Synchronize latest catatanPerkembangan with akademik.catatanWaliKelas
+    // If Catatan Perkembangan was deleted in Google Sheet / app, clear catatanWaliKelas so no stale note persists
+    if (latestCp && latestCp.catatan && latestCp.catatan.toString().trim() !== '') {
+      if (aka.catatanWaliKelas !== latestCp.catatan) {
+        aka.catatanWaliKelas = latestCp.catatan;
+        migrated = true;
+      }
+    } else {
+      if (aka.catatanWaliKelas && aka.catatanWaliKelas.toString().trim() !== '' && aka.catatanWaliKelas !== '-') {
+        aka.catatanWaliKelas = '';
+        migrated = true;
+      }
     }
   });
 
@@ -985,7 +995,7 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.pengaduanSiswa = parsed.pengaduanSiswa.filter((p: any) => p && (p.id || p.judulPengaduan || p.kronologis));
   }
 
-  parsed._sanitized_v11 = true;
+  parsed._sanitized_v12 = true;
   return { sanitized: parsed as DatabaseState, migrated };
 }
 
@@ -1001,7 +1011,7 @@ function loadLocalDatabase(): DatabaseState {
         parsed._cleaned_default_data_v2 = true;
       }
       const { sanitized, migrated } = sanitizeDatabaseState(parsed);
-      if (migrated || !stored.includes('_sanitized_v11')) {
+      if (migrated || !stored.includes('_sanitized_v12')) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
       }
       currentDatabase = sanitized;
@@ -1012,7 +1022,7 @@ function loadLocalDatabase(): DatabaseState {
   }
   const clonedInitial = JSON.parse(JSON.stringify(INITIAL_DATABASE));
   clonedInitial._cleaned_default_data_v2 = true;
-  clonedInitial._sanitized_v11 = true;
+  clonedInitial._sanitized_v12 = true;
   const { sanitized } = sanitizeDatabaseState(clonedInitial);
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
   currentDatabase = sanitized;
@@ -1902,7 +1912,20 @@ export const apiService = {
     addDeletedTombstone(id);
     addToDeletionQueue(id, 'deleteCatatanPerkembangan', { id });
     const db = loadLocalDatabase();
-    db.catatanPerkembangan = db.catatanPerkembangan.filter(item => item.id !== id);
+    const targetCp = (db.catatanPerkembangan || []).find(item => item.id === id);
+    db.catatanPerkembangan = (db.catatanPerkembangan || []).filter(item => item.id !== id);
+
+    // Also update/clear corresponding catatanWaliKelas in akademik
+    if (targetCp && targetCp.siswaId && db.akademik) {
+      const ak = db.akademik.find(a => a.id === targetCp.siswaId || (a as any).siswaId === targetCp.siswaId);
+      if (ak) {
+        const remainingCp = db.catatanPerkembangan
+          .filter(c => c.siswaId === targetCp.siswaId)
+          .sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))[0];
+        ak.catatanWaliKelas = remainingCp ? remainingCp.catatan : '';
+      }
+    }
+
     saveLocalDatabase(db);
     processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
     return { success: true, message: 'Catatan Perkembangan berhasil dihapus permanen.' };
