@@ -44,26 +44,50 @@ function saveSiswaPackage(db, payload) {
 
 function deleteSiswaPackage(db, siswaId) {
   db = db || getDatabaseSheets();
-  if (!siswaId) {
+  if (siswaId === undefined || siswaId === null || siswaId === '') {
     Logger.log("Peringatan: Fungsi deleteSiswaPackage dijalankan tanpa parameter siswaId.");
     return { success: false, message: "siswaId kosong." };
   }
   
-  // List of sheets where the student ID is the first column (id)
-  const idSheets = ["Siswa", "OrangTua", "Kesehatan", "Ekonomi", "Psikologi", "Sosial", "Akademik"];
+  const targetIdStr = String(siswaId).trim().toLowerCase();
+
+  // 1. Sheets where primary key is the student ID (id)
+  const primaryIdSheets = ["Siswa", "OrangTua", "Kesehatan", "Ekonomi", "Psikologi", "Sosial", "Akademik"];
   
-  // List of sheets where the student ID is the second column (siswaId)
-  const siswaIdSheets = ["Prestasi", "Pelanggaran", "RemisiPoin", "Konseling", "Asesmen", "HomeVisit", "Surat", "Dokumen", "CatatanPerkembangan"];
+  // 2. Child/Relational sheets where the foreign key is siswaId (or pelaporId/id)
+  const relatedSheets = [
+    "Prestasi", 
+    "Pelanggaran", 
+    "RemisiPoin", 
+    "Konseling", 
+    "Asesmen", 
+    "HomeVisit", 
+    "Surat", 
+    "Dokumen", 
+    "Catatan_Perkembangan", 
+    "Pengaduan_Siswa", 
+    "Kehadiran", 
+    "LaporanKejadian"
+  ];
   
   let deletedCount = 0;
   
-  // 1. Delete from idSheets
-  idSheets.forEach(function(sheetName) {
-    const sheet = db.getSheetByName(sheetName);
-    if (sheet) {
+  // 1. Delete from primary sheets
+  primaryIdSheets.forEach(function(sheetName) {
+    const sheet = typeof findSheetFlexible === "function" ? findSheetFlexible(db, sheetName) : db.getSheetByName(sheetName);
+    if (sheet && sheet.getLastRow() > 1) {
       const values = sheet.getDataRange().getValues();
+      const headers = values[0];
+      let idCol = 0;
+      for (let c = 0; c < headers.length; c++) {
+        if (String(headers[c] || "").trim().toLowerCase() === "id") {
+          idCol = c;
+          break;
+        }
+      }
       for (let i = values.length - 1; i >= 1; i--) {
-        if (values[i][0] == siswaId) {
+        const val = String(values[i][idCol] !== undefined ? values[i][idCol] : "").trim().toLowerCase();
+        if (val === targetIdStr) {
           sheet.deleteRow(i + 1);
           deletedCount++;
         }
@@ -71,13 +95,28 @@ function deleteSiswaPackage(db, siswaId) {
     }
   });
   
-  // 2. Delete from siswaIdSheets
-  siswaIdSheets.forEach(function(sheetName) {
-    const sheet = db.getSheetByName(sheetName);
-    if (sheet) {
+  // 2. Delete from related/child sheets
+  relatedSheets.forEach(function(sheetName) {
+    const sheet = typeof findSheetFlexible === "function" ? findSheetFlexible(db, sheetName) : db.getSheetByName(sheetName);
+    if (sheet && sheet.getLastRow() > 1) {
       const values = sheet.getDataRange().getValues();
+      const headers = values[0];
+      let sCol = -1;
+      
+      for (let c = 0; c < headers.length; c++) {
+        const h = String(headers[c] || "").trim().toLowerCase();
+        if (h === "siswaid" || h === "siswa_id" || h === "id_siswa" || h === "pelaporid" || h === "idsiswa") {
+          sCol = c;
+          break;
+        }
+      }
+      if (sCol === -1) {
+        sCol = values[0].length > 1 ? 1 : 0;
+      }
+      
       for (let i = values.length - 1; i >= 1; i--) {
-        if (values[i][1] == siswaId) {
+        const val = String(values[i][sCol] !== undefined ? values[i][sCol] : "").trim().toLowerCase();
+        if (val === targetIdStr) {
           sheet.deleteRow(i + 1);
           deletedCount++;
         }
@@ -85,5 +124,8 @@ function deleteSiswaPackage(db, siswaId) {
     }
   });
   
-  return { success: true, message: "Siswa dan seluruh rekam data terkait berhasil dihapus secara online (" + deletedCount + " baris)." };
+  return { 
+    success: true, 
+    message: "Siswa dan seluruh rekam data terkait berhasil dihapus permanen di Google Sheets (" + deletedCount + " baris)." 
+  };
 }

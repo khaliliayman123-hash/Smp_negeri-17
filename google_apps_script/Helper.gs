@@ -465,22 +465,69 @@ function saveEntity(db, sheetName, entity, isNew) {
   }
 }
 
+function findSheetFlexible(db, sheetName) {
+  if (!db || !sheetName) return null;
+  let sheet = db.getSheetByName(sheetName);
+  if (sheet) return sheet;
+  
+  const cleanTarget = sheetName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const allSheets = db.getSheets();
+  for (let i = 0; i < allSheets.length; i++) {
+    const sName = allSheets[i].getName();
+    const cleanS = sName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanS === cleanTarget) {
+      return allSheets[i];
+    }
+  }
+  return null;
+}
+
 function deleteEntity(db, sheetName, id) {
   db = db || getDatabaseSheets();
-  const sheet = db.getSheetByName(sheetName);
+  if (id === undefined || id === null || id === '') {
+    return { success: false, message: "ID kosong." };
+  }
+  const sheet = findSheetFlexible(db, sheetName);
   if (!sheet) {
-    return { success: false, message: "Sheet tidak ditemukan." };
+    return { success: false, message: "Sheet '" + sheetName + "' tidak ditemukan." };
   }
   
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { success: true, message: "Data sudah tidak ada di sheet " + sheetName };
+  }
+
   const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] == id) {
+  if (values.length <= 1) {
+    return { success: true, message: "Data sudah tidak ada di sheet " + sheetName };
+  }
+
+  const headers = values[0];
+  let idCol = -1;
+  const targetIdStr = String(id).trim().toLowerCase();
+
+  for (let c = 0; c < headers.length; c++) {
+    const h = String(headers[c] || "").trim().toLowerCase();
+    if (h === "id" || h === "id_" + sheetName.toLowerCase() || h === sheetName.toLowerCase() + "id") {
+      idCol = c;
+      break;
+    }
+  }
+  if (idCol === -1) idCol = 0;
+
+  let deletedCount = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const cellVal = String(values[i][idCol] !== undefined ? values[i][idCol] : "").trim().toLowerCase();
+    if (cellVal === targetIdStr) {
       sheet.deleteRow(i + 1);
-      return { success: true, message: sheetName + " berhasil dihapus." };
+      deletedCount++;
     }
   }
   
-  return { success: false, message: "ID tidak ditemukan di sheet " + sheetName };
+  if (deletedCount > 0) {
+    return { success: true, message: sheetName + " berhasil dihapus permanen (" + deletedCount + " baris)." };
+  }
+  return { success: true, message: "ID tidak ditemukan di sheet " + sheetName + " (sudah terhapus)." };
 }
 
 function saveUser(db, user, isNew) {

@@ -737,6 +737,7 @@ function getSheetDataAsJson(sheet) {
 
 // Universal Entity Save Row Handler
 function saveRowEntity(db, sheetName, entity, isNew) {
+  if (!entity || typeof entity !== "object") return;
   db = db || getDatabaseSheets();
   let sheet = db.getSheetByName(sheetName);
   
@@ -747,34 +748,35 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     if (sheetName === "LaporanKejadian") sheet = db.getSheetByName("Laporan_Kejadian");
   }
 
+  const schema = {
+    "Users": ["id", "username", "nama", "role", "email", "isActive"],
+    "Siswa": ["id", "nis", "nisn", "nama", "foto", "tempatLahir", "tanggalLahir", "jenisKelamin", "agama", "alamat", "desa", "kecamatan", "kabupaten", "provinsi", "nomorHp", "email", "kelasId", "tahunMasuk"],
+    "OrangTua": ["id", "namaAyah", "statusAyah", "tempatLahirAyah", "tanggalLahirAyah", "alamatAyah", "agamaAyah", "pendidikanAyah", "pekerjaanAyah", "noHpAyah", "namaIbu", "statusIbu", "tempatLahirIbu", "tanggalLahirIbu", "alamatIbu", "agamaIbu", "pendidikanIbu", "pekerjaanIbu", "noHpIbu", "wali", "statusWali", "tempatLahirWali", "tanggalLahirWali", "alamatWali", "agamaWali", "pendidikanWali", "pekerjaanWali", "noHpWali", "penghasilan", "pendidikanOrangTua"],
+    "Akademik": ["id", "semester", "rataRataRaport", "catatanWaliKelas"],
+    "Kesehatan": ["id", "tinggiBadan", "beratBadan", "golonganDarah", "penyakit", "alergi", "disabilitas"],
+    "Ekonomi": ["id", "statusRumah", "penghasilan", "kendaraan", "pip", "pkh", "kip"],
+    "Psikologi": ["id", "minat", "bakat", "hobi", "gayaBelajar", "citaCita", "kepribadian"],
+    "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
+    "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
+    "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
+    "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
+    "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
+    "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
+    "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
+    "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
+    "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
+    "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
+    "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
+    "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
+    "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
+    "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
+    "Kelas": ["id", "namaKelas", "waliKelasId"],
+    "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
+  };
+
   // AUTO CREATE SHEET ON THE FLY IF IT DOES NOT EXIST
   if (!sheet) {
-    const schema = {
-      "Users": ["id", "username", "nama", "role", "email", "isActive"],
-      "Siswa": ["id", "nis", "nisn", "nama", "foto", "tempatLahir", "tanggalLahir", "jenisKelamin", "agama", "alamat", "desa", "kecamatan", "kabupaten", "provinsi", "nomorHp", "email", "kelasId", "tahunMasuk"],
-      "OrangTua": ["id", "namaAyah", "statusAyah", "tempatLahirAyah", "tanggalLahirAyah", "alamatAyah", "agamaAyah", "pendidikanAyah", "pekerjaanAyah", "noHpAyah", "namaIbu", "statusIbu", "tempatLahirIbu", "tanggalLahirIbu", "alamatIbu", "agamaIbu", "pendidikanIbu", "pekerjaanIbu", "noHpIbu", "wali", "statusWali", "tempatLahirWali", "tanggalLahirWali", "alamatWali", "agamaWali", "pendidikanWali", "pekerjaanWali", "noHpWali", "penghasilan", "pendidikanOrangTua"],
-      "Akademik": ["id", "semester", "rataRataRaport", "catatanWaliKelas"],
-      "Kesehatan": ["id", "tinggiBadan", "beratBadan", "golonganDarah", "penyakit", "alergi", "disabilitas"],
-      "Ekonomi": ["id", "statusRumah", "penghasilan", "kendaraan", "pip", "pkh", "kip"],
-      "Psikologi": ["id", "minat", "bakat", "hobi", "gayaBelajar", "citaCita", "kepribadian"],
-      "Sosial": ["id", "hubunganTeman", "organisasi", "masalahSosial"],
-      "Prestasi": ["id", "siswaId", "namaPrestasi", "tingkat", "tahun", "juara", "sertifikat", "kategori"],
-      "Pelanggaran": ["id", "siswaId", "tanggal", "jenisPelanggaran", "kategori", "poin", "guruPelapor", "tindakLanjut", "status"],
-      "RemisiPoin": ["id", "siswaId", "tanggal", "jenisRemisi", "kategori", "poin", "guruPemberi", "keterangan"],
-      "Konseling": ["id", "nomorKonseling", "siswaId", "tanggal", "jenis", "guruBkId", "permasalahan", "analisis", "solusi", "hasil", "tindakLanjut"],
-      "Asesmen": ["id", "siswaId", "akpd", "dcm", "aum", "iq", "bakat", "minat"],
-      "HomeVisit": ["id", "siswaId", "tanggal", "tujuan", "hasil", "dokumentasi"],
-      "Surat": ["id", "siswaId", "nomorSurat", "tanggal", "jenisSurat", "perihal", "isiSurat"],
-      "Dokumen": ["id", "siswaId", "jenisDokumen", "namaFile", "fileData", "tanggalUpload"],
-      "Catatan_Perkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
-      "CatatanPerkembangan": ["id", "siswaId", "tanggal", "catatan", "rekomendasi", "guruBkId", "namaGuru", "roleGuru", "kategori"],
-      "Pengaduan_Siswa": ["id", "siswaId", "namaSiswa", "nis", "kelas", "tanggalKejadian", "tanggalPengaduan", "judulPengaduan", "kategori", "kronologis", "buktiFoto", "namaFoto", "status", "tanggapanBk", "tanggalTanggapan", "petugasBk"],
-      "Kehadiran": ["id", "siswaId", "mingguKe", "bulan", "tahun", "hadir", "sakit", "izin", "alfa", "keterangan"],
-      "LaporanKejadian": ["id", "tanggal", "pelaporId", "namaPelapor", "kelasId", "ringkasan", "detail", "status"],
-      "TahunPelajaran": ["id", "tahun", "semester", "isActive"],
-      "Kelas": ["id", "namaKelas", "waliKelasId"],
-      "LogAktivitas": ["id", "timestamp", "userId", "namaUser", "role", "aktivitas", "detail"]
-    };
     try {
       sheet = db.insertSheet(sheetName);
       const defaultHeaders = schema[sheetName] || (entity ? Object.keys(entity) : ["id"]);
@@ -786,10 +788,14 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     }
   }
   
-  const headers = sheet.getDataRange().getValues()[0];
+  const headers = sheet.getDataRange().getValues()[0] || [];
+  const standardHeaders = schema[sheetName] || [];
+  const mappedHeaders = headers.map(function(h) {
+    return normalizeHeaderKey(h, standardHeaders);
+  });
   
   let rowIndex = -1;
-  if (!isNew) {
+  if (!isNew && entity.id) {
     // Edit Row - first search for existing row
     const dataRange = sheet.getDataRange();
     const values = dataRange.getValues();
@@ -803,9 +809,9 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     
     // Safety fallback for Siswa sheet: If ID not found, check by NIS / NISN / Nama to prevent duplicate rows
     if (rowIndex === -1 && sheetName === "Siswa") {
-      const nisColIdx = headers.indexOf("nis");
-      const nisnColIdx = headers.indexOf("nisn");
-      const namaColIdx = headers.indexOf("nama");
+      const nisColIdx = mappedHeaders.indexOf("nis");
+      const nisnColIdx = mappedHeaders.indexOf("nisn");
+      const namaColIdx = mappedHeaders.indexOf("nama");
       
       for (let i = 1; i < values.length; i++) {
         const rowNIS = values[i][nisColIdx];
@@ -829,8 +835,9 @@ function saveRowEntity(db, sheetName, entity, isNew) {
   if (isNew || rowIndex === -1) {
     // Append Row (either explicitly new, or fallback because ID wasn't found in this sheet yet)
     const newRow = [];
-    headers.forEach(function(header) {
-      let val = entity[header] !== undefined ? entity[header] : "";
+    headers.forEach(function(header, idx) {
+      const normKey = mappedHeaders[idx] || header;
+      let val = entity[normKey] !== undefined ? entity[normKey] : (entity[header] !== undefined ? entity[header] : "");
       if (typeof val === 'string' && val.length > 45000) {
         val = val.substring(0, 45000) + "... (truncated)";
       }
@@ -840,15 +847,34 @@ function saveRowEntity(db, sheetName, entity, isNew) {
   } else {
     // Edit Row
     headers.forEach(function(header, colIdx) {
-      if (entity[header] !== undefined) {
-        let val = entity[header];
-        if (typeof val === 'string' && val.length > 45000) {
-          val = val.substring(0, 45000) + "... (truncated)";
+      const normKey = mappedHeaders[colIdx] || header;
+      const val = entity[normKey] !== undefined ? entity[normKey] : entity[header];
+      if (val !== undefined) {
+        let cleanVal = val;
+        if (typeof cleanVal === 'string' && cleanVal.length > 45000) {
+          cleanVal = cleanVal.substring(0, 45000) + "... (truncated)";
         }
-        sheet.getRange(rowIndex, colIdx + 1).setValue(val);
+        sheet.getRange(rowIndex, colIdx + 1).setValue(cleanVal);
       }
     });
   }
+}
+
+function findSheetFlexible(db, sheetName) {
+  if (!db || !sheetName) return null;
+  let sheet = db.getSheetByName(sheetName);
+  if (sheet) return sheet;
+  
+  const cleanTarget = sheetName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const allSheets = db.getSheets();
+  for (let i = 0; i < allSheets.length; i++) {
+    const sName = allSheets[i].getName();
+    const cleanS = sName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanS === cleanTarget) {
+      return allSheets[i];
+    }
+  }
+  return null;
 }
 
 function saveEntity(db, sheetName, entity, isNew) {
@@ -863,20 +889,50 @@ function saveEntity(db, sheetName, entity, isNew) {
 
 function deleteEntity(db, sheetName, id) {
   db = db || getDatabaseSheets();
-  const sheet = db.getSheetByName(sheetName);
+  if (id === undefined || id === null || id === '') {
+    return { success: false, message: "ID kosong." };
+  }
+  const sheet = findSheetFlexible(db, sheetName);
   if (!sheet) {
-    return { success: false, message: "Sheet tidak ditemukan." };
+    return { success: false, message: "Sheet '" + sheetName + "' tidak ditemukan." };
   }
   
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { success: true, message: "Data sudah tidak ada di sheet " + sheetName };
+  }
+
   const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] == id) {
+  if (values.length <= 1) {
+    return { success: true, message: "Data sudah tidak ada di sheet " + sheetName };
+  }
+
+  const headers = values[0];
+  let idCol = -1;
+  const targetIdStr = String(id).trim().toLowerCase();
+
+  for (let c = 0; c < headers.length; c++) {
+    const h = String(headers[c] || "").trim().toLowerCase();
+    if (h === "id" || h === "id_" + sheetName.toLowerCase() || h === sheetName.toLowerCase() + "id") {
+      idCol = c;
+      break;
+    }
+  }
+  if (idCol === -1) idCol = 0;
+
+  let deletedCount = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const cellVal = String(values[i][idCol] !== undefined ? values[i][idCol] : "").trim().toLowerCase();
+    if (cellVal === targetIdStr) {
       sheet.deleteRow(i + 1);
-      return { success: true, message: sheetName + " berhasil dihapus." };
+      deletedCount++;
     }
   }
   
-  return { success: false, message: "ID tidak ditemukan di sheet " + sheetName };
+  if (deletedCount > 0) {
+    return { success: true, message: sheetName + " berhasil dihapus permanen (" + deletedCount + " baris)." };
+  }
+  return { success: true, message: "ID tidak ditemukan di sheet " + sheetName + " (sudah terhapus)." };
 }
 
 function updatePengaduanStatusRow(db, id, status, tanggapanBk, petugasBk, tanggalTanggapan) {
@@ -1017,9 +1073,10 @@ function uploadFullDatabase(db, payload) {
     if (sheet) {
       // Clear all rows below header (using clearContent is thousands of times faster than deleteRows)
       var lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        sheet.getRange(2, 1, lastRow - 1, schema[sheetName].length).clearContent();
-      } else if (lastRow === 0) {
+      var lastCol = sheet.getLastColumn();
+      if (lastRow > 1 && lastCol > 0) {
+        sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+      } else if (lastRow === 0 || lastCol === 0) {
         // Terapkan headers jika kosong total
         var headers = schema[sheetName];
         sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1028,19 +1085,28 @@ function uploadFullDatabase(db, payload) {
       
       var items = payload[key];
       if (items && items.length > 0) {
-        var headers = sheet.getDataRange().getValues()[0];
-        var rowsToAdd = [];
+        var rawHeaders = sheet.getDataRange().getValues()[0] || [];
+        var standardHeaders = schema[sheetName] || rawHeaders;
+        var mappedHeaders = rawHeaders.map(function(h) {
+          return normalizeHeaderKey(h, standardHeaders);
+        });
         
+        var rowsToAdd = [];
         items.forEach(function(item) {
           var row = [];
-          headers.forEach(function(header) {
-            row.push(item[header] !== undefined ? item[header] : "");
+          rawHeaders.forEach(function(header, idx) {
+            var normKey = mappedHeaders[idx] || header;
+            var val = item[normKey] !== undefined ? item[normKey] : (item[header] !== undefined ? item[header] : "");
+            if (typeof val === 'string' && val.length > 45000) {
+              val = val.substring(0, 45000) + "... (truncated)";
+            }
+            row.push(val);
           });
           rowsToAdd.push(row);
         });
         
-        if (rowsToAdd.length > 0) {
-          sheet.getRange(2, 1, rowsToAdd.length, headers.length).setValues(rowsToAdd);
+        if (rowsToAdd.length > 0 && rawHeaders.length > 0) {
+          sheet.getRange(2, 1, rowsToAdd.length, rawHeaders.length).setValues(rowsToAdd);
         }
       }
     }
@@ -1168,26 +1234,50 @@ function saveSiswaPackage(db, payload) {
 
 function deleteSiswaPackage(db, siswaId) {
   db = db || getDatabaseSheets();
-  if (!siswaId) {
+  if (siswaId === undefined || siswaId === null || siswaId === '') {
     Logger.log("Peringatan: Fungsi deleteSiswaPackage dijalankan tanpa parameter siswaId.");
     return { success: false, message: "siswaId kosong." };
   }
   
-  // List of sheets where the student ID is the first column (id)
-  const idSheets = ["Siswa", "OrangTua", "Kesehatan", "Ekonomi", "Psikologi", "Sosial", "Akademik"];
+  const targetIdStr = String(siswaId).trim().toLowerCase();
+
+  // 1. Sheets where primary key is the student ID (id)
+  const primaryIdSheets = ["Siswa", "OrangTua", "Kesehatan", "Ekonomi", "Psikologi", "Sosial", "Akademik"];
   
-  // List of sheets where the student ID is the second column (siswaId)
-  const siswaIdSheets = ["Prestasi", "Pelanggaran", "RemisiPoin", "Konseling", "Asesmen", "HomeVisit", "Surat", "Dokumen", "CatatanPerkembangan"];
+  // 2. Child/Relational sheets where the foreign key is siswaId (or pelaporId/id)
+  const relatedSheets = [
+    "Prestasi", 
+    "Pelanggaran", 
+    "RemisiPoin", 
+    "Konseling", 
+    "Asesmen", 
+    "HomeVisit", 
+    "Surat", 
+    "Dokumen", 
+    "Catatan_Perkembangan", 
+    "Pengaduan_Siswa", 
+    "Kehadiran", 
+    "LaporanKejadian"
+  ];
   
   let deletedCount = 0;
   
-  // 1. Delete from idSheets
-  idSheets.forEach(function(sheetName) {
-    const sheet = db.getSheetByName(sheetName);
-    if (sheet) {
+  // 1. Delete from primary sheets
+  primaryIdSheets.forEach(function(sheetName) {
+    const sheet = findSheetFlexible(db, sheetName);
+    if (sheet && sheet.getLastRow() > 1) {
       const values = sheet.getDataRange().getValues();
+      const headers = values[0];
+      let idCol = 0;
+      for (let c = 0; c < headers.length; c++) {
+        if (String(headers[c] || "").trim().toLowerCase() === "id") {
+          idCol = c;
+          break;
+        }
+      }
       for (let i = values.length - 1; i >= 1; i--) {
-        if (values[i][0] == siswaId) {
+        const val = String(values[i][idCol] !== undefined ? values[i][idCol] : "").trim().toLowerCase();
+        if (val === targetIdStr) {
           sheet.deleteRow(i + 1);
           deletedCount++;
         }
@@ -1195,13 +1285,28 @@ function deleteSiswaPackage(db, siswaId) {
     }
   });
   
-  // 2. Delete from siswaIdSheets
-  siswaIdSheets.forEach(function(sheetName) {
-    const sheet = db.getSheetByName(sheetName);
-    if (sheet) {
+  // 2. Delete from related/child sheets
+  relatedSheets.forEach(function(sheetName) {
+    const sheet = findSheetFlexible(db, sheetName);
+    if (sheet && sheet.getLastRow() > 1) {
       const values = sheet.getDataRange().getValues();
+      const headers = values[0];
+      let sCol = -1;
+      
+      for (let c = 0; c < headers.length; c++) {
+        const h = String(headers[c] || "").trim().toLowerCase();
+        if (h === "siswaid" || h === "siswa_id" || h === "id_siswa" || h === "pelaporid" || h === "idsiswa") {
+          sCol = c;
+          break;
+        }
+      }
+      if (sCol === -1) {
+        sCol = values[0].length > 1 ? 1 : 0;
+      }
+      
       for (let i = values.length - 1; i >= 1; i--) {
-        if (values[i][1] == siswaId) {
+        const val = String(values[i][sCol] !== undefined ? values[i][sCol] : "").trim().toLowerCase();
+        if (val === targetIdStr) {
           sheet.deleteRow(i + 1);
           deletedCount++;
         }
@@ -1209,7 +1314,10 @@ function deleteSiswaPackage(db, siswaId) {
     }
   });
   
-  return { success: true, message: "Siswa dan seluruh rekam data terkait berhasil dihapus secara online (" + deletedCount + " baris)." };
+  return { 
+    success: true, 
+    message: "Siswa dan seluruh rekam data terkait berhasil dihapus permanen di Google Sheets (" + deletedCount + " baris)." 
+  };
 }
 
 // ==========================================

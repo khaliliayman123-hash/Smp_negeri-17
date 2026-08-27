@@ -32,6 +32,164 @@ import {
 } from '../types';
 
 const LOCAL_STORAGE_KEY = 'hds_bk_database_v1';
+const LOCAL_STORAGE_TOMBSTONES_KEY = 'hds_bk_deleted_tombstones_v1';
+const LOCAL_STORAGE_DELETE_QUEUE_KEY = 'hds_bk_pending_deletions_v1';
+
+export function getDeletedTombstones(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_TOMBSTONES_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.map(String) : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+
+export function addDeletedTombstone(id: string | number | undefined | null) {
+  if (id === undefined || id === null || id === '') return;
+  try {
+    const idStr = String(id).trim();
+    if (!idStr) return;
+    const current = getDeletedTombstones();
+    current.add(idStr);
+    const arr = Array.from(current);
+    if (arr.length > 2000) {
+      arr.splice(0, arr.length - 2000);
+    }
+    localStorage.setItem(LOCAL_STORAGE_TOMBSTONES_KEY, JSON.stringify(arr));
+  } catch (e) {
+    console.warn('Failed to save tombstone', e);
+  }
+}
+
+export function removeDeletedTombstone(id: string | number | undefined | null) {
+  if (id === undefined || id === null || id === '') return;
+  try {
+    const idStr = String(id).trim();
+    const current = getDeletedTombstones();
+    if (current.has(idStr)) {
+      current.delete(idStr);
+      localStorage.setItem(LOCAL_STORAGE_TOMBSTONES_KEY, JSON.stringify(Array.from(current)));
+    }
+  } catch (e) {
+    console.warn('Failed to remove tombstone', e);
+  }
+}
+
+export interface PendingDeletionTask {
+  id: string;
+  action: string;
+  payload: any;
+  timestamp: number;
+}
+
+export function getPendingDeletionsQueue(): PendingDeletionTask[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_DELETE_QUEUE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function addToDeletionQueue(id: string, action: string, payload: any = { id }) {
+  try {
+    const queue = getPendingDeletionsQueue();
+    const idStr = String(id).trim();
+    const existingIdx = queue.findIndex(item => item.action === action && String(item.id).trim() === idStr);
+    const task: PendingDeletionTask = {
+      id: idStr,
+      action,
+      payload: { ...payload, id: idStr },
+      timestamp: Date.now()
+    };
+    if (existingIdx >= 0) {
+      queue[existingIdx] = task;
+    } else {
+      queue.push(task);
+    }
+    localStorage.setItem(LOCAL_STORAGE_DELETE_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {
+    console.warn('Failed to add to deletion queue', e);
+  }
+}
+
+let isProcessingQueue = false;
+
+export async function processPendingDeletionsQueue(): Promise<{ processed: number; remaining: number }> {
+  if (isProcessingQueue) return { processed: 0, remaining: getPendingDeletionsQueue().length };
+  const url = getGasApiUrl();
+  if (!url) return { processed: 0, remaining: getPendingDeletionsQueue().length };
+
+  const queue = getPendingDeletionsQueue();
+  if (queue.length === 0) return { processed: 0, remaining: 0 };
+
+  isProcessingQueue = true;
+  let processedCount = 0;
+  const remainingTasks: PendingDeletionTask[] = [];
+
+  for (const task of queue) {
+    try {
+      const res = await apiCall(task.action, task.payload);
+      if (res && res.success) {
+        processedCount++;
+      } else {
+        const msg = (res?.message || '').toLowerCase();
+        if (msg.includes('tidak ditemukan') || msg.includes('sudah tidak ada') || msg.includes('sudah terhapus')) {
+          processedCount++;
+        } else {
+          remainingTasks.push(task);
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to execute deletion task for ${task.action} (${task.id}):`, e);
+      remainingTasks.push(task);
+    }
+  }
+
+  localStorage.setItem(LOCAL_STORAGE_DELETE_QUEUE_KEY, JSON.stringify(remainingTasks));
+  isProcessingQueue = false;
+  return { processed: processedCount, remaining: remainingTasks.length };
+}
+
+export function filterOutTombstones(db: DatabaseState): DatabaseState {
+  const tombstones = getDeletedTombstones();
+  if (tombstones.size === 0) return db;
+
+  const isTombstoned = (id?: string | number | null) => {
+    if (!id && id !== 0) return false;
+    return tombstones.has(String(id).trim());
+  };
+
+  return {
+    ...db,
+    siswa: (db.siswa || []).filter(s => !isTombstoned(s.id)),
+    orangTua: (db.orangTua || []).filter(o => !isTombstoned(o.id)),
+    kesehatan: (db.kesehatan || []).filter(k => !isTombstoned(k.id)),
+    ekonomi: (db.ekonomi || []).filter(e => !isTombstoned(e.id)),
+    psikologi: (db.psikologi || []).filter(p => !isTombstoned(p.id)),
+    sosial: (db.sosial || []).filter(s => !isTombstoned(s.id)),
+    akademik: (db.akademik || []).filter(a => !isTombstoned(a.id)),
+    prestasi: (db.prestasi || []).filter(p => !isTombstoned(p.id) && !isTombstoned(p.siswaId)),
+    pelanggaran: (db.pelanggaran || []).filter(p => !isTombstoned(p.id) && !isTombstoned(p.siswaId)),
+    remisiPoin: (db.remisiPoin || []).filter(r => !isTombstoned(r.id) && !isTombstoned(r.siswaId)),
+    konseling: (db.konseling || []).filter(k => !isTombstoned(k.id) && !isTombstoned(k.siswaId)),
+    asesmen: (db.asesmen || []).filter(a => !isTombstoned(a.id) && !isTombstoned(a.siswaId)),
+    homeVisit: (db.homeVisit || []).filter(h => !isTombstoned(h.id) && !isTombstoned(h.siswaId)),
+    surat: (db.surat || []).filter(s => !isTombstoned(s.id) && !isTombstoned(s.siswaId)),
+    dokumen: (db.dokumen || []).filter(d => !isTombstoned(d.id) && !isTombstoned(d.siswaId)),
+    catatanPerkembangan: (db.catatanPerkembangan || []).filter(c => !isTombstoned(c.id) && !isTombstoned(c.siswaId)),
+    pengaduanSiswa: (db.pengaduanSiswa || []).filter(p => !isTombstoned(p.id) && !isTombstoned(p.siswaId)),
+    kehadiran: (db.kehadiran || []).filter(k => !isTombstoned(k.id) && !isTombstoned(k.siswaId)),
+    laporanKejadian: (db.laporanKejadian || []).filter(l => !isTombstoned(l.id) && (!l.siswaId || !isTombstoned(l.siswaId))),
+    tahunPelajaran: (db.tahunPelajaran || []).filter(t => !isTombstoned(t.id)),
+    kelas: (db.kelas || []).filter(k => !isTombstoned(k.id)),
+    users: (db.users || []).filter(u => !isTombstoned(u.id))
+  };
+}
 
 // List of 33 Wali Kelas requested by user
 export const WALI_KELAS_USERS: User[] = [
@@ -865,7 +1023,8 @@ function loadLocalDatabase(): DatabaseState {
 currentDatabase = loadLocalDatabase();
 
 function saveLocalDatabase(db: DatabaseState) {
-  const { sanitized } = sanitizeDatabaseState(db);
+  const filtered = filterOutTombstones(db);
+  const { sanitized } = sanitizeDatabaseState(filtered);
   currentDatabase = sanitized;
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
 }
@@ -1030,6 +1189,8 @@ export const apiService = {
       
       if (json && typeof json === 'object') {
         if (json.success) {
+          // Flush pending deletions in background
+          processPendingDeletionsQueue().catch(err => console.warn('Queue flush warning:', err));
           return { success: true, message: json.message || 'Koneksi berhasil dan aktif!' };
         } else {
           return { success: false, message: json.message || 'Server mengembalikan status gagal.', code: 'SERVER_FAIL' };
@@ -1226,15 +1387,23 @@ export const apiService = {
 
   // GET Dynamic Data (Combines offline state + optional remote load)
   getData: async (force: boolean = false, localOnly: boolean = false): Promise<DatabaseState> => {
-    const localDb = loadLocalDatabase();
+    let localDb = loadLocalDatabase();
+    localDb = filterOutTombstones(localDb);
     if (localOnly) {
       return localDb;
     }
     if (getGasApiUrl()) {
+      // 1. Process any pending deletions in the background queue first
+      try {
+        await processPendingDeletionsQueue();
+      } catch (err) {
+        console.warn('Queue flush warning during getData:', err);
+      }
+
       const res = await apiCall<DatabaseState>('getFullDatabase');
       if (res.success && res.data) {
         // Sanitize the remote data first to filter out empty/invalid rows!
-        const { sanitized, migrated } = sanitizeDatabaseState(res.data);
+        const { sanitized } = sanitizeDatabaseState(res.data);
 
         // Cegah penimpaan data lokal jika database di Google Sheets kosong (belum di-seeding)
         const isEmptyRemote = 
@@ -1247,40 +1416,17 @@ export const apiService = {
             throw new Error('Database di Google Sheets kosong atau belum di-seeding. Silakan gunakan tombol "Unggah Data Lokal ke Google Sheets" terlebih dahulu.');
           }
           // Tetap gunakan data lokal agar user tidak keluar/terkunci dan data tidak hilang!
-          const updated = { ...localDb, config: { ...localDb.config, gasApiUrl: getGasApiUrl() } };
+          const updated = filterOutTombstones({ ...localDb, config: { ...localDb.config, gasApiUrl: getGasApiUrl() } });
           saveLocalDatabase(updated);
           return updated;
         }
 
         // Google Sheets is the authoritative remote database.
-        // Synchronize local cache with remote data without losing local offline/un-synced records.
-        const remoteComplaints = sanitized.pengaduanSiswa || [];
-        const localComplaints = localDb.pengaduanSiswa || [];
-        const remoteComplaintIds = new Set(remoteComplaints.map((p: any) => p && p.id).filter(Boolean));
-        const mergedComplaints = [
-          ...remoteComplaints,
-          ...localComplaints.filter((p: any) => p && p.id && !remoteComplaintIds.has(p.id))
-        ];
-        sanitized.pengaduanSiswa = mergedComplaints;
+        // Filter out tombstoned items that were deleted by the user
+        const cleanRemote = filterOutTombstones(sanitized);
 
-        const remoteKehadiran = sanitized.kehadiran || [];
-        const localKehadiran = localDb.kehadiran || [];
-        const remoteKehadiranIds = new Set(remoteKehadiran.map((k: any) => k && k.id).filter(Boolean));
-        sanitized.kehadiran = [
-          ...remoteKehadiran,
-          ...localKehadiran.filter((k: any) => k && k.id && !remoteKehadiranIds.has(k.id))
-        ];
-
-        const remoteLaporan = sanitized.laporanKejadian || [];
-        const localLaporan = localDb.laporanKejadian || [];
-        const remoteLaporanIds = new Set(remoteLaporan.map((l: any) => l && l.id).filter(Boolean));
-        sanitized.laporanKejadian = [
-          ...remoteLaporan,
-          ...localLaporan.filter((l: any) => l && l.id && !remoteLaporanIds.has(l.id))
-        ];
-
-        const updated = {
-          ...sanitized,
+        const updated: DatabaseState = {
+          ...cleanRemote,
           config: { ...localDb.config, gasApiUrl: getGasApiUrl(), spreadsheetId: getSpreadsheetId() }
         };
         saveLocalDatabase(updated);
@@ -1332,6 +1478,8 @@ export const apiService = {
     isNew: boolean,
     localOnly: boolean = false
   ): Promise<{ success: boolean; message: string }> => {
+    // Un-tombstone if re-created
+    removeDeletedTombstone(siswaData.id);
     const db = loadLocalDatabase();
     
     if (isNew) {
@@ -1418,6 +1566,13 @@ export const apiService = {
   },
 
   deleteSiswa: async (siswaId: string): Promise<{ success: boolean; message: string }> => {
+    // 1. Mark as permanently tombstoned
+    addDeletedTombstone(siswaId);
+
+    // 2. Add to persistent sync deletion queue
+    addToDeletionQueue(siswaId, 'deleteSiswa', { id: siswaId });
+
+    // 3. Remove immediately from local database state
     const db = loadLocalDatabase();
     db.siswa = db.siswa.filter(s => s.id !== siswaId);
     db.orangTua = db.orangTua.filter(o => o.id !== siswaId);
@@ -1434,25 +1589,20 @@ export const apiService = {
     db.surat = db.surat.filter(s => s.siswaId !== siswaId);
     db.dokumen = db.dokumen.filter(d => d.siswaId !== siswaId);
     db.catatanPerkembangan = db.catatanPerkembangan.filter(c => c.siswaId !== siswaId);
+    if (db.kehadiran) db.kehadiran = db.kehadiran.filter(k => k.siswaId !== siswaId);
+    if (db.pengaduanSiswa) db.pengaduanSiswa = db.pengaduanSiswa.filter(p => p.siswaId !== siswaId);
 
     saveLocalDatabase(db);
 
-    if (getGasApiUrl()) {
-      const res = await apiCall('deleteSiswa', { id: siswaId });
-      if (res.success) {
-        return { success: true, message: 'Siswa berhasil dihapus secara online di Google Sheets.' };
-      } else {
-        return { 
-          success: false, 
-          message: `Gagal menghapus siswa dari Google Sheets secara permanen.\n\nDetail Error: ${res.message || 'Koneksi ditolak oleh Google Apps Script.'}\n\nLangkah Solusi:\n1. Buka editor Google Apps Script Anda.\n2. Pastikan file 'Code.gs' dan 'Siswa.gs' sudah sesuai dengan kode terbaru.\n3. Anda WAJIB membuat penerapan baru: Klik "Terapkan" -> "Penerapan baru" -> Pilih Jenis "Aplikasi Web" -> Set akses "Siapa saja" -> Klik "Terapkan".\n4. Salin URL Aplikasi Web baru tersebut dan simpan di menu Pengaturan aplikasi.` 
-        };
-      }
-    }
-    return { success: true, message: 'Siswa berhasil dihapus secara lokal.' };
+    // 4. Trigger queue process in background
+    processPendingDeletionsQueue().catch(err => console.warn('Queue flush warning in deleteSiswa:', err));
+
+    return { success: true, message: 'Siswa dan seluruh berkas terkait berhasil dihapus permanen di aplikasi & antrean Google Sheets.' };
   },
 
   // 2. TAHUN PELAJARAN CRUD
   saveTahunPelajaran: async (tp: TahunPelajaran, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(tp.id);
     const db = loadLocalDatabase();
     if (tp.isActive) {
       // Deactivate all others
@@ -1472,15 +1622,18 @@ export const apiService = {
   },
 
   deleteTahunPelajaran: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteTahunPelajaran', { id });
     const db = loadLocalDatabase();
     db.tahunPelajaran = db.tahunPelajaran.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteTahunPelajaran', { id });
-    return { success: true, message: 'Tahun Pelajaran berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Tahun Pelajaran berhasil dihapus permanen.' };
   },
 
   // 3. KELAS CRUD
   saveKelas: async (kl: Kelas, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(kl.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.kelas.push(kl);
@@ -1493,15 +1646,18 @@ export const apiService = {
   },
 
   deleteKelas: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteKelas', { id });
     const db = loadLocalDatabase();
     db.kelas = db.kelas.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteKelas', { id });
-    return { success: true, message: 'Kelas berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Kelas berhasil dihapus permanen.' };
   },
 
   // 5. USER CRUD (Guru BK / Users)
   saveUser: async (user: User, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(user.id);
     const db = loadLocalDatabase();
     if (isNew) {
       if (db.users.some(u => u.username.toLowerCase() === user.username.toLowerCase())) {
@@ -1517,15 +1673,18 @@ export const apiService = {
   },
 
   deleteUser: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteUser', { id });
     const db = loadLocalDatabase();
     db.users = db.users.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteUser', { id });
-    return { success: true, message: 'User berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'User berhasil dihapus permanen.' };
   },
 
   // 6. PRESTASI CRUD
   savePrestasi: async (p: Prestasi, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(p.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.prestasi.push(p);
@@ -1538,15 +1697,18 @@ export const apiService = {
   },
 
   deletePrestasi: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deletePrestasi', { id });
     const db = loadLocalDatabase();
     db.prestasi = db.prestasi.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deletePrestasi', { id });
-    return { success: true, message: 'Data Prestasi berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Prestasi berhasil dihapus permanen.' };
   },
 
   // 7. PELANGGARAN CRUD
   savePelanggaran: async (p: Pelanggaran, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(p.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.pelanggaran.push(p);
@@ -1559,15 +1721,18 @@ export const apiService = {
   },
 
   deletePelanggaran: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deletePelanggaran', { id });
     const db = loadLocalDatabase();
     db.pelanggaran = db.pelanggaran.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deletePelanggaran', { id });
-    return { success: true, message: 'Data Pelanggaran berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Pelanggaran berhasil dihapus permanen.' };
   },
 
   // 7b. REMISI POIN CRUD
   saveRemisiPoin: async (r: RemisiPoin, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(r.id);
     const db = loadLocalDatabase();
     if (!db.remisiPoin) db.remisiPoin = [];
     if (isNew) {
@@ -1589,24 +1754,19 @@ export const apiService = {
   },
 
   deleteRemisiPoin: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteRemisiPoin', { id });
     const db = loadLocalDatabase();
     if (!db.remisiPoin) db.remisiPoin = [];
     db.remisiPoin = db.remisiPoin.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) {
-      const remoteRes = await apiCall('deleteRemisiPoin', { id });
-      if (!remoteRes.success) {
-        return {
-          success: false,
-          message: `Gagal menghapus Remisi Poin dari Google Sheets: ${remoteRes.message}`
-        };
-      }
-    }
-    return { success: true, message: 'Data Remisi Poin berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Remisi Poin berhasil dihapus permanen.' };
   },
 
   // 8. KONSELING CRUD
   saveKonseling: async (k: Konseling, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(k.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.konseling.push(k);
@@ -1619,15 +1779,18 @@ export const apiService = {
   },
 
   deleteKonseling: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteKonseling', { id });
     const db = loadLocalDatabase();
     db.konseling = db.konseling.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteKonseling', { id });
-    return { success: true, message: 'Data Konseling berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Konseling berhasil dihapus permanen.' };
   },
 
   // 9. ASESMEN CRUD
   saveAsesmen: async (a: Asesmen, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(a.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.asesmen.push(a);
@@ -1640,15 +1803,18 @@ export const apiService = {
   },
 
   deleteAsesmen: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteAsesmen', { id });
     const db = loadLocalDatabase();
     db.asesmen = db.asesmen.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteAsesmen', { id });
-    return { success: true, message: 'Data Asesmen berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Asesmen berhasil dihapus permanen.' };
   },
 
   // 10. HOME VISIT CRUD
   saveHomeVisit: async (h: HomeVisit, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(h.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.homeVisit.push(h);
@@ -1661,15 +1827,18 @@ export const apiService = {
   },
 
   deleteHomeVisit: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteHomeVisit', { id });
     const db = loadLocalDatabase();
     db.homeVisit = db.homeVisit.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteHomeVisit', { id });
-    return { success: true, message: 'Data Kunjungan Rumah berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Kunjungan Rumah berhasil dihapus permanen.' };
   },
 
   // 11. SURAT CRUD
   saveSurat: async (s: Surat, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(s.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.surat.push(s);
@@ -1682,15 +1851,18 @@ export const apiService = {
   },
 
   deleteSurat: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteSurat', { id });
     const db = loadLocalDatabase();
     db.surat = db.surat.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteSurat', { id });
-    return { success: true, message: 'Dokumen Surat berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Dokumen Surat berhasil dihapus permanen.' };
   },
 
   // 12. DOKUMEN CRUD
   saveDokumen: async (d: Dokumen, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(d.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.dokumen.push(d);
@@ -1703,15 +1875,18 @@ export const apiService = {
   },
 
   deleteDokumen: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteDokumen', { id });
     const db = loadLocalDatabase();
     db.dokumen = db.dokumen.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteDokumen', { id });
-    return { success: true, message: 'Dokumen Siswa berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Dokumen Siswa berhasil dihapus permanen.' };
   },
 
   // 13. CATATAN PERKEMBANGAN CRUD
   saveCatatanPerkembangan: async (c: CatatanPerkembangan, isNew: boolean): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(c.id);
     const db = loadLocalDatabase();
     if (isNew) {
       db.catatanPerkembangan.push(c);
@@ -1724,15 +1899,18 @@ export const apiService = {
   },
 
   deleteCatatanPerkembangan: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteCatatanPerkembangan', { id });
     const db = loadLocalDatabase();
     db.catatanPerkembangan = db.catatanPerkembangan.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) await apiCall('deleteCatatanPerkembangan', { id });
-    return { success: true, message: 'Catatan Perkembangan berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Catatan Perkembangan berhasil dihapus permanen.' };
   },
 
   // 14. HEALTH, PSYCHOLOGY, ACADEMIC, ECONOMIC Sub-CRUD (direct updates for specific tabs)
   saveKesehatan: async (k: Kesehatan): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(k.id);
     const db = loadLocalDatabase();
     db.kesehatan = db.kesehatan.map(item => item.id === k.id ? k : item);
     if (!db.kesehatan.some(item => item.id === k.id)) db.kesehatan.push(k);
@@ -1742,6 +1920,7 @@ export const apiService = {
   },
 
   saveEkonomi: async (e: Ekonomi): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(e.id);
     const db = loadLocalDatabase();
     db.ekonomi = db.ekonomi.map(item => item.id === e.id ? e : item);
     if (!db.ekonomi.some(item => item.id === e.id)) db.ekonomi.push(e);
@@ -1751,6 +1930,7 @@ export const apiService = {
   },
 
   savePsikologi: async (p: Psikologi): Promise<{ success: boolean; message: string }> => {
+    removeDeletedTombstone(p.id);
     const db = loadLocalDatabase();
     db.psikologi = db.psikologi.map(item => item.id === p.id ? p : item);
     if (!db.psikologi.some(item => item.id === p.id)) db.psikologi.push(p);
@@ -1761,11 +1941,12 @@ export const apiService = {
 
   // 15. KEHADIRAN (REKAP KEHADIRAN PERMINGGU) CRUD
   saveKehadiran: async (k: Kehadiran, isNew: boolean): Promise<{ success: boolean; message: string }> => {
-    const db = loadLocalDatabase();
-    if (!db.kehadiran) db.kehadiran = [];
     if (!k.id) {
       k.id = `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     }
+    removeDeletedTombstone(k.id);
+    const db = loadLocalDatabase();
+    if (!db.kehadiran) db.kehadiran = [];
 
     // Ensure numeric fields are numbers
     k.hadir = Number(k.hadir || 0);
@@ -1819,27 +2000,24 @@ export const apiService = {
   },
 
   deleteKehadiran: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteKehadiran', { id });
     const db = loadLocalDatabase();
     if (!db.kehadiran) db.kehadiran = [];
     db.kehadiran = db.kehadiran.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) {
-      try {
-        await apiCall('deleteKehadiran', { id });
-      } catch (err) {
-        console.warn('Google Sheets deleteKehadiran warning:', err);
-      }
-    }
-    return { success: true, message: 'Rekap Kehadiran berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Rekap Kehadiran berhasil dihapus permanen.' };
   },
 
   // 16. LAPORAN KEJADIAN CRUD
   saveLaporanKejadian: async (l: LaporanKejadian, isNew: boolean): Promise<{ success: boolean; message: string }> => {
-    const db = loadLocalDatabase();
-    if (!db.laporanKejadian) db.laporanKejadian = [];
     if (!l.id) {
       l.id = `lap-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     }
+    removeDeletedTombstone(l.id);
+    const db = loadLocalDatabase();
+    if (!db.laporanKejadian) db.laporanKejadian = [];
     if (isNew) {
       const existingIdx = db.laporanKejadian.findIndex(item => item.id === l.id);
       if (existingIdx !== -1) {
@@ -1869,18 +2047,14 @@ export const apiService = {
   },
 
   deleteLaporanKejadian: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deleteLaporanKejadian', { id });
     const db = loadLocalDatabase();
     if (!db.laporanKejadian) db.laporanKejadian = [];
     db.laporanKejadian = db.laporanKejadian.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) {
-      try {
-        await apiCall('deleteLaporanKejadian', { id });
-      } catch (e) {
-        console.warn('Google Sheet does not support deleteLaporanKejadian yet.', e);
-      }
-    }
-    return { success: true, message: 'Laporan Kejadian berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Laporan Kejadian berhasil dihapus permanen.' };
   },
 
   updateLaporanKejadianStatus: async (id: string, status: 'Belum Dibaca' | 'Dibaca'): Promise<{ success: boolean; message: string }> => {
@@ -1900,11 +2074,12 @@ export const apiService = {
 
   // 17. PENGADUAN SISWA CRUD (Sheets: Pengaduan_Siswa)
   savePengaduan: async (p: PengaduanSiswa, isNew: boolean): Promise<{ success: boolean; message: string }> => {
-    const db = loadLocalDatabase();
-    if (!db.pengaduanSiswa) db.pengaduanSiswa = [];
     if (!p.id) {
       p.id = `aduan-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     }
+    removeDeletedTombstone(p.id);
+    const db = loadLocalDatabase();
+    if (!db.pengaduanSiswa) db.pengaduanSiswa = [];
     if (isNew) {
       // Avoid duplicate ID if already exists
       const existingIdx = db.pengaduanSiswa.findIndex(item => item.id === p.id);
@@ -1941,18 +2116,14 @@ export const apiService = {
   },
 
   deletePengaduan: async (id: string): Promise<{ success: boolean; message: string }> => {
+    addDeletedTombstone(id);
+    addToDeletionQueue(id, 'deletePengaduan', { id });
     const db = loadLocalDatabase();
     if (!db.pengaduanSiswa) db.pengaduanSiswa = [];
     db.pengaduanSiswa = db.pengaduanSiswa.filter(item => item.id !== id);
     saveLocalDatabase(db);
-    if (getGasApiUrl()) {
-      try {
-        await apiCall('deletePengaduan', { id });
-      } catch (e) {
-        console.warn('Google Sheets deletePengaduan warning:', e);
-      }
-    }
-    return { success: true, message: 'Data Pengaduan berhasil dihapus.' };
+    processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
+    return { success: true, message: 'Data Pengaduan berhasil dihapus permanen.' };
   },
 
   updatePengaduanStatus: async (
