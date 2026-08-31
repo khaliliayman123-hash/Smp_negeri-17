@@ -97,7 +97,7 @@ function handleRequest(e) {
         break;
         
       case "deletePrestasi":
-        responseData = deleteEntity(db, "Prestasi", postData.id);
+        responseData = deleteEntity(db, "Prestasi", postData.id, postData);
         break;
         
       case "savePelanggaran":
@@ -105,7 +105,7 @@ function handleRequest(e) {
         break;
         
       case "deletePelanggaran":
-        responseData = deleteEntity(db, "Pelanggaran", postData.id);
+        responseData = deleteEntity(db, "Pelanggaran", postData.id, postData);
         break;
 
       case "saveRemisiPoin":
@@ -113,7 +113,7 @@ function handleRequest(e) {
         break;
         
       case "deleteRemisiPoin":
-        responseData = deleteEntity(db, "RemisiPoin", postData.id);
+        responseData = deleteEntity(db, "RemisiPoin", postData.id, postData);
         break;
         
       case "saveKonseling":
@@ -121,7 +121,7 @@ function handleRequest(e) {
         break;
         
       case "deleteKonseling":
-        responseData = deleteEntity(db, "Konseling", postData.id);
+        responseData = deleteEntity(db, "Konseling", postData.id, postData);
         break;
         
       case "saveAsesmen":
@@ -129,7 +129,7 @@ function handleRequest(e) {
         break;
         
       case "deleteAsesmen":
-        responseData = deleteEntity(db, "Asesmen", postData.id);
+        responseData = deleteEntity(db, "Asesmen", postData.id, postData);
         break;
         
       case "saveHomeVisit":
@@ -137,7 +137,7 @@ function handleRequest(e) {
         break;
         
       case "deleteHomeVisit":
-        responseData = deleteEntity(db, "HomeVisit", postData.id);
+        responseData = deleteEntity(db, "HomeVisit", postData.id, postData);
         break;
         
       case "saveSurat":
@@ -145,7 +145,7 @@ function handleRequest(e) {
         break;
         
       case "deleteSurat":
-        responseData = deleteEntity(db, "Surat", postData.id);
+        responseData = deleteEntity(db, "Surat", postData.id, postData);
         break;
         
       case "saveDokumen":
@@ -153,7 +153,7 @@ function handleRequest(e) {
         break;
         
       case "deleteDokumen":
-        responseData = deleteEntity(db, "Dokumen", postData.id);
+        responseData = deleteEntity(db, "Dokumen", postData.id, postData);
         break;
         
       case "saveCatatanPerkembangan":
@@ -161,7 +161,7 @@ function handleRequest(e) {
         break;
         
       case "deleteCatatanPerkembangan":
-        responseData = deleteEntity(db, "Catatan_Perkembangan", postData.id);
+        responseData = deleteEntity(db, "Catatan_Perkembangan", postData.id, postData);
         break;
 
       case "savePengaduan":
@@ -169,7 +169,7 @@ function handleRequest(e) {
         break;
         
       case "deletePengaduan":
-        responseData = deleteEntity(db, "Pengaduan_Siswa", postData.id);
+        responseData = deleteEntity(db, "Pengaduan_Siswa", postData.id, postData);
         break;
 
       case "updatePengaduanStatus":
@@ -181,7 +181,7 @@ function handleRequest(e) {
         break;
 
       case "deleteKehadiran":
-        responseData = deleteEntity(db, "Kehadiran", postData.id);
+        responseData = deleteEntity(db, "Kehadiran", postData.id, postData);
         break;
 
       case "saveLaporanKejadian":
@@ -189,7 +189,7 @@ function handleRequest(e) {
         break;
 
       case "deleteLaporanKejadian":
-        responseData = deleteEntity(db, "LaporanKejadian", postData.id);
+        responseData = deleteEntity(db, "LaporanKejadian", postData.id, postData);
         break;
 
       case "updateLaporanKejadianStatus":

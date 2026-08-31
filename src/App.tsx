@@ -30,7 +30,8 @@ import {
   RefreshCw,
   Calendar,
   Search,
-  AlertCircle
+  AlertCircle,
+  ShieldAlert
 } from 'lucide-react';
 
 // Sub views
@@ -255,6 +256,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
   const [isCopyingGas, setIsCopyingGas] = useState(false);
 
   // Custom dialogs/modals state
@@ -287,6 +289,9 @@ export default function App() {
         }
         if (u.role === UserRole.WALI_KELAS) {
           return 'walikelas';
+        }
+        if (u.role === UserRole.GURU_PIKET) {
+          return 'dashboard';
         }
       }
     } catch {}
@@ -330,7 +335,7 @@ export default function App() {
       setActiveMenu('walikelas');
     }
     if (currentUser && currentUser.role === UserRole.GURU_PIKET) {
-      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan' && activeMenu !== 'kehadiran' && activeMenu !== 'pengaduan') {
+      if (activeMenu !== 'dashboard' && activeMenu !== 'layanan' && activeMenu !== 'kehadiran') {
         setActiveMenu('dashboard');
       }
     }
@@ -746,6 +751,28 @@ export default function App() {
     } catch (e: any) {
       showToast('Gagal mereset database.', 'error');
       showAlert('⚠️ GAGAL MERESET DATABASE', e.toString(), 'error');
+    }
+  };
+
+  const handlePurgeLegacyData = async () => {
+    const confirmed = window.confirm(
+      "Apakah Anda yakin ingin membersihkan permanen seluruh data lama bawaan aplikasi (contoh prestasi hackathon, poster, panjat pinang, dsb.) dan menyelaraskan data asli Anda ke Google Sheets?"
+    );
+    if (!confirmed) return;
+
+    setIsPurging(true);
+    showToast('Membersihkan data sampel & menyelaraskan ke Google Sheets...', 'info');
+    try {
+      const res = await apiService.purgeAllLegacySampleData();
+      const latestData = await apiService.getData(false);
+      setDb(latestData);
+      showToast(res.message, 'success');
+      showAlert('🧹 PEMBERSIHAN SELESAI', res.message, 'success');
+    } catch (e: any) {
+      showToast('Gagal membersihkan data lama.', 'error');
+      showAlert('⚠️ GAGAL MEMBERSIHKAN DATA', e.message || 'Terjadi kesalahan.', 'error');
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -1346,12 +1373,6 @@ export default function App() {
                 >
                   <MessageSquare size={16} /> Layanan BK & Disiplin
                 </button>
-                <button 
-                  onClick={() => { setActiveMenu('pengaduan'); }}
-                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <AlertCircle size={16} /> Layanan Pengaduan
-                </button>
               </>
             ) : (
               <>
@@ -1567,7 +1588,6 @@ export default function App() {
                 <button onClick={() => { setActiveMenu('dashboard'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Dashboard Evaluasi</button>
                 <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
-                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan Pengaduan</button>
               </>
             ) : (
               <>
@@ -2424,74 +2444,93 @@ export default function App() {
 
         {/* VIEW: LAYANAN PENGADUAN SISWA */}
         {activeMenu === 'pengaduan' && (
-          <AppErrorBoundary fallbackTitle="Layanan Pengaduan Siswa">
-            <PengaduanView
-              db={db}
-              currentUser={currentUser}
-              onSavePengaduan={async (p, isNew) => {
-                setDb(prev => {
-                  if (!prev) return prev;
-                  const currentList = prev.pengaduanSiswa || [];
-                  const list = isNew 
-                    ? [p, ...currentList] 
-                    : currentList.map(item => item.id === p.id ? p : item);
-                  return { ...prev, pengaduanSiswa: list };
-                });
-                try {
-                  const res = await apiService.savePengaduan(p, isNew);
-                  showToast(res.message, res.success ? 'success' : 'error');
-                  return res.success;
-                } catch {
-                  showToast('Gagal mengirim/menyimpan pengaduan.', 'error');
-                  return false;
-                }
-              }}
-              onDeletePengaduan={async (id) => {
-                setDb(prev => {
-                  if (!prev) return prev;
-                  return {
-                    ...prev,
-                    pengaduanSiswa: (prev.pengaduanSiswa || []).filter(item => item.id !== id)
-                  };
-                });
-                try {
-                  const res = await apiService.deletePengaduan(id);
-                  showToast(res.message, res.success ? 'success' : 'error');
-                  return res.success;
-                } catch {
-                  showToast('Gagal menghapus pengaduan.', 'error');
-                  return false;
-                }
-              }}
-              onUpdateStatus={async (id, status, tanggapan, petugas) => {
-                const tgl = new Date().toISOString().split('T')[0];
-                setDb(prev => {
-                  if (!prev) return prev;
-                  const list = (prev.pengaduanSiswa || []).map(item => {
-                    if (item.id === id) {
-                      return {
-                        ...item,
-                        status,
-                        ...(tanggapan !== undefined ? { tanggapanBk: tanggapan } : {}),
-                        ...(petugas !== undefined ? { petugasBk: petugas } : {}),
-                        tanggalTanggapan: tgl
-                      };
-                    }
-                    return item;
+          currentUser.role === UserRole.GURU_PIKET ? (
+            <div id="pengaduan-restricted-block" className="bg-white rounded-2xl p-8 border border-slate-200 text-center max-w-lg mx-auto my-12 shadow-sm">
+              <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-rose-100">
+                <ShieldAlert size={28} />
+              </div>
+              <h2 className="text-lg font-bold text-slate-800 mb-2">Akses Dibatasi</h2>
+              <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                Login <b>Guru Piket</b> tidak memiliki hak akses untuk membuka atau mengelola menu <b>Layanan Pengaduan Siswa</b>. Layanan ini khusus untuk Siswa, Guru BK, dan Wali Kelas.
+              </p>
+              <button 
+                id="btn-back-dashboard-piket"
+                onClick={() => setActiveMenu('dashboard')}
+                className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition cursor-pointer"
+              >
+                Kembali ke Dashboard
+              </button>
+            </div>
+          ) : (
+            <AppErrorBoundary fallbackTitle="Layanan Pengaduan Siswa">
+              <PengaduanView
+                db={db}
+                currentUser={currentUser}
+                onSavePengaduan={async (p, isNew) => {
+                  setDb(prev => {
+                    if (!prev) return prev;
+                    const currentList = prev.pengaduanSiswa || [];
+                    const list = isNew 
+                      ? [p, ...currentList] 
+                      : currentList.map(item => item.id === p.id ? p : item);
+                    return { ...prev, pengaduanSiswa: list };
                   });
-                  return { ...prev, pengaduanSiswa: list };
-                });
-                try {
-                  const res = await apiService.updatePengaduanStatus(id, status, tanggapan, petugas);
-                  showToast(res.message, res.success ? 'success' : 'error');
-                  return res.success;
-                } catch {
-                  showToast('Gagal memperbarui status pengaduan.', 'error');
-                  return false;
-                }
-              }}
-            />
-          </AppErrorBoundary>
+                  try {
+                    const res = await apiService.savePengaduan(p, isNew);
+                    showToast(res.message, res.success ? 'success' : 'error');
+                    return res.success;
+                  } catch {
+                    showToast('Gagal mengirim/menyimpan pengaduan.', 'error');
+                    return false;
+                  }
+                }}
+                onDeletePengaduan={async (id) => {
+                  setDb(prev => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      pengaduanSiswa: (prev.pengaduanSiswa || []).filter(item => item.id !== id)
+                    };
+                  });
+                  try {
+                    const res = await apiService.deletePengaduan(id);
+                    showToast(res.message, res.success ? 'success' : 'error');
+                    return res.success;
+                  } catch {
+                    showToast('Gagal menghapus pengaduan.', 'error');
+                    return false;
+                  }
+                }}
+                onUpdateStatus={async (id, status, tanggapan, petugas) => {
+                  const tgl = new Date().toISOString().split('T')[0];
+                  setDb(prev => {
+                    if (!prev) return prev;
+                    const list = (prev.pengaduanSiswa || []).map(item => {
+                      if (item.id === id) {
+                        return {
+                          ...item,
+                          status,
+                          ...(tanggapan !== undefined ? { tanggapanBk: tanggapan } : {}),
+                          ...(petugas !== undefined ? { petugasBk: petugas } : {}),
+                          tanggalTanggapan: tgl
+                        };
+                      }
+                      return item;
+                    });
+                    return { ...prev, pengaduanSiswa: list };
+                  });
+                  try {
+                    const res = await apiService.updatePengaduanStatus(id, status, tanggapan, petugas);
+                    showToast(res.message, res.success ? 'success' : 'error');
+                    return res.success;
+                  } catch {
+                    showToast('Gagal memperbarui status pengaduan.', 'error');
+                    return false;
+                  }
+                }}
+              />
+            </AppErrorBoundary>
+          )
         )}
 
         {/* VIEW 6: GOOGLE SHEETS / GAS CONNECTION SETTINGS */}
@@ -2745,6 +2784,34 @@ export default function App() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* PURGE LEGACY DATA UTILITIES */}
+            <div className="bg-emerald-50/60 p-5 rounded-2xl border border-emerald-200/80 shadow-sm space-y-4">
+              <h3 className="font-bold text-emerald-900 text-sm flex items-center gap-2">
+                <Sparkles size={16} className="text-emerald-600" />
+                Pembersihan Permanen Data Bawaan / Sampel Aplikasi
+              </h3>
+              <p className="text-slate-600 leading-relaxed text-[11px]">
+                Gunakan tombol di bawah ini untuk <strong>menghapus permanen</strong> data demo / sampel bawaan aplikasi (contoh prestasi hackathon, lomba poster, panjat pinang, dsb.) baik dari memori aplikasi maupun langsung dari Google Sheets Anda, serta mengunci agar hanya data asli Anda yang tersimpan secara permanen.
+              </p>
+              <div className="flex justify-start">
+                <button
+                  onClick={handlePurgeLegacyData}
+                  disabled={isPurging}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition text-[11px] shadow-xs"
+                >
+                  {isPurging ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Sedang Membersihkan Data...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} /> Bersihkan Data Bawaan & Samakan ke Google Sheets
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 

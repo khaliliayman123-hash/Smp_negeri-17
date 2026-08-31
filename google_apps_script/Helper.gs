@@ -499,9 +499,9 @@ function findSheetFlexible(db, sheetName) {
   return null;
 }
 
-function deleteEntity(db, sheetName, id) {
+function deleteEntity(db, sheetName, id, extraSearch) {
   db = db || getDatabaseSheets();
-  if (id === undefined || id === null || id === '') {
+  if ((id === undefined || id === null || id === '') && !extraSearch) {
     return { success: false, message: "ID kosong." };
   }
   const sheet = findSheetFlexible(db, sheetName);
@@ -521,7 +521,7 @@ function deleteEntity(db, sheetName, id) {
 
   const headers = values[0];
   let idCol = -1;
-  const targetIdStr = String(id).trim().toLowerCase();
+  const targetIdStr = id !== undefined && id !== null ? String(id).trim().toLowerCase() : "";
 
   for (let c = 0; c < headers.length; c++) {
     const h = String(headers[c] || "").trim().toLowerCase();
@@ -535,7 +535,38 @@ function deleteEntity(db, sheetName, id) {
   let deletedCount = 0;
   for (let i = values.length - 1; i >= 1; i--) {
     const cellVal = String(values[i][idCol] !== undefined ? values[i][idCol] : "").trim().toLowerCase();
-    if (cellVal === targetIdStr) {
+    let isMatch = (targetIdStr !== "" && cellVal === targetIdStr);
+    
+    // Extra fallback search if ID wasn't matched (e.g. by title, description, or student ID)
+    if (!isMatch && extraSearch && typeof extraSearch === 'object') {
+      let allMatch = true;
+      let checkedFields = 0;
+      for (let key in extraSearch) {
+        if (!extraSearch[key] || key === 'id') continue;
+        const searchKey = String(key).trim().toLowerCase();
+        const searchVal = String(extraSearch[key]).trim().toLowerCase();
+        let matchCol = -1;
+        for (let c = 0; c < headers.length; c++) {
+          if (String(headers[c] || "").trim().toLowerCase() === searchKey) {
+            matchCol = c;
+            break;
+          }
+        }
+        if (matchCol !== -1) {
+          checkedFields++;
+          const rowVal = String(values[i][matchCol] !== undefined ? values[i][matchCol] : "").trim().toLowerCase();
+          if (rowVal !== searchVal) {
+            allMatch = false;
+            break;
+          }
+        }
+      }
+      if (allMatch && checkedFields > 0) {
+        isMatch = true;
+      }
+    }
+
+    if (isMatch) {
       sheet.deleteRow(i + 1);
       deletedCount++;
     }

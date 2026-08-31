@@ -931,6 +931,236 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   });
 
+  // Helper to identify known sample/dummy data titles from initial templates
+  const isSampleTitle = (title?: string) => {
+    if (!title) return false;
+    const t = title.toLowerCase();
+    return t.includes('hackathon') || 
+           t.includes('desain poster') || 
+           t.includes('panjat pinang') || 
+           t.includes('kripca') || 
+           t.includes('contoh prestasi') || 
+           t.includes('sample prestasi');
+  };
+
+  // Strictly filter PRESTASI to eliminate legacy sample dummy data and orphaned records
+  if (parsed.prestasi && Array.isArray(parsed.prestasi)) {
+    parsed.prestasi = parsed.prestasi.filter((p: any) => {
+      if (!p || typeof p !== 'object') return false;
+      const id = String(p.id || '').trim();
+      const sId = String(p.siswaId || p.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      
+      // Filter out known sample template items
+      if (isSampleTitle(p.namaPrestasi)) {
+        addDeletedTombstone(id);
+        addToDeletionQueue(id, 'deletePrestasi', { id, namaPrestasi: p.namaPrestasi, siswaId: sId });
+        migrated = true;
+        return false;
+      }
+      // If students exist, filter out orphaned records with nonexistent student IDs (like old mock sis-1, sis-2)
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, p);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deletePrestasi', { id, namaPrestasi: p.namaPrestasi, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.prestasi = [];
+  }
+
+  // Strictly filter PELANGGARAN to eliminate sample dummy data and orphaned records
+  if (parsed.pelanggaran && Array.isArray(parsed.pelanggaran)) {
+    parsed.pelanggaran = parsed.pelanggaran.filter((p: any) => {
+      if (!p || typeof p !== 'object') return false;
+      const id = String(p.id || '').trim();
+      const sId = String(p.siswaId || p.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, p);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deletePelanggaran', { id, jenisPelanggaran: p.jenisPelanggaran, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.pelanggaran = [];
+  }
+
+  // Strictly filter REMISI POIN
+  if (parsed.remisiPoin && Array.isArray(parsed.remisiPoin)) {
+    parsed.remisiPoin = parsed.remisiPoin.filter((r: any) => {
+      if (!r || typeof r !== 'object') return false;
+      const id = String(r.id || '').trim();
+      const sId = String(r.siswaId || r.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, r);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deleteRemisiPoin', { id, jenisRemisi: r.jenisRemisi, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.remisiPoin = [];
+  }
+
+  // Strictly filter KONSELING
+  if (parsed.konseling && Array.isArray(parsed.konseling)) {
+    parsed.konseling = parsed.konseling.filter((k: any) => {
+      if (!k || typeof k !== 'object') return false;
+      const id = String(k.id || '').trim();
+      const sId = String(k.siswaId || k.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, k);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deleteKonseling', { id, nomorKonseling: k.nomorKonseling, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.konseling = [];
+  }
+
+  // Strictly filter ASESMEN
+  if (parsed.asesmen && Array.isArray(parsed.asesmen)) {
+    parsed.asesmen = parsed.asesmen.filter((a: any) => {
+      if (!a || typeof a !== 'object') return false;
+      const id = String(a.id || '').trim();
+      const sId = String(a.siswaId || a.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, a);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deleteAsesmen', { id, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.asesmen = [];
+  }
+
+  // Strictly filter HOME VISIT
+  if (parsed.homeVisit && Array.isArray(parsed.homeVisit)) {
+    parsed.homeVisit = parsed.homeVisit.filter((h: any) => {
+      if (!h || typeof h !== 'object') return false;
+      const id = String(h.id || '').trim();
+      const sId = String(h.siswaId || h.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, h);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deleteHomeVisit', { id, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.homeVisit = [];
+  }
+
+  // Strictly filter SURAT
+  if (parsed.surat && Array.isArray(parsed.surat)) {
+    parsed.surat = parsed.surat.filter((s: any) => {
+      if (!s || typeof s !== 'object') return false;
+      const id = String(s.id || '').trim();
+      const sId = String(s.siswaId || s.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, s);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deleteSurat', { id, nomorSurat: s.nomorSurat, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.surat = [];
+  }
+
+  // Strictly filter DOKUMEN
+  if (parsed.dokumen && Array.isArray(parsed.dokumen)) {
+    parsed.dokumen = parsed.dokumen.filter((d: any) => {
+      if (!d || typeof d !== 'object') return false;
+      const id = String(d.id || '').trim();
+      const sId = String(d.siswaId || d.idSiswa || '').trim();
+      if (!id) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, d);
+        if (!student) {
+          addDeletedTombstone(id);
+          addToDeletionQueue(id, 'deleteDokumen', { id, namaFile: d.namaFile, siswaId: sId });
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.dokumen = [];
+  }
+
+  // Strictly filter KEHADIRAN
+  if (parsed.kehadiran && Array.isArray(parsed.kehadiran)) {
+    parsed.kehadiran = parsed.kehadiran.filter((k: any) => {
+      if (!k || typeof k !== 'object') return false;
+      const id = String(k.id || '').trim();
+      const sId = String(k.siswaId || k.idSiswa || '').trim();
+      if (!id && !sId) return false;
+      if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, sId, k);
+        if (!student) {
+          if (id) {
+            addDeletedTombstone(id);
+            addToDeletionQueue(id, 'deleteKehadiran', { id, siswaId: sId });
+          }
+          migrated = true;
+          return false;
+        }
+      }
+      return true;
+    });
+  } else {
+    parsed.kehadiran = [];
+  }
+
   // Strictly filter catatanPerkembangan to discard empty rows, missing IDs, or blank content
   if (parsed.catatanPerkembangan && Array.isArray(parsed.catatanPerkembangan)) {
     parsed.catatanPerkembangan = parsed.catatanPerkembangan.filter((c: any) => {
@@ -940,6 +1170,15 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       const cleanSiswaId = String(c.siswaId || c.idSiswa || '').trim();
       if (!cleanId || !cleanCatatan || !cleanSiswaId) return false;
       if (isTombstoned(cleanId) || isTombstoned(cleanSiswaId)) return false;
+      if (parsed.siswa && parsed.siswa.length > 0) {
+        const student = findSiswa(parsed as DatabaseState, cleanSiswaId, c);
+        if (!student) {
+          addDeletedTombstone(cleanId);
+          addToDeletionQueue(cleanId, 'deleteCatatanPerkembangan', { id: cleanId, siswaId: cleanSiswaId });
+          migrated = true;
+          return false;
+        }
+      }
       return true;
     });
   } else {
@@ -1706,10 +1945,16 @@ export const apiService = {
     return { success: true, message: 'Data Prestasi berhasil disimpan.' };
   },
 
-  deletePrestasi: async (id: string): Promise<{ success: boolean; message: string }> => {
+  deletePrestasi: async (id: string, extraPayload?: any): Promise<{ success: boolean; message: string }> => {
     addDeletedTombstone(id);
-    addToDeletionQueue(id, 'deletePrestasi', { id });
     const db = loadLocalDatabase();
+    const targetItem = db.prestasi.find(item => item.id === id);
+    addToDeletionQueue(id, 'deletePrestasi', { 
+      id, 
+      namaPrestasi: targetItem?.namaPrestasi, 
+      siswaId: targetItem?.siswaId, 
+      ...(extraPayload || {}) 
+    });
     db.prestasi = db.prestasi.filter(item => item.id !== id);
     saveLocalDatabase(db);
     processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
@@ -1730,10 +1975,16 @@ export const apiService = {
     return { success: true, message: 'Data Pelanggaran berhasil disimpan.' };
   },
 
-  deletePelanggaran: async (id: string): Promise<{ success: boolean; message: string }> => {
+  deletePelanggaran: async (id: string, extraPayload?: any): Promise<{ success: boolean; message: string }> => {
     addDeletedTombstone(id);
-    addToDeletionQueue(id, 'deletePelanggaran', { id });
     const db = loadLocalDatabase();
+    const targetItem = db.pelanggaran.find(item => item.id === id);
+    addToDeletionQueue(id, 'deletePelanggaran', { 
+      id, 
+      jenisPelanggaran: targetItem?.jenisPelanggaran, 
+      siswaId: targetItem?.siswaId, 
+      ...(extraPayload || {}) 
+    });
     db.pelanggaran = db.pelanggaran.filter(item => item.id !== id);
     saveLocalDatabase(db);
     processPendingDeletionsQueue().catch(err => console.warn('Queue error:', err));
@@ -2179,5 +2430,103 @@ export const apiService = {
       }
     }
     return { success: true, message: 'Tanggapan & Status Pengaduan berhasil diperbarui.' };
+  },
+
+  // 18. PEMBERSIHAN DATA SAMPEL & SINKRONISASI PERMANEN
+  purgeAllLegacySampleData: async (): Promise<{ success: boolean; message: string; purgedCount: number }> => {
+    let db = loadLocalDatabase();
+    let purgedCount = 0;
+    
+    // Purge known mock/sample prestasis and orphaned records
+    const sampleKeywords = ['hackathon', 'desain poster', 'panjat pinang', 'kripca', 'sample', 'contoh'];
+    
+    const initialPrestasiLen = db.prestasi ? db.prestasi.length : 0;
+    const initialPelanggaranLen = db.pelanggaran ? db.pelanggaran.length : 0;
+    const initialKonselingLen = db.konseling ? db.konseling.length : 0;
+    const initialRemisiLen = db.remisiPoin ? db.remisiPoin.length : 0;
+    
+    if (db.prestasi && Array.isArray(db.prestasi)) {
+      db.prestasi = db.prestasi.filter(p => {
+        if (!p) return false;
+        const isSample = sampleKeywords.some(kw => (p.namaPrestasi || '').toLowerCase().includes(kw));
+        const hasStudent = db.siswa.some(s => s.id === p.siswaId || (s.nama && s.nama.toLowerCase() === (p as any).namaSiswa?.toLowerCase()));
+        if (isSample || (!hasStudent && db.siswa.length > 0)) {
+          addDeletedTombstone(p.id);
+          addToDeletionQueue(p.id, 'deletePrestasi', { id: p.id, namaPrestasi: p.namaPrestasi, siswaId: p.siswaId });
+          return false;
+        }
+        return true;
+      });
+    }
+    
+    if (db.pelanggaran && Array.isArray(db.pelanggaran)) {
+      db.pelanggaran = db.pelanggaran.filter(p => {
+        if (!p) return false;
+        const isSample = sampleKeywords.some(kw => (p.jenisPelanggaran || '').toLowerCase().includes(kw));
+        const hasStudent = db.siswa.some(s => s.id === p.siswaId);
+        if (isSample || (!hasStudent && db.siswa.length > 0)) {
+          addDeletedTombstone(p.id);
+          addToDeletionQueue(p.id, 'deletePelanggaran', { id: p.id, jenisPelanggaran: p.jenisPelanggaran, siswaId: p.siswaId });
+          return false;
+        }
+        return true;
+      });
+    }
+
+    if (db.konseling && Array.isArray(db.konseling)) {
+      db.konseling = db.konseling.filter(k => {
+        if (!k) return false;
+        const hasStudent = db.siswa.some(s => s.id === k.siswaId);
+        if (!hasStudent && db.siswa.length > 0) {
+          addDeletedTombstone(k.id);
+          addToDeletionQueue(k.id, 'deleteKonseling', { id: k.id, nomorKonseling: k.nomorKonseling, siswaId: k.siswaId });
+          return false;
+        }
+        return true;
+      });
+    }
+
+    if (db.remisiPoin && Array.isArray(db.remisiPoin)) {
+      db.remisiPoin = db.remisiPoin.filter(r => {
+        if (!r) return false;
+        const hasStudent = db.siswa.some(s => s.id === r.siswaId);
+        if (!hasStudent && db.siswa.length > 0) {
+          addDeletedTombstone(r.id);
+          addToDeletionQueue(r.id, 'deleteRemisiPoin', { id: r.id, jenisRemisi: r.jenisRemisi, siswaId: r.siswaId });
+          return false;
+        }
+        return true;
+      });
+    }
+
+    purgedCount += (initialPrestasiLen - (db.prestasi?.length || 0)) + 
+                   (initialPelanggaranLen - (db.pelanggaran?.length || 0)) + 
+                   (initialKonselingLen - (db.konseling?.length || 0)) +
+                   (initialRemisiLen - (db.remisiPoin?.length || 0));
+                   
+    saveLocalDatabase(db);
+    
+    // Sync clean state to Google Sheets immediately if connected
+    if (getGasApiUrl()) {
+      try {
+        await processPendingDeletionsQueue();
+        const uploadRes = await apiService.uploadFullDatabase(db);
+        if (uploadRes.success) {
+          return {
+            success: true,
+            purgedCount,
+            message: `Pembersihan berhasil! ${purgedCount} data lama bawaan aplikasi telah dihapus permanen dan seluruh data baru telah tersimpan permanen di Google Sheets & aplikasi.`
+          };
+        }
+      } catch (err: any) {
+        console.warn('Sync warning after purge:', err);
+      }
+    }
+    
+    return {
+      success: true,
+      purgedCount,
+      message: `Pembersihan berhasil! ${purgedCount} data lama bawaan aplikasi telah dihapus permanen dari memori aplikasi.`
+    };
   }
 };

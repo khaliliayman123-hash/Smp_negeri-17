@@ -39,7 +39,8 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 
 interface PengaduanViewProps {
@@ -71,12 +72,29 @@ export default function PengaduanView({
   onDeletePengaduan,
   onUpdateStatus
 }: PengaduanViewProps) {
+  // Filter batasan akses: Guru Piket tidak diizinkan mengakses Layanan Pengaduan
+  if (currentUser.role === UserRole.GURU_PIKET) {
+    return (
+      <div id="pengaduan-restricted-access" className="bg-white rounded-2xl p-8 border border-slate-200 text-center max-w-lg mx-auto my-12 shadow-sm">
+        <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-rose-100">
+          <ShieldAlert size={28} />
+        </div>
+        <h2 className="text-lg font-bold text-slate-800 mb-2">Akses Dibatasi</h2>
+        <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+          Akun <b>Guru Piket</b> tidak memiliki hak akses untuk membuka atau mengelola menu <b>Layanan Pengaduan</b>. Layanan ini dikhususkan bagi Siswa, Guru BK, dan Wali Kelas.
+        </p>
+        <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold">
+          Batasan Hak Akses Sistem
+        </span>
+      </div>
+    );
+  }
+
   const isStudent = currentUser.role === UserRole.SISWA;
   const isTeacherOrAdmin = 
     currentUser.role === UserRole.ADMIN || 
     currentUser.role === UserRole.GURU_BK || 
-    currentUser.role === UserRole.WALI_KELAS || 
-    currentUser.role === UserRole.GURU_PIKET;
+    currentUser.role === UserRole.WALI_KELAS;
 
   // Student matching with strict null safety
   const currentSiswa = useMemo(() => {
