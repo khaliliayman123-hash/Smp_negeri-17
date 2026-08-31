@@ -210,7 +210,7 @@ function normalizeHeaderKey(header, standardHeaders) {
   if (!header) return "";
   var cleanHeader = header.toString().toLowerCase().trim().replace(/[\s_\-\.]/g, "");
   
-  // Direct match
+  // Direct match against standard headers
   for (var i = 0; i < standardHeaders.length; i++) {
     var std = standardHeaders[i];
     var cleanStd = std.toLowerCase().replace(/[\s_\-\.]/g, "");
@@ -219,17 +219,35 @@ function normalizeHeaderKey(header, standardHeaders) {
     }
   }
   
-  // Custom aliases mapping for human input
-  if (cleanHeader === "id") return "id";
+  // Comprehensive aliases mapping for human input and common typos (e.g. siswald, siswaid, etc.)
+  if (cleanHeader === "id" || cleanHeader === "kode" || cleanHeader === "nomor" || cleanHeader === "key") return "id";
+  if (cleanHeader === "siswald" || cleanHeader === "siswaid" || cleanHeader === "idsiswa" || cleanHeader === "id_siswa" || cleanHeader === "siswa_id" || cleanHeader === "kodesiswa" || cleanHeader === "nissiswa") {
+    for (var j = 0; j < standardHeaders.length; j++) {
+      if (standardHeaders[j] === "siswaId") return "siswaId";
+      if (standardHeaders[j] === "id") return "id";
+    }
+    return "siswaId";
+  }
   if (cleanHeader === "nama" || cleanHeader === "namasiswa" || cleanHeader === "namalengkap") return "nama";
   if (cleanHeader === "nis" || cleanHeader === "nomorinduksiswa") return "nis";
   if (cleanHeader === "nisn" || cleanHeader === "nomorinduksiswanasional") return "nisn";
-  if (cleanHeader === "kelas" || cleanHeader === "kelasid" || cleanHeader === "namakelas") return "kelasId";
+  if (cleanHeader === "kelas" || cleanHeader === "kelasid" || cleanHeader === "namakelas" || cleanHeader === "rombel") return "kelasId";
+  if (cleanHeader === "namaprestasi" || cleanHeader === "prestasi" || cleanHeader === "judulprestasi" || cleanHeader === "kegiatan" || cleanHeader === "lomba") return "namaPrestasi";
+  if (cleanHeader === "tingkat" || cleanHeader === "level" || cleanHeader === "jenjang") return "tingkat";
+  if (cleanHeader === "tahun" || cleanHeader === "tahunprestasi" || cleanHeader === "periode") return "tahun";
+  if (cleanHeader === "juara" || cleanHeader === "peringkat" || cleanHeader === "hasil" || cleanHeader === "posisi") return "juara";
+  if (cleanHeader === "sertifikat" || cleanHeader === "piagam" || cleanHeader === "buktisertifikat" || cleanHeader === "url_sertifikat") return "sertifikat";
+  if (cleanHeader === "kategori" || cleanHeader === "bidang" || cleanHeader === "jenis" || cleanHeader === "tipe") return "kategori";
+  if (cleanHeader === "jenispelanggaran" || cleanHeader === "pelanggaran" || cleanHeader === "bentukpelanggaran" || cleanHeader === "kasus") return "jenisPelanggaran";
+  if (cleanHeader === "poin" || cleanHeader === "bobotpoin" || cleanHeader === "skor" || cleanHeader === "bobot") return "poin";
+  if (cleanHeader === "gurupelapor" || cleanHeader === "pelapor" || cleanHeader === "namapelapor") return "guruPelapor";
+  if (cleanHeader === "tindaklanjut" || cleanHeader === "penanganan" || cleanHeader === "solusi") return "tindakLanjut";
+  if (cleanHeader === "status" || cleanHeader === "statuspenanganan" || cleanHeader === "keadaan") return "status";
   if (cleanHeader === "gender" || cleanHeader === "jeniskelamin" || cleanHeader === "jk") return "jenisKelamin";
-  if (cleanHeader === "nohp" || cleanHeader === "nomorhp" || cleanHeader === "telepon" || cleanHeader === "notelepon") return "nomorHp";
-  if (cleanHeader === "alamat" || cleanHeader === "alamatrumah") return "alamat";
-  if (cleanHeader === "foto" || cleanHeader === "urlfoto" || cleanHeader === "pasfoto") return "foto";
-  if (cleanHeader === "tahunmasuk" || cleanHeader === "tahun") return "tahunMasuk";
+  if (cleanHeader === "nohp" || cleanHeader === "nomorhp" || cleanHeader === "telepon" || cleanHeader === "notelepon" || cleanHeader === "kontak") return "nomorHp";
+  if (cleanHeader === "alamat" || cleanHeader === "alamatrumah" || cleanHeader === "domisili") return "alamat";
+  if (cleanHeader === "foto" || cleanHeader === "urlfoto" || cleanHeader === "pasfoto" || cleanHeader === "linkfoto") return "foto";
+  if (cleanHeader === "tahunmasuk") return "tahunMasuk";
   if (cleanHeader === "tempatlahir") return "tempatLahir";
   if (cleanHeader === "tanggallahir") return "tanggalLahir";
   if (cleanHeader === "agama") return "agama";
@@ -238,8 +256,18 @@ function normalizeHeaderKey(header, standardHeaders) {
   if (cleanHeader === "kabupaten" || cleanHeader === "kota") return "kabupaten";
   if (cleanHeader === "provinsi") return "provinsi";
   if (cleanHeader === "email" || cleanHeader === "surel") return "email";
-  if (cleanHeader === "jenisremis" || cleanHeader === "jenisremisi") return "jenisRemisi";
+  if (cleanHeader === "jenisremis" || cleanHeader === "jenisremisi" || cleanHeader === "remisi") return "jenisRemisi";
   if (cleanHeader === "gurupember" || cleanHeader === "gurupemberi") return "guruPemberi";
+  if (cleanHeader === "nomorkonseling" || cleanHeader === "nokonseling") return "nomorKonseling";
+  if (cleanHeader === "permasalahan" || cleanHeader === "masalah") return "permasalahan";
+  if (cleanHeader === "catatan" || cleanHeader === "catatanperkembangan") return "catatan";
+  if (cleanHeader === "rekomendasi") return "rekomendasi";
+  if (cleanHeader === "mingguke") return "mingguKe";
+  if (cleanHeader === "bulan") return "bulan";
+  if (cleanHeader === "hadir") return "hadir";
+  if (cleanHeader === "sakit") return "sakit";
+  if (cleanHeader === "izin") return "izin";
+  if (cleanHeader === "alfa" || cleanHeader === "alpha") return "alfa";
   
   return header;
 }
@@ -320,33 +348,51 @@ function getSheetDataAsJson(sheet) {
       }
     }
     
-    // Auto-heal missing ID in Siswa row to keep database references secure and prevent duplicate sync rows
-    if (sheetName === "Siswa" && (!obj.id || obj.id.toString().trim() === "")) {
-      var cleanNis = (obj.nis || "").toString().trim();
-      var cleanNisn = (obj.nisn || "").toString().trim();
-      var cleanNama = (obj.nama || "").toString().trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      
-      let generatedId = "";
-      if (cleanNis) {
-        generatedId = "sis-nis-" + cleanNis;
-      } else if (cleanNisn) {
-        generatedId = "sis-nisn-" + cleanNisn;
-      } else if (cleanNama) {
-        generatedId = "sis-name-" + cleanNama;
+    // Normalize siswaId if aliased in row
+    if (!obj.siswaId && (obj.siswald || obj.idSiswa || obj.siswa_id || obj.id_siswa)) {
+      obj.siswaId = obj.siswald || obj.idSiswa || obj.siswa_id || obj.id_siswa;
+    }
+
+    // Auto-heal missing ID across ALL sheets to prevent dropping rows or sync mismatches
+    if (!obj.id || obj.id.toString().trim() === "") {
+      var prefix = "item";
+      if (sheetName === "Siswa") {
+        var cleanNis = (obj.nis || "").toString().trim();
+        var cleanNisn = (obj.nisn || "").toString().trim();
+        var cleanNama = (obj.nama || "").toString().trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (cleanNis) obj.id = "sis-nis-" + cleanNis;
+        else if (cleanNisn) obj.id = "sis-nisn-" + cleanNisn;
+        else if (cleanNama) obj.id = "sis-name-" + cleanNama;
+        else obj.id = "sis-row-" + i;
       } else {
-        generatedId = "sis-row-" + i;
+        if (sheetName === "Prestasi") prefix = "pres";
+        else if (sheetName === "Pelanggaran") prefix = "pel";
+        else if (sheetName === "RemisiPoin") prefix = "rem";
+        else if (sheetName === "Konseling") prefix = "kon";
+        else if (sheetName === "Asesmen") prefix = "ase";
+        else if (sheetName === "HomeVisit") prefix = "hv";
+        else if (sheetName === "Surat") prefix = "sur";
+        else if (sheetName === "Dokumen") prefix = "dok";
+        else if (sheetName === "Catatan_Perkembangan" || sheetName === "CatatanPerkembangan") prefix = "cp";
+        else if (sheetName === "Pengaduan_Siswa" || sheetName === "PengaduanSiswa") prefix = "peng";
+        else if (sheetName === "Kehadiran") prefix = "keh";
+        else if (sheetName === "LaporanKejadian") prefix = "lap";
+        else if (["OrangTua", "Akademik", "Kesehatan", "Ekonomi", "Psikologi", "Sosial"].indexOf(sheetName) !== -1) {
+          prefix = "sis";
+        }
+
+        var sRef = (obj.siswaId || obj.idSiswa || obj.nis || "").toString().trim().replace(/[^a-zA-Z0-9]/g, "");
+        obj.id = prefix + "-" + (sRef ? sRef + "-" : "") + i;
       }
-      
-      obj.id = generatedId;
-      
-      // Persist the missing ID right back to the spreadsheet row cell
+
+      // Persist the missing ID right back to the spreadsheet row cell if header exists
       try {
         var idColIdx = mappedHeaders.indexOf("id");
         if (idColIdx !== -1) {
-          sheet.getRange(i + 1, idColIdx + 1).setValue(generatedId);
+          sheet.getRange(i + 1, idColIdx + 1).setValue(obj.id);
         }
       } catch (err) {
-        Logger.log("Gagal auto-heal ID siswa di baris " + (i + 1) + ": " + err.toString());
+        Logger.log("Gagal auto-heal ID di baris " + (i + 1) + ": " + err.toString());
       }
     }
     

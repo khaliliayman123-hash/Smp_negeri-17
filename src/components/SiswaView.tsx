@@ -2034,8 +2034,8 @@ export default function SiswaView({
 
                 {/* 5. HISTORY (DISCIPLINARY AND COUNSELING TIMELINE) */}
                 {activeDetailTab === 'history' && (() => {
-                  const vl = db.pelanggaran.filter(p => p.siswaId === viewingSiswa.id);
-                  const cs = db.konseling.filter(c => c.siswaId === viewingSiswa.id);
+                  const vl = db.pelanggaran.filter(p => p.siswaId === viewingSiswa.id || (p as any).idSiswa === viewingSiswa.id || p.siswaId === viewingSiswa.nis || findSiswa(db, p.siswaId, p)?.id === viewingSiswa.id);
+                  const cs = db.konseling.filter(c => c.siswaId === viewingSiswa.id || (c as any).idSiswa === viewingSiswa.id || c.siswaId === viewingSiswa.nis || findSiswa(db, c.siswaId, c)?.id === viewingSiswa.id);
                   return (
                     <div className="space-y-4">
                       {/* Counseling logs */}
@@ -2076,7 +2076,7 @@ export default function SiswaView({
 
                       {/* Remisi Poin logs */}
                       {(() => {
-                        const rems = (db.remisiPoin || []).filter(r => r.siswaId === viewingSiswa.id);
+                        const rems = (db.remisiPoin || []).filter(r => r.siswaId === viewingSiswa.id || (r as any).idSiswa === viewingSiswa.id || r.siswaId === viewingSiswa.nis || findSiswa(db, r.siswaId, r)?.id === viewingSiswa.id);
                         return (
                           <div className="space-y-2 pt-2 border-t border-slate-100">
                             <p className="text-[10px] uppercase font-bold text-sky-800 tracking-wider">Catatan Remisi Poin ({rems.length})</p>
@@ -2105,7 +2105,7 @@ export default function SiswaView({
 
                 {/* 6. ACHIEVEMENT (PRESTASI) VIEW */}
                 {activeDetailTab === 'achievement' && (() => {
-                  const pr = db.prestasi.filter(p => p.siswaId === viewingSiswa.id);
+                  const pr = db.prestasi.filter(p => p.siswaId === viewingSiswa.id || (p as any).idSiswa === viewingSiswa.id || p.siswaId === viewingSiswa.nis || findSiswa(db, p.siswaId, p)?.id === viewingSiswa.id);
                   return (
                     <div className="space-y-4">
                       <div className="flex justify-between items-center pb-2 border-b border-slate-100">
@@ -2304,7 +2304,7 @@ export default function SiswaView({
                 {/* 8. CATATAN PERKEMBANGAN SISWA (Guru BK & Wali Kelas ONLY, Siswa cannot see) */}
                 {activeDetailTab === 'catatan_perkembangan' && canAccessCatatanWaliKelas && (() => {
                   const catatanList = (db.catatanPerkembangan || [])
-                    .filter(c => c.siswaId === viewingSiswa.id)
+                    .filter(c => c.siswaId === viewingSiswa.id || (c as any).idSiswa === viewingSiswa.id || c.siswaId === viewingSiswa.nis || findSiswa(db, c.siswaId, c)?.id === viewingSiswa.id)
                     .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
                   
                   return (

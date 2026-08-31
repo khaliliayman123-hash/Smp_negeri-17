@@ -77,6 +77,25 @@ export function removeDeletedTombstone(id: string | number | undefined | null) {
   }
 }
 
+export function clearTombstonesForExistingItems(remoteData: any) {
+  if (!remoteData || typeof remoteData !== 'object') return;
+  const listKeys = [
+    'siswa', 'orangTua', 'akademik', 'kesehatan', 'ekonomi', 'psikologi', 'sosial',
+    'prestasi', 'pelanggaran', 'remisiPoin', 'konseling', 'asesmen', 'homeVisit',
+    'surat', 'dokumen', 'catatanPerkembangan', 'pengaduanSiswa', 'kehadiran',
+    'laporanKejadian', 'users', 'kelas', 'tahunPelajaran'
+  ];
+  listKeys.forEach(k => {
+    if (Array.isArray(remoteData[k])) {
+      remoteData[k].forEach((item: any) => {
+        if (item && item.id) {
+          removeDeletedTombstone(item.id);
+        }
+      });
+    }
+  });
+}
+
 export interface PendingDeletionTask {
   id: string;
   action: string;
@@ -349,23 +368,40 @@ export function findSiswa(db: DatabaseState | null | undefined, targetIdOrRef: s
     match = db.siswa.find(s => s && ((s.nis && s.nis.toString().trim() === target) || (s.nisn && s.nisn.toString().trim() === target)));
     if (match) return match;
 
-    // 3. Match by exact name
+    // 3. Match by partial ID pattern (e.g. target="12345", s.id="sis-nis-12345")
+    match = db.siswa.find(s => s && s.id && (s.id.toLowerCase().includes(targetLower) || targetLower.includes(s.id.toLowerCase())));
+    if (match) return match;
+
+    // 4. Match by exact name
     match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase() === targetLower);
     if (match) return match;
+
+    // 5. Match by normalized name (removing spaces and punctuation)
+    const normTarget = targetLower.replace(/[^a-z0-9]/g, '');
+    if (normTarget && normTarget.length >= 3) {
+      match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget);
+      if (match) return match;
+    }
   }
 
-  // 4. Match via itemObj fields if itemObj provided (nis, siswaNama, namaSiswa, nama, siswaId)
+  // 6. Match via itemObj fields if itemObj provided (nis, siswaNama, namaSiswa, nama, siswaId, siswald, idSiswa)
   if (itemObj) {
     const itemNis = (itemObj.nis || itemObj.nisSiswa || '').toString().trim();
     if (itemNis) {
-      const match = db.siswa.find(s => s && s.nis && s.nis.toString().trim() === itemNis);
+      const match = db.siswa.find(s => s && ((s.nis && s.nis.toString().trim() === itemNis) || (s.nisn && s.nisn.toString().trim() === itemNis)));
       if (match) return match;
     }
 
     const itemNama = (itemObj.siswaNama || itemObj.namaSiswa || itemObj.nama || itemObj.siswa || '').toString().trim().toLowerCase();
-    if (itemNama && itemNama !== 'siswa') {
-      const match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase() === itemNama);
+    if (itemNama && itemNama !== 'siswa' && itemNama !== '-') {
+      let match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase() === itemNama);
       if (match) return match;
+
+      const normItemNama = itemNama.replace(/[^a-z0-9]/g, '');
+      if (normItemNama && normItemNama.length >= 3) {
+        match = db.siswa.find(s => s && s.nama && s.nama.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normItemNama);
+        if (match) return match;
+      }
 
       const partialMatch = db.siswa.find(s => s && s.nama && (s.nama.toString().trim().toLowerCase().includes(itemNama) || itemNama.includes(s.nama.toString().trim().toLowerCase())));
       if (partialMatch) return partialMatch;
@@ -943,30 +979,37 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
            t.includes('sample prestasi');
   };
 
-  // Strictly filter PRESTASI to eliminate legacy sample dummy data and orphaned records
+  // Process PRESTASI - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.prestasi && Array.isArray(parsed.prestasi)) {
-    parsed.prestasi = parsed.prestasi.filter((p: any) => {
+    parsed.prestasi = parsed.prestasi.filter((p: any, idx: number) => {
       if (!p || typeof p !== 'object') return false;
-      const id = String(p.id || '').trim();
-      const sId = String(p.siswaId || p.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(p.namaPrestasi || p.tingkat || p.tahun || p.juara || p.kategori || p.siswaId || p.nama || p.siswaNama || p.namaSiswa || p.nis);
+      if (!hasContent) return false;
+
+      let id = String(p.id || '').trim();
+      let sId = String(p.siswaId || p.idSiswa || p.siswald || '').trim();
+      
+      if (!id) {
+        id = `pres-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        p.id = id;
+      }
+      
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
       
-      // Filter out known sample template items
-      if (isSampleTitle(p.namaPrestasi)) {
+      // Filter out known sample template items only on dummy students
+      if (isSampleTitle(p.namaPrestasi) && (!sId || sId.startsWith('sis-sample') || sId === 'sis-1' || sId === 'sis-2')) {
         addDeletedTombstone(id);
         addToDeletionQueue(id, 'deletePrestasi', { id, namaPrestasi: p.namaPrestasi, siswaId: sId });
         migrated = true;
         return false;
       }
-      // If students exist, filter out orphaned records with nonexistent student IDs (like old mock sis-1, sis-2)
+
+      // Map to canonical student ID if match found
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, p);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deletePrestasi', { id, namaPrestasi: p.namaPrestasi, siswaId: sId });
+        if (student && student.id !== p.siswaId) {
+          p.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -975,21 +1018,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.prestasi = [];
   }
 
-  // Strictly filter PELANGGARAN to eliminate sample dummy data and orphaned records
+  // Process PELANGGARAN - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.pelanggaran && Array.isArray(parsed.pelanggaran)) {
-    parsed.pelanggaran = parsed.pelanggaran.filter((p: any) => {
+    parsed.pelanggaran = parsed.pelanggaran.filter((p: any, idx: number) => {
       if (!p || typeof p !== 'object') return false;
-      const id = String(p.id || '').trim();
-      const sId = String(p.siswaId || p.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(p.jenisPelanggaran || p.kategori || p.poin || p.tindakLanjut || p.siswaId || p.nama || p.siswaNama || p.namaSiswa || p.nis);
+      if (!hasContent) return false;
+
+      let id = String(p.id || '').trim();
+      let sId = String(p.siswaId || p.idSiswa || p.siswald || '').trim();
+
+      if (!id) {
+        id = `pel-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        p.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, p);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deletePelanggaran', { id, jenisPelanggaran: p.jenisPelanggaran, siswaId: sId });
+        if (student && student.id !== p.siswaId) {
+          p.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -998,21 +1048,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.pelanggaran = [];
   }
 
-  // Strictly filter REMISI POIN
+  // Process REMISI POIN - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.remisiPoin && Array.isArray(parsed.remisiPoin)) {
-    parsed.remisiPoin = parsed.remisiPoin.filter((r: any) => {
+    parsed.remisiPoin = parsed.remisiPoin.filter((r: any, idx: number) => {
       if (!r || typeof r !== 'object') return false;
-      const id = String(r.id || '').trim();
-      const sId = String(r.siswaId || r.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(r.jenisRemisi || r.kategori || r.poin || r.keterangan || r.siswaId || r.nama || r.siswaNama || r.namaSiswa || r.nis);
+      if (!hasContent) return false;
+
+      let id = String(r.id || '').trim();
+      let sId = String(r.siswaId || r.idSiswa || r.siswald || '').trim();
+
+      if (!id) {
+        id = `rem-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        r.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, r);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deleteRemisiPoin', { id, jenisRemisi: r.jenisRemisi, siswaId: sId });
+        if (student && student.id !== r.siswaId) {
+          r.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1021,21 +1078,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.remisiPoin = [];
   }
 
-  // Strictly filter KONSELING
+  // Process KONSELING - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.konseling && Array.isArray(parsed.konseling)) {
-    parsed.konseling = parsed.konseling.filter((k: any) => {
+    parsed.konseling = parsed.konseling.filter((k: any, idx: number) => {
       if (!k || typeof k !== 'object') return false;
-      const id = String(k.id || '').trim();
-      const sId = String(k.siswaId || k.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(k.permasalahan || k.nomorKonseling || k.analisis || k.solusi || k.hasil || k.tindakLanjut || k.siswaId || k.nama || k.siswaNama || k.namaSiswa || k.nis);
+      if (!hasContent) return false;
+
+      let id = String(k.id || '').trim();
+      let sId = String(k.siswaId || k.idSiswa || k.siswald || '').trim();
+
+      if (!id) {
+        id = `kon-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        k.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, k);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deleteKonseling', { id, nomorKonseling: k.nomorKonseling, siswaId: sId });
+        if (student && student.id !== k.siswaId) {
+          k.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1044,21 +1108,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.konseling = [];
   }
 
-  // Strictly filter ASESMEN
+  // Process ASESMEN - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.asesmen && Array.isArray(parsed.asesmen)) {
-    parsed.asesmen = parsed.asesmen.filter((a: any) => {
+    parsed.asesmen = parsed.asesmen.filter((a: any, idx: number) => {
       if (!a || typeof a !== 'object') return false;
-      const id = String(a.id || '').trim();
-      const sId = String(a.siswaId || a.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(a.akpd || a.dcm || a.aum || a.iq || a.minat || a.bakat || a.siswaId || a.id || a.nama || a.siswaNama || a.nis);
+      if (!hasContent) return false;
+
+      let id = String(a.id || '').trim();
+      let sId = String(a.siswaId || a.idSiswa || a.siswald || a.id || '').trim();
+
+      if (!id) {
+        id = sId || `asm-row-${idx + 1}`;
+        a.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, a);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deleteAsesmen', { id, siswaId: sId });
+        if (student && student.id !== a.siswaId) {
+          a.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1067,21 +1138,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.asesmen = [];
   }
 
-  // Strictly filter HOME VISIT
+  // Process HOME VISIT - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.homeVisit && Array.isArray(parsed.homeVisit)) {
-    parsed.homeVisit = parsed.homeVisit.filter((h: any) => {
+    parsed.homeVisit = parsed.homeVisit.filter((h: any, idx: number) => {
       if (!h || typeof h !== 'object') return false;
-      const id = String(h.id || '').trim();
-      const sId = String(h.siswaId || h.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(h.tujuan || h.hasil || h.tanggal || h.siswaId || h.nama || h.siswaNama || h.namaSiswa || h.nis);
+      if (!hasContent) return false;
+
+      let id = String(h.id || '').trim();
+      let sId = String(h.siswaId || h.idSiswa || h.siswald || '').trim();
+
+      if (!id) {
+        id = `hv-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        h.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, h);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deleteHomeVisit', { id, siswaId: sId });
+        if (student && student.id !== h.siswaId) {
+          h.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1090,21 +1168,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.homeVisit = [];
   }
 
-  // Strictly filter SURAT
+  // Process SURAT - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.surat && Array.isArray(parsed.surat)) {
-    parsed.surat = parsed.surat.filter((s: any) => {
+    parsed.surat = parsed.surat.filter((s: any, idx: number) => {
       if (!s || typeof s !== 'object') return false;
-      const id = String(s.id || '').trim();
-      const sId = String(s.siswaId || s.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(s.nomorSurat || s.jenisSurat || s.perihal || s.isiSurat || s.siswaId || s.nama || s.siswaNama || s.namaSiswa || s.nis);
+      if (!hasContent) return false;
+
+      let id = String(s.id || '').trim();
+      let sId = String(s.siswaId || s.idSiswa || s.siswald || '').trim();
+
+      if (!id) {
+        id = `srt-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        s.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, s);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deleteSurat', { id, nomorSurat: s.nomorSurat, siswaId: sId });
+        if (student && student.id !== s.siswaId) {
+          s.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1113,21 +1198,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.surat = [];
   }
 
-  // Strictly filter DOKUMEN
+  // Process DOKUMEN - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.dokumen && Array.isArray(parsed.dokumen)) {
-    parsed.dokumen = parsed.dokumen.filter((d: any) => {
+    parsed.dokumen = parsed.dokumen.filter((d: any, idx: number) => {
       if (!d || typeof d !== 'object') return false;
-      const id = String(d.id || '').trim();
-      const sId = String(d.siswaId || d.idSiswa || '').trim();
-      if (!id) return false;
+      const hasContent = !!(d.namaFile || d.jenisDokumen || d.fileData || d.siswaId || d.nama || d.siswaNama || d.namaSiswa || d.nis);
+      if (!hasContent) return false;
+
+      let id = String(d.id || '').trim();
+      let sId = String(d.siswaId || d.idSiswa || d.siswald || '').trim();
+
+      if (!id) {
+        id = `dok-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        d.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, d);
-        if (!student) {
-          addDeletedTombstone(id);
-          addToDeletionQueue(id, 'deleteDokumen', { id, namaFile: d.namaFile, siswaId: sId });
+        if (student && student.id !== d.siswaId) {
+          d.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1136,23 +1228,28 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.dokumen = [];
   }
 
-  // Strictly filter KEHADIRAN
+  // Process KEHADIRAN - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.kehadiran && Array.isArray(parsed.kehadiran)) {
-    parsed.kehadiran = parsed.kehadiran.filter((k: any) => {
+    parsed.kehadiran = parsed.kehadiran.filter((k: any, idx: number) => {
       if (!k || typeof k !== 'object') return false;
-      const id = String(k.id || '').trim();
-      const sId = String(k.siswaId || k.idSiswa || '').trim();
-      if (!id && !sId) return false;
+      const hasContent = !!(k.mingguKe || k.bulan || k.hadir !== undefined || k.siswaId || k.nama || k.siswaNama || k.namaSiswa || k.nis);
+      if (!hasContent) return false;
+
+      let id = String(k.id || '').trim();
+      let sId = String(k.siswaId || k.idSiswa || k.siswald || '').trim();
+
+      if (!id) {
+        id = `khd-${sId ? sId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        k.id = id;
+      }
+
       if (isTombstoned(id) || (sId && isTombstoned(sId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, sId, k);
-        if (!student) {
-          if (id) {
-            addDeletedTombstone(id);
-            addToDeletionQueue(id, 'deleteKehadiran', { id, siswaId: sId });
-          }
+        if (student && student.id !== k.siswaId) {
+          k.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1161,22 +1258,29 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     parsed.kehadiran = [];
   }
 
-  // Strictly filter catatanPerkembangan to discard empty rows, missing IDs, or blank content
+  // Process Catatan Perkembangan - auto-heal IDs and match student IDs without dropping valid records
   if (parsed.catatanPerkembangan && Array.isArray(parsed.catatanPerkembangan)) {
-    parsed.catatanPerkembangan = parsed.catatanPerkembangan.filter((c: any) => {
+    parsed.catatanPerkembangan = parsed.catatanPerkembangan.filter((c: any, idx: number) => {
       if (!c || typeof c !== 'object') return false;
-      const cleanId = String(c.id || '').trim();
       const cleanCatatan = String(c.catatan || '').trim();
-      const cleanSiswaId = String(c.siswaId || c.idSiswa || '').trim();
-      if (!cleanId || !cleanCatatan || !cleanSiswaId) return false;
-      if (isTombstoned(cleanId) || isTombstoned(cleanSiswaId)) return false;
+      const hasContent = !!(cleanCatatan || c.siswaId || c.idSiswa || c.nama || c.siswaNama || c.namaSiswa || c.nis);
+      if (!hasContent) return false;
+
+      let cleanId = String(c.id || '').trim();
+      let cleanSiswaId = String(c.siswaId || c.idSiswa || c.siswald || '').trim();
+
+      if (!cleanId) {
+        cleanId = `cp-${cleanSiswaId ? cleanSiswaId.replace(/[^a-zA-Z0-9]/g, '') : 'row'}-${idx + 1}`;
+        c.id = cleanId;
+      }
+
+      if (isTombstoned(cleanId) || (cleanSiswaId && isTombstoned(cleanSiswaId))) return false;
+
       if (parsed.siswa && parsed.siswa.length > 0) {
         const student = findSiswa(parsed as DatabaseState, cleanSiswaId, c);
-        if (!student) {
-          addDeletedTombstone(cleanId);
-          addToDeletionQueue(cleanId, 'deleteCatatanPerkembangan', { id: cleanId, siswaId: cleanSiswaId });
+        if (student && student.id !== c.siswaId) {
+          c.siswaId = student.id;
           migrated = true;
-          return false;
         }
       }
       return true;
@@ -1651,7 +1755,10 @@ export const apiService = {
 
       const res = await apiCall<DatabaseState>('getFullDatabase');
       if (res.success && res.data) {
-        // Sanitize the remote data first to filter out empty/invalid rows!
+        // Clear tombstones for any items that exist in the remote database
+        clearTombstonesForExistingItems(res.data);
+
+        // Sanitize the remote data first to ensure types and mappings are consistent
         const { sanitized } = sanitizeDatabaseState(res.data);
 
         // Cegah penimpaan data lokal jika database di Google Sheets kosong (belum di-seeding)
