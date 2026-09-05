@@ -323,6 +323,8 @@ export default function App() {
   const [connStatus, setConnStatus] = useState<'idle' | 'checking' | 'connected' | 'failed'>('idle');
   const [connMessage, setConnMessage] = useState('');
   const [connCode, setConnCode] = useState('');
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -341,6 +343,48 @@ export default function App() {
     }
   }, [currentUser, activeMenu]);
 
+  const handleManualSync = async () => {
+    setIsAutoSyncing(true);
+    setConnStatus('checking');
+    setConnMessage('Mengunduh data terbaru dari Google Sheets...');
+    try {
+      const data = await apiService.getData(true, false);
+      setDb(data);
+      setConnStatus('connected');
+      setConnMessage('Data terbaru berhasil diperbarui dari Google Sheets!');
+      const totalSiswa = data.siswa ? data.siswa.length : 0;
+      setSyncNotice(`Sinkronisasi berhasil! ${totalSiswa.toLocaleString('id-ID')} siswa telah dimuat.`);
+      setTimeout(() => setSyncNotice(null), 6000);
+    } catch (err: any) {
+      console.error('Manual sync failed:', err);
+      setConnStatus('failed');
+      setConnMessage(err?.message || 'Gagal sinkronisasi data dari Google Sheets.');
+    } finally {
+      setIsAutoSyncing(false);
+    }
+  };
+
+  const handleHardResetAndSync = async () => {
+    setIsAutoSyncing(true);
+    setConnStatus('checking');
+    setConnMessage('Membersihkan cache perangkat dan mengunduh database lengkap...');
+    try {
+      const data = await apiService.clearAllLocalDataAndSync();
+      setDb(data);
+      setConnStatus('connected');
+      setConnMessage('Cache berhasil dibersihkan & data terbaru telah dimuat!');
+      const totalSiswa = data.siswa ? data.siswa.length : 0;
+      setSyncNotice(`Sinkronisasi tuntas! ${totalSiswa.toLocaleString('id-ID')} siswa telah dimuat.`);
+      setTimeout(() => setSyncNotice(null), 6000);
+    } catch (err: any) {
+      console.error('Hard reset and sync failed:', err);
+      setConnStatus('failed');
+      setConnMessage(err?.message || 'Gagal sinkronisasi data dari Google Sheets.');
+    } finally {
+      setIsAutoSyncing(false);
+    }
+  };
+
   const loadDatabase = async (checkConnection: boolean = false, localOnly: boolean = false, forceRemote: boolean = false) => {
     // Optimization for fast startup: If not checking connection, not explicitly localOnly, and not forceRemote,
     // load cached database instantly to unblock the UI and fetch remote data in background (SWR pattern)
@@ -352,26 +396,37 @@ export default function App() {
         setSpreadsheetIdInput(localData.config.spreadsheetId || '');
         setIsLoading(false); // Instantly enters the app!
 
-        if (localData.config.gasApiUrl) {
+        const gasUrl = localData.config.gasApiUrl;
+        const needsFullSync = (localData as any)._needs_fresh_sheet_sync || (localData.siswa || []).length < 1300;
+
+        if (gasUrl) {
           setConnStatus('checking');
-          setConnMessage('Menghubungkan ke awan...');
-          
-          // Background fetch from Google Sheets
-          apiService.getData(false, false).then((remoteData) => {
+          setConnMessage(needsFullSync ? 'Mengunduh database lengkap (1.386 siswa)...' : 'Menghubungkan ke awan...');
+          setIsAutoSyncing(true);
+
+          // Background fetch from Google Sheets (force if local data is obsolete or missing students)
+          apiService.getData(needsFullSync, false).then((remoteData) => {
             setDb(remoteData);
             setConnStatus('connected');
             setConnMessage('Koneksi berhasil dan data terbaru telah disinkronkan!');
+            setIsAutoSyncing(false);
+            const totalSiswa = remoteData.siswa ? remoteData.siswa.length : 0;
+            setSyncNotice(`Tersinkronisasi otomatis dengan Google Sheets (${totalSiswa.toLocaleString('id-ID')} siswa)`);
+            setTimeout(() => setSyncNotice(null), 6000);
           }).catch((err) => {
             console.warn('Background sync failed, using cached local data:', err);
             setConnStatus('failed');
             setConnMessage('Gagal sinkronisasi data awan. Berjalan dalam mode lokal offline.');
+            setIsAutoSyncing(false);
           });
         } else {
           setConnStatus('idle');
+          setIsAutoSyncing(false);
         }
       } catch (e) {
         console.error('Failed to load initial local database', e);
         setIsLoading(false);
+        setIsAutoSyncing(false);
       }
       return;
     }
@@ -837,6 +892,40 @@ export default function App() {
 
           {loginTab === 'admin' ? (
             <div className="space-y-4">
+              {/* Cloud Sync Status & Quick Refresh */}
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px]">
+                <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                  {isAutoSyncing ? (
+                    <>
+                      <RefreshCw size={12} className="text-blue-600 animate-spin shrink-0" />
+                      <span className="text-blue-700 font-medium truncate">Menyinkronkan awan...</span>
+                    </>
+                  ) : syncNotice ? (
+                    <>
+                      <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                      <span className="text-emerald-700 font-medium truncate">{syncNotice}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Database size={12} className="text-slate-500 shrink-0" />
+                      <span className="text-slate-600 font-medium truncate">
+                        Google Sheets: {connStatus === 'connected' ? 'Tersinkron' : 'Aktif'}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isAutoSyncing}
+                  title="Sinkronkan data dari Google Sheets"
+                  className="flex items-center gap-1 px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-lg font-bold text-[10px] transition shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                >
+                  <RefreshCw size={10} className={isAutoSyncing ? 'animate-spin' : ''} />
+                  <span>{isAutoSyncing ? 'Sinkron...' : 'Sinkronkan'}</span>
+                </button>
+              </div>
+
               <div className="space-y-2">
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block text-center">
                   PILIH AKUN STAF
@@ -951,6 +1040,73 @@ export default function App() {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Cloud Sync Status & Quick Refresh */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px]">
+                <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                  {isAutoSyncing ? (
+                    <>
+                      <RefreshCw size={13} className="text-blue-600 animate-spin shrink-0" />
+                      <span className="text-blue-700 font-medium truncate">Menyinkronkan data Google Sheets...</span>
+                    </>
+                  ) : syncNotice ? (
+                    <>
+                      <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                      <span className="text-emerald-700 font-medium truncate">{syncNotice}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Database size={13} className="text-slate-500 shrink-0" />
+                      <span className="text-slate-600 font-medium truncate">
+                        {db?.siswa?.length ? `${db.siswa.length.toLocaleString('id-ID')} Siswa Terdaftar` : 'Memuat data...'}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleManualSync}
+                    disabled={isAutoSyncing}
+                    title="Tarik data terbaru dari Google Sheets"
+                    className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-lg font-bold text-[10px] transition shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                  >
+                    <RefreshCw size={11} className={isAutoSyncing ? 'animate-spin' : ''} />
+                    <span>{isAutoSyncing ? 'Menyinkron...' : 'Sinkronkan'}</span>
+                  </button>
+                  {(!db?.siswa || db.siswa.length < 1300) && (
+                    <button
+                      type="button"
+                      onClick={handleHardResetAndSync}
+                      disabled={isAutoSyncing}
+                      title="Bersihkan cache lokal dan unduh ulang 1.386 siswa"
+                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold text-[10px] transition shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                    >
+                      Reset Cache
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Alert jika data siswa di bawah 1.300 atau sedang sinkronisasi */}
+              {(!db?.siswa || db.siswa.length < 1300) && (
+                <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-xl text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                      <RefreshCw size={13} className={isAutoSyncing ? "animate-spin text-amber-700" : "text-amber-700"} />
+                      {isAutoSyncing ? "Sedang Mengunduh Data Google Sheets..." : "Data Siswa Belum Lengkap"}
+                    </span>
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                      {db?.siswa?.length || 0} / 1.386 Siswa
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    {isAutoSyncing
+                      ? "Sedang mengunduh seluruh 1.386 data siswa (Kelas 7, 8, dan 9). Pilihan kelas akan aktif dan terisi otomatis setelah selesai."
+                      : "Perangkat ini masih menyimpan data lama atau belum mengunduh data Kelas 9 dari Google Sheets. Klik tombol Sinkronkan atau Reset Cache di atas."}
+                  </p>
+                </div>
+              )}
+
               {/* Dropdown Kelas */}
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">

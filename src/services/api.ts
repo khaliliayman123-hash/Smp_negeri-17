@@ -30,6 +30,7 @@ import {
   Kehadiran,
   LaporanKejadian,
 } from '../types';
+import { getIdbDatabase, setIdbDatabase, clearIdbDatabase } from './storage';
 
 const LOCAL_STORAGE_KEY = 'hds_bk_database_v1';
 const LOCAL_STORAGE_TOMBSTONES_KEY = 'hds_bk_deleted_tombstones_v1';
@@ -640,7 +641,19 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     }
   }
 
-  if (parsed._sanitized_v12 && !migrated) {
+  const hasKelas9Siswa = (parsed.siswa || []).some((s: any) => {
+    const kId = (s.kelasId || '').toString().toLowerCase();
+    const klName = (s.kelas || s.namaKelas || s.rombel || '').toString().toLowerCase();
+    return ['kl-23', 'kl-24', 'kl-25', 'kl-26', 'kl-27', 'kl-28', 'kl-29', 'kl-30', 'kl-31', 'kl-32', 'kl-33'].includes(kId) ||
+      klName.includes('9-') || klName.includes('9.') || klName.includes('ix');
+  });
+
+  const isObsolete859Cache = (parsed.siswa || []).length === 859 || (!hasKelas9Siswa && (parsed.siswa || []).length > 0);
+  if (isObsolete859Cache) {
+    (parsed as any)._needs_fresh_sheet_sync = true;
+  }
+
+  if (parsed._sanitized_v14 && hasKelas9Siswa && !isObsolete859Cache && !migrated) {
     return { sanitized: parsed as DatabaseState, migrated: false };
   }
 
@@ -1354,8 +1367,12 @@ function loadLocalDatabase(): DatabaseState {
         parsed._cleaned_default_data_v2 = true;
       }
       const { sanitized, migrated } = sanitizeDatabaseState(parsed);
-      if (migrated || !stored.includes('_sanitized_v12')) {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+      if (migrated || !stored.includes('_sanitized_v14')) {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+        } catch (storageErr) {
+          console.warn('Could not update migrated db in localStorage, quota limit:', storageErr);
+        }
       }
       currentDatabase = sanitized;
       return sanitized;
@@ -1365,9 +1382,13 @@ function loadLocalDatabase(): DatabaseState {
   }
   const clonedInitial = JSON.parse(JSON.stringify(INITIAL_DATABASE));
   clonedInitial._cleaned_default_data_v2 = true;
-  clonedInitial._sanitized_v12 = true;
+  clonedInitial._sanitized_v14 = true;
   const { sanitized } = sanitizeDatabaseState(clonedInitial);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+  } catch (storageErr) {
+    console.warn('Could not store initial db in localStorage, quota limit:', storageErr);
+  }
   currentDatabase = sanitized;
   return sanitized;
 }
@@ -1379,7 +1400,31 @@ function saveLocalDatabase(db: DatabaseState) {
   const filtered = filterOutTombstones(db);
   const { sanitized } = sanitizeDatabaseState(filtered);
   currentDatabase = sanitized;
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+
+  // Persist full database to IndexedDB (completely immune to 5MB quota limits)
+  setIdbDatabase(sanitized).catch((err) => console.warn('IDB save error:', err));
+
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
+  } catch (quotaErr: any) {
+    console.warn('localStorage quota exceeded on device, saving compact representation to preserve space:', quotaErr);
+    try {
+      // In mobile environments where quota is strictly 5MB or less:
+      // Strip heavy base64 photos to ensure 1,386+ students textual data and grades fit comfortably under quota (~1.8 MB)
+      const compactSiswa = (sanitized.siswa || []).map(s => {
+        if (s.foto && s.foto.length > 500) {
+          const { foto, ...rest } = s;
+          return { ...rest, foto: '' };
+        }
+        return s;
+      });
+      const compactDb = { ...sanitized, siswa: compactSiswa };
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(compactDb));
+      console.log('Compact database successfully persisted to localStorage.');
+    } catch (compactErr: any) {
+      console.error('Failed to save compact database into localStorage:', compactErr);
+    }
+  }
 }
 
 export const getGasApiUrl = (): string => {
@@ -1445,6 +1490,11 @@ async function apiCall<T>(action: string, payload: any = {}): Promise<{ success:
   const trimmedUrl = url.trim();
   const spreadsheetId = getSpreadsheetId();
 
+  // Set timeout: 60s for full database sync, 30s for standard operations
+  const controller = new AbortController();
+  const timeoutMs = action === 'getFullDatabase' ? 60000 : 30000;
+  const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     // Combine payload, action, and spreadsheetId into body to ensure parameter is preserved on 302 redirects
     const bodyPayload = typeof payload === 'object' && payload !== null
@@ -1459,7 +1509,9 @@ async function apiCall<T>(action: string, payload: any = {}): Promise<{ success:
         'Content-Type': 'text/plain',
       },
       body: JSON.stringify(bodyPayload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutTimer);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -1480,6 +1532,11 @@ async function apiCall<T>(action: string, payload: any = {}): Promise<{ success:
     }
     return result;
   } catch (error: any) {
+    clearTimeout(timeoutTimer);
+    if (error?.name === 'AbortError') {
+      console.warn(`Request timeout (${timeoutMs}ms) for action: ${action}`);
+      return { success: false, message: 'Koneksi ke Google Sheets melebihi batas waktu (timeout). Silakan periksa jaringan dan coba lagi.' };
+    }
     console.error('API Call Error:', error);
     return { success: false, message: error.message || 'Koneksi ke Google Apps Script gagal.' };
   }
@@ -1742,6 +1799,21 @@ export const apiService = {
   getData: async (force: boolean = false, localOnly: boolean = false): Promise<DatabaseState> => {
     let localDb = loadLocalDatabase();
     localDb = filterOutTombstones(localDb);
+
+    // Check if IndexedDB has a more complete database (e.g. 1,386 students) if localStorage is small or incomplete
+    if (!localDb.siswa || localDb.siswa.length < 1300) {
+      try {
+        const idbData = await getIdbDatabase();
+        if (idbData && idbData.siswa && idbData.siswa.length >= (localDb.siswa?.length || 0)) {
+          const { sanitized } = sanitizeDatabaseState(idbData);
+          localDb = filterOutTombstones(sanitized);
+          currentDatabase = localDb;
+        }
+      } catch (idbErr) {
+        console.warn('Could not read idb in getData:', idbErr);
+      }
+    }
+
     if (localOnly) {
       return localDb;
     }
@@ -1807,6 +1879,7 @@ export const apiService = {
   resetDatabase: async (): Promise<DatabaseState> => {
     const currentConfig = currentDatabase?.config || { gasApiUrl: '', spreadsheetId: '' };
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    await clearIdbDatabase();
     currentDatabase = null;
     const restored = loadLocalDatabase();
     
@@ -1818,6 +1891,24 @@ export const apiService = {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(restored));
     currentDatabase = restored;
     return restored;
+  },
+
+  clearAllLocalDataAndSync: async (): Promise<DatabaseState> => {
+    const currentConfig = currentDatabase?.config || { gasApiUrl: '', spreadsheetId: '' };
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      await clearIdbDatabase();
+    } catch (e) {
+      console.warn('Clear storage warning:', e);
+    }
+    currentDatabase = null;
+    const cleanInitial = loadLocalDatabase();
+    cleanInitial.config = {
+      gasApiUrl: currentConfig.gasApiUrl || cleanInitial.config.gasApiUrl,
+      spreadsheetId: currentConfig.spreadsheetId || cleanInitial.config.spreadsheetId
+    };
+    currentDatabase = cleanInitial;
+    return await apiService.getData(true, false);
   },
 
   // CRUD Operations with dynamic routing (Remote first, else LocalStorage)
