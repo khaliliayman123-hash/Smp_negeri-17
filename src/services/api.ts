@@ -273,7 +273,7 @@ export const isOldOrDefaultUrl = (url?: string): boolean => {
 const INITIAL_DATABASE: DatabaseState = {
   config: {
     gasApiUrl: DEFAULT_GAS_API_URL,
-    spreadsheetId: '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc',
+    spreadsheetId: '',
   },
   users: [
     { id: 'usr-1', username: 'admin', nama: 'Sulaiman, S.Psi', role: UserRole.ADMIN, email: 'sulaiman.admin@sekolah.sch.id', isActive: true },
@@ -619,10 +619,11 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
   let migrated = false;
 
   // Ensure config block is present and always sanitized to latest URL
+  const OBSOLETE_SPREADSHEET_ID = '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc';
   if (!parsed.config || typeof parsed.config !== 'object') {
     parsed.config = { 
       gasApiUrl: DEFAULT_GAS_API_URL, 
-      spreadsheetId: (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc' 
+      spreadsheetId: '' 
     };
     migrated = true;
   } else {
@@ -632,9 +633,13 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     if (isOldOrDefaultUrl(gas)) {
       gas = DEFAULT_GAS_API_URL;
     }
+    let sid = (parsed.config.spreadsheetId || (import.meta as any).env.VITE_SPREADSHEET_ID || '').toString().trim();
+    if (sid === OBSOLETE_SPREADSHEET_ID) {
+      sid = '';
+    }
     parsed.config = {
       gasApiUrl: gas,
-      spreadsheetId: (parsed.config.spreadsheetId || (import.meta as any).env.VITE_SPREADSHEET_ID || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc').toString().trim()
+      spreadsheetId: sid
     };
     if (parsed.config.gasApiUrl !== originalGas || parsed.config.spreadsheetId !== originalSpreadsheet) {
       migrated = true;
@@ -1465,17 +1470,23 @@ export const extractSpreadsheetId = (input: string): string => {
 };
 
 export const getSpreadsheetId = (): string => {
+  const OBSOLETE_ID = '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc';
   const envId = (import.meta as any).env.VITE_SPREADSHEET_ID;
-  if (envId && envId.trim() !== '') {
+  if (envId && envId.trim() !== '' && envId.trim() !== OBSOLETE_ID) {
     return extractSpreadsheetId(envId);
   }
-  const rawId = currentDatabase?.config?.spreadsheetId || '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc';
-  return extractSpreadsheetId(rawId);
+  const rawId = currentDatabase?.config?.spreadsheetId;
+  if (rawId && rawId.trim() !== '' && rawId.trim() !== OBSOLETE_ID) {
+    return extractSpreadsheetId(rawId);
+  }
+  return '';
 };
 
 export const setSpreadsheetId = (id: string) => {
   const db = { ...currentDatabase } as DatabaseState;
-  db.config.spreadsheetId = id ? extractSpreadsheetId(id) : '';
+  const OBSOLETE_ID = '1g3thopFbDdsvlXyidgq_PEiiEhY5cH3PngqGO5weHqc';
+  const cleanId = id ? extractSpreadsheetId(id) : '';
+  db.config.spreadsheetId = cleanId === OBSOLETE_ID ? '' : cleanId;
   saveLocalDatabase(db);
 };
 
@@ -1489,6 +1500,7 @@ async function apiCall<T>(action: string, payload: any = {}): Promise<{ success:
 
   const trimmedUrl = url.trim();
   const spreadsheetId = getSpreadsheetId();
+  const hasCustomSpreadsheetId = spreadsheetId && spreadsheetId.trim() !== '';
 
   // Set timeout: 60s for full database sync, 30s for standard operations
   const controller = new AbortController();
@@ -1496,12 +1508,15 @@ async function apiCall<T>(action: string, payload: any = {}): Promise<{ success:
   const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Combine payload, action, and spreadsheetId into body to ensure parameter is preserved on 302 redirects
+    // Only send spreadsheetId if explicitly configured (to avoid overriding the active spreadsheet bound to Web App)
     const bodyPayload = typeof payload === 'object' && payload !== null
-      ? { ...payload, action, spreadsheetId }
-      : { payload, action, spreadsheetId };
+      ? { ...payload, action, ...(hasCustomSpreadsheetId ? { spreadsheetId } : {}) }
+      : { payload, action, ...(hasCustomSpreadsheetId ? { spreadsheetId } : {}) };
 
-    const queryParams = `?action=${action}&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
+    const queryParams = hasCustomSpreadsheetId
+      ? `?action=${action}&spreadsheetId=${encodeURIComponent(spreadsheetId)}`
+      : `?action=${action}`;
+
     const response = await fetch(`${trimmedUrl}${queryParams}`, {
       method: 'POST',
       mode: 'cors',
