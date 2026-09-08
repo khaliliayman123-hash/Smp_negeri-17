@@ -227,6 +227,7 @@ export interface CatatanPerkembangan {
   siswaId: string;
   tanggal: string;
   catatan: string; // format teks
+  keterangan?: string; // alias for compatibility with Google Sheets
   rekomendasi?: string;
   guruBkId?: string;
   namaGuru?: string;

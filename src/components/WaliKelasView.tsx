@@ -37,6 +37,7 @@ import {
   Eye,
   Plus,
   Edit,
+  Edit2,
   Trash2,
   Star,
   Check,
@@ -701,7 +702,15 @@ export default function WaliKelasView({
   const [catatanFilterKategori, setCatatanFilterKategori] = useState<string>('ALL');
   const [showCatatanModal, setShowCatatanModal] = useState(false);
   const [editingCatatan, setEditingCatatan] = useState<CatatanPerkembangan | null>(null);
-  const [formCatatan, setFormCatatan] = useState({
+  const [formCatatan, setFormCatatan] = useState<{
+    siswaId: string;
+    tanggal: string;
+    kategori: string;
+    catatan: string;
+    rekomendasi: string;
+    namaGuru: string;
+    roleGuru: string;
+  }>({
     siswaId: '',
     tanggal: new Date().toISOString().split('T')[0],
     kategori: 'Perilaku & Karakter',
@@ -4229,6 +4238,205 @@ export default function WaliKelasView({
             </div>
           )}
 
+          {/* TAB: Catatan Perkembangan Siswa */}
+          {activeSubFeature === 'catatan_perkembangan' && (
+            <div className="space-y-4">
+              {/* Header card with action */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold shrink-0">
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                      Catatan Perkembangan Siswa {currentClassName}
+                      <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                        {filteredCatatanPerkembangan.length} Catatan
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Catatan perkembangan, pembinaan karakter, perilaku, dan kemajuan belajar siswa kelas Anda.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => {
+                      setEditingCatatan(null);
+                      setFormCatatan({
+                        siswaId: classStudents[0]?.id || '',
+                        tanggal: new Date().toISOString().split('T')[0],
+                        kategori: 'Perilaku & Karakter',
+                        catatan: '',
+                        rekomendasi: '',
+                        namaGuru: currentUser.nama || 'Wali Kelas',
+                        roleGuru: currentUser.role
+                      });
+                      setShowCatatanModal(true);
+                    }}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <Plus size={14} /> Tambah Catatan Siswa
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter bar */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search size={14} className="absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari berdasarkan nama siswa atau isi catatan..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 focus:bg-white transition"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Kategori:</span>
+                  <select
+                    value={catatanFilterKategori}
+                    onChange={(e) => setCatatanFilterKategori(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:bg-white text-slate-700 cursor-pointer"
+                  >
+                    <option value="ALL">Semua Kategori</option>
+                    <option value="Perilaku & Karakter">Perilaku & Karakter</option>
+                    <option value="Akademik & Belajar">Akademik & Belajar</option>
+                    <option value="Sosial & Emosional">Sosial & Emosional</option>
+                    <option value="Kedisiplinan & Kehadiran">Kedisiplinan & Kehadiran</option>
+                    <option value="Motivasi & Minat">Motivasi & Minat</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Cards / List of Catatan */}
+              {filteredCatatanPerkembangan.length === 0 ? (
+                <div className="bg-white p-12 rounded-2xl border border-slate-100 shadow-xs text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                    <FileText size={24} />
+                  </div>
+                  <h4 className="font-bold text-slate-700 text-sm">Belum Ada Catatan Perkembangan</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {searchQuery || catatanFilterKategori !== 'ALL'
+                      ? 'Tidak ada catatan yang sesuai dengan filter pencarian Anda.'
+                      : 'Belum ada catatan perkembangan yang diinput untuk siswa kelas ini. Klik tombol Tambah Catatan Siswa untuk membuat catatan baru.'}
+                  </p>
+                  {(searchQuery || catatanFilterKategori !== 'ALL') && (
+                    <button
+                      onClick={() => { setSearchQuery(''); setCatatanFilterKategori('ALL'); }}
+                      className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
+                    >
+                      Reset Filter
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredCatatanPerkembangan.map((c) => {
+                    const student = findSiswa(db, c.siswaId, c);
+                    return (
+                      <div
+                        key={c.id}
+                        className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:border-emerald-200 transition-all flex flex-col justify-between space-y-3"
+                      >
+                        <div className="space-y-2.5">
+                          {/* Student Info & Meta */}
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-extrabold flex items-center justify-center text-xs shrink-0">
+                                {(student?.nama || 'S').charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-extrabold text-slate-800 text-xs leading-tight">
+                                  {student?.nama || (c as any).namaSiswa || 'Siswa'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  NIS: {student?.nis || '-'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {c.kategori || 'Perilaku & Karakter'}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-mono">
+                                📅 {c.tanggal}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Catatan Body */}
+                          <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100/80 text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                            {c.catatan || (c as any).keterangan || '-'}
+                          </div>
+
+                          {/* Rekomendasi if any */}
+                          {c.rekomendasi && (
+                            <div className="p-2.5 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs text-amber-900 space-y-0.5">
+                              <p className="font-bold text-[10px] text-amber-800 flex items-center gap-1">
+                                💡 Rekomendasi / Tindak Lanjut:
+                              </p>
+                              <p className="leading-normal">{c.rekomendasi}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer: Author & Action Buttons */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                          <div>
+                            Ditulis oleh: <strong className="text-slate-600">{c.namaGuru || 'Wali Kelas'}</strong>
+                            {c.roleGuru && <span className="ml-1 text-[9px] text-slate-400">({c.roleGuru})</span>}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingCatatan(c);
+                                setFormCatatan({
+                                  siswaId: c.siswaId,
+                                  tanggal: c.tanggal,
+                                  kategori: c.kategori || 'Perilaku & Karakter',
+                                  catatan: c.catatan || (c as any).keterangan || '',
+                                  rekomendasi: c.rekomendasi || '',
+                                  namaGuru: c.namaGuru || currentUser.nama || 'Wali Kelas',
+                                  roleGuru: c.roleGuru || currentUser.role
+                                });
+                                setShowCatatanModal(true);
+                              }}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 rounded-lg font-bold transition cursor-pointer flex items-center gap-1"
+                              title="Edit Catatan"
+                            >
+                              <Edit2 size={11} /> Edit
+                            </button>
+
+                            {onDeleteCatatanPerkembangan && (
+                              <button
+                                onClick={async () => {
+                                  if (window.confirm('Hapus catatan perkembangan ini secara permanen?')) {
+                                    await onDeleteCatatanPerkembangan(c.id);
+                                  }
+                                }}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-lg font-bold transition cursor-pointer flex items-center gap-1"
+                                title="Hapus Catatan"
+                              >
+                                <Trash2 size={11} /> Hapus
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 7: Laporan Kejadian */}
           {activeSubFeature === 'laporan' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -5030,6 +5238,161 @@ export default function WaliKelasView({
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
                 >
                   <Save size={14} /> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Catatan Perkembangan Siswa */}
+      {showCatatanModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    {editingCatatan ? 'Ubah Catatan Perkembangan' : 'Tambah Catatan Perkembangan Siswa'}
+                  </h3>
+                  <p className="text-[10px] text-slate-400">Kelas {currentClassName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCatatanModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!formCatatan.siswaId) {
+                  alert('Pilih siswa terlebih dahulu!');
+                  return;
+                }
+                if (!formCatatan.catatan.trim()) {
+                  alert('Kolom Catatan Perkembangan wajib diisi!');
+                  return;
+                }
+
+                if (onSaveCatatanPerkembangan) {
+                  const payload: CatatanPerkembangan = {
+                    id: editingCatatan?.id || `cp-${formCatatan.siswaId.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`,
+                    siswaId: formCatatan.siswaId,
+                    tanggal: formCatatan.tanggal || new Date().toISOString().split('T')[0],
+                    kategori: formCatatan.kategori || 'Perilaku & Karakter',
+                    catatan: formCatatan.catatan.trim(),
+                    keterangan: formCatatan.catatan.trim(),
+                    rekomendasi: formCatatan.rekomendasi.trim(),
+                    namaGuru: formCatatan.namaGuru || currentUser.nama || 'Wali Kelas',
+                    roleGuru: formCatatan.roleGuru || currentUser.role
+                  };
+                  const ok = await onSaveCatatanPerkembangan(payload, !editingCatatan);
+                  if (ok) {
+                    setShowCatatanModal(false);
+                  }
+                }
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                  Pilih Siswa <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={formCatatan.siswaId}
+                  onChange={(e) => setFormCatatan({ ...formCatatan, siswaId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 transition"
+                  required
+                >
+                  <option value="">-- Pilih Siswa Kelas {currentClassName} --</option>
+                  {classStudents.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nama} ({s.nis || 'Tanpa NIS'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                    Tanggal Catatan <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formCatatan.tanggal}
+                    onChange={(e) => setFormCatatan({ ...formCatatan, tanggal: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 transition font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                    Kategori Perkembangan
+                  </label>
+                  <select
+                    value={formCatatan.kategori}
+                    onChange={(e) => setFormCatatan({ ...formCatatan, kategori: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 transition cursor-pointer"
+                  >
+                    <option value="Perilaku & Karakter">Perilaku & Karakter</option>
+                    <option value="Akademik & Belajar">Akademik & Belajar</option>
+                    <option value="Sosial & Emosional">Sosial & Emosional</option>
+                    <option value="Kedisiplinan & Kehadiran">Kedisiplinan & Kehadiran</option>
+                    <option value="Motivasi & Minat">Motivasi & Minat</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                  Catatan Perkembangan (Format Teks) <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={formCatatan.catatan}
+                  onChange={(e) => setFormCatatan({ ...formCatatan, catatan: e.target.value })}
+                  placeholder="Tuliskan evaluasi, kemajuan, perubahan sikap, kedisiplinan, atau catatan bimbingan siswa secara rinci..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:border-emerald-500 transition"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                  Rekomendasi / Tindak Lanjut (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={formCatatan.rekomendasi}
+                  onChange={(e) => setFormCatatan({ ...formCatatan, rekomendasi: e.target.value })}
+                  placeholder="Rekomendasi pembinaan atau arahan untuk orang tua / guru..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCatatanModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Save size={14} /> Simpan Catatan
                 </button>
               </div>
             </form>

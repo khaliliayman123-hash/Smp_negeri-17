@@ -4061,7 +4061,7 @@ export default function SiswaView({
         const allCatatan = (db.catatanPerkembangan || []).filter(c => {
           const student = findSiswa(db, c.siswaId, c);
           const studentName = (student?.nama || (c as any).namaSiswa || '').toLowerCase();
-          const noteText = (c.catatan || '').toLowerCase();
+          const noteText = (c.catatan || (c as any).keterangan || '').toLowerCase();
           const recText = (c.rekomendasi || '').toLowerCase();
           const q = rekapSearchQuery.toLowerCase();
           
@@ -4219,7 +4219,7 @@ export default function SiswaView({
                         </div>
 
                         <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed bg-slate-50/70 p-3 rounded-lg border border-slate-100">
-                          {c.catatan}
+                          {c.catatan || (c as any).keterangan || '-'}
                         </div>
 
                         {c.rekomendasi && (
@@ -4250,7 +4250,7 @@ export default function SiswaView({
                                   siswaId: c.siswaId,
                                   tanggal: c.tanggal,
                                   kategori: c.kategori,
-                                  catatan: c.catatan,
+                                  catatan: c.catatan || (c as any).keterangan || '',
                                   rekomendasi: c.rekomendasi || '',
                                   namaGuru: c.namaGuru,
                                   roleGuru: c.roleGuru
