@@ -1110,10 +1110,31 @@ export default function App() {
               {/* Dropdown Kelas */}
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <label className="block font-semibold text-slate-700">1. Pilih Kelas</label>
-                  {selectedSiswaKelasId && (
+                  <div className="flex items-center gap-2">
+                    <label className="block font-semibold text-slate-700">1. Pilih Kelas</label>
+                    {selectedSiswaKelasId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSiswaKelasId('');
+                          setSelectedSiswaId('');
+                          setSiswaSearchQuery('');
+                          setPassword('');
+                          setLoginError('');
+                        }}
+                        className="text-[10px] text-emerald-700 hover:text-emerald-900 underline font-medium cursor-pointer"
+                      >
+                        (Tampilkan Semua Kelas)
+                      </button>
+                    )}
+                  </div>
+                  {selectedSiswaKelasId ? (
                     <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                       {getStudentsForClass(db?.siswa || [], selectedSiswaKelasId, db?.kelas || []).length} Siswa Terdaftar
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {(db?.siswa || []).length} Siswa (33 Kelas)
                     </span>
                   )}
                 </div>
@@ -1128,7 +1149,7 @@ export default function App() {
                   }}
                   className="p-2.5 bg-white border border-slate-200 rounded-xl w-full text-xs focus:outline-none focus:border-emerald-500 font-medium cursor-pointer shadow-xs"
                 >
-                  <option value="">-- Pilih Kelas Anda --</option>
+                  <option value="">-- Semua Kelas ({(db?.siswa || []).length} Siswa) --</option>
                   {(db?.kelas || [])
                     .slice()
                     .sort((a, b) => {
@@ -1155,13 +1176,16 @@ export default function App() {
                 const allKelas = db?.kelas || [];
                 const q = siswaSearchQuery.toLowerCase().trim();
 
-                // Base student pool: if class selected, filter to that class; otherwise all students
+                // Base student pool for dropdown fallback when no search query
                 const basePool = selectedSiswaKelasId 
                   ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas)
                   : allSiswa;
 
-                // Precision scored search
-                const scoredResults = basePool
+                // Precision scored search: when searching (q non-empty), search across ALL students so students in any class can be found!
+                // Prioritize matching students within the currently selected class with a score bonus
+                const searchPool = q ? allSiswa : basePool;
+
+                const scoredResults = searchPool
                   .map((s) => {
                     const nameLower = (s.nama || '').toLowerCase().trim();
                     const nisStr = (s.nis || '').toString().trim();
@@ -1173,16 +1197,25 @@ export default function App() {
                     }
 
                     let score = 0;
-                    if (nameLower.startsWith(q)) {
+                    if (nameLower === q) {
+                      score = 120; // Exact full name match
+                    } else if (nameLower.startsWith(q)) {
                       score = 100; // Match start of full name (Nama Depan)
                     } else if (nameWords.some((w) => w.startsWith(q))) {
                       score = 85; // Match start of any word in name
                     } else if (nameLower.includes(q)) {
                       score = 60; // Substring in name
+                    } else if (nisStr === q || nisnStr === q) {
+                      score = 90; // Exact NIS or NISN
                     } else if (nisStr.startsWith(q) || nisnStr.startsWith(q)) {
                       score = 75; // Prefix in NIS or NISN
                     } else if (nisStr.includes(q) || nisnStr.includes(q)) {
                       score = 40; // Substring in NIS or NISN
+                    }
+
+                    // If user has a class selected, give bonus to students of that class
+                    if (score > 0 && selectedSiswaKelasId && s.kelasId === selectedSiswaKelasId) {
+                      score += 25;
                     }
 
                     return { student: s, score };

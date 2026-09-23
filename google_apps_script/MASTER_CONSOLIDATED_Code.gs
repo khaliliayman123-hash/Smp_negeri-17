@@ -711,6 +711,7 @@ function getSheetDataAsJson(sheet) {
   
   const jsonArray = [];
   const cleanSheetName = sheetName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const seenSheetRowIds = {};
   
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -751,17 +752,22 @@ function getSheetDataAsJson(sheet) {
       obj.siswaId = obj.siswald || obj.idSiswa || obj.siswa_id || obj.id_siswa;
     }
 
-    // Auto-heal missing ID across ALL sheets to prevent dropping rows or sync mismatches
-    if (!obj.id || obj.id.toString().trim() === "") {
+    // Auto-heal missing or colliding ID across ALL sheets to prevent dropping rows or sync mismatches
+    var currentObjId = (obj.id || "").toString().trim();
+    var isCollidingId = !currentObjId || (sheetName === "Siswa" && (currentObjId === "sis-nis-12345678" || seenSheetRowIds[currentObjId]));
+
+    if (isCollidingId) {
       var prefix = "item";
       if (sheetName === "Siswa") {
         var cleanNis = (obj.nis || "").toString().trim();
         var cleanNisn = (obj.nisn || "").toString().trim();
         var cleanNama = (obj.nama || "").toString().trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (cleanNis) obj.id = "sis-nis-" + cleanNis;
-        else if (cleanNisn) obj.id = "sis-nisn-" + cleanNisn;
-        else if (cleanNama) obj.id = "sis-name-" + cleanNama;
-        else obj.id = "sis-row-" + i;
+        var isPlaceholderNis = !cleanNis || cleanNis === "12345678" || cleanNis === "0" || cleanNis === "-" || cleanNis === "123";
+
+        if (!isPlaceholderNis && !seenSheetRowIds["sis-nis-" + cleanNis]) obj.id = "sis-nis-" + cleanNis;
+        else if (cleanNisn && cleanNisn !== "0" && !seenSheetRowIds["sis-nisn-" + cleanNisn]) obj.id = "sis-nisn-" + cleanNisn;
+        else if (cleanNama && !seenSheetRowIds["sis-name-" + cleanNama]) obj.id = "sis-name-" + cleanNama;
+        else obj.id = "sis-row-" + i + (cleanNisn ? "-" + cleanNisn : "");
       } else {
         if (sheetName === "Prestasi") prefix = "pres";
         else if (sheetName === "Pelanggaran") prefix = "pel";
@@ -794,6 +800,7 @@ function getSheetDataAsJson(sheet) {
       }
     }
     
+    if (obj.id) seenSheetRowIds[obj.id] = true;
     jsonArray.push(obj);
   }
   
@@ -811,6 +818,7 @@ function saveRowEntity(db, sheetName, entity, isNew) {
     if (sheetName === "Pengaduan_Siswa") sheet = db.getSheetByName("PengaduanSiswa") || db.getSheetByName("Pengaduan");
     if (sheetName === "Catatan_Perkembangan") sheet = db.getSheetByName("CatatanPerkembangan");
     if (sheetName === "LaporanKejadian") sheet = db.getSheetByName("Laporan_Kejadian");
+    if (!sheet) sheet = findSheetFlexible(db, sheetName);
   }
 
   const schema = {
