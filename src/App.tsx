@@ -123,6 +123,60 @@ export default function App() {
   // Application Data States
   const [db, setDb] = useState<DatabaseState | null>(null);
 
+  // Memoized student search for Portal Siswa to avoid recalculating on every keystroke
+  const studentSearchResults = useMemo(() => {
+    const allSiswa = db?.siswa || [];
+    const allKelas = db?.kelas || [];
+    const q = siswaSearchQuery.toLowerCase().trim();
+
+    const basePool = selectedSiswaKelasId 
+      ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas)
+      : allSiswa;
+
+    const searchPool = q ? allSiswa : basePool;
+
+    return searchPool
+      .map((s) => {
+        const nameLower = (s.nama || '').toLowerCase().trim();
+        const nisStr = (s.nis || '').toString().trim();
+        const nisnStr = (s.nisn || '').toString().trim();
+        const nameWords = nameLower.split(/\s+/);
+
+        if (!q) {
+          return { student: s, score: 1 };
+        }
+
+        let score = 0;
+        if (nameLower === q) {
+          score = 120;
+        } else if (nameLower.startsWith(q)) {
+          score = 100;
+        } else if (nameWords.some((w) => w.startsWith(q))) {
+          score = 85;
+        } else if (nameLower.includes(q)) {
+          score = 60;
+        } else if (nisStr === q || nisnStr === q) {
+          score = 90;
+        } else if (nisStr.startsWith(q) || nisnStr.startsWith(q)) {
+          score = 75;
+        } else if (nisStr.includes(q) || nisnStr.includes(q)) {
+          score = 40;
+        }
+
+        if (score > 0 && selectedSiswaKelasId && s.kelasId === selectedSiswaKelasId) {
+          score += 25;
+        }
+
+        return { student: s, score };
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (a.student.nama || '').localeCompare(b.student.nama || '', undefined, { sensitivity: 'base', numeric: true });
+      })
+      .map(item => item.student);
+  }, [db?.siswa, db?.kelas, selectedSiswaKelasId, siswaSearchQuery]);
+
   const filteredDb = useMemo(() => {
     if (!db) return null;
     if (!currentUser) return db;
@@ -183,13 +237,13 @@ export default function App() {
     }
 
     const assignedClassIds = new Set(assignedClasses.map(k => k.id));
-    const assignedClassNamesLower = new Set(assignedClasses.map(k => (k.namaKelas || '').toLowerCase().trim()));
-    const assignedClassNorms = new Set(assignedClasses.map(k => (k.namaKelas || '').toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim()));
+    const assignedClassNamesLower = new Set(assignedClasses.map(k => String(k.namaKelas || '').toLowerCase().trim()));
+    const assignedClassNorms = new Set(assignedClasses.map(k => String(k.namaKelas || '').toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim()));
 
     // Filter students
     const assignedStudents = db.siswa.filter(s => {
       if (!s.kelasId) return false;
-      const cleanKelasId = s.kelasId.toString().trim().toLowerCase();
+      const cleanKelasId = String(s.kelasId).trim().toLowerCase();
       const sNorm = cleanKelasId.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim();
       return assignedClassIds.has(s.kelasId) || assignedClassNamesLower.has(cleanKelasId) || (sNorm && assignedClassNorms.has(sNorm));
     });
@@ -226,20 +280,23 @@ export default function App() {
       pengaduanSiswa: isWaliKelas ? (db.pengaduanSiswa || []).filter(item => {
         if (!item) return false;
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
-        const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
-        const isClassMatch = item.kelas && (
-          assignedClassIds.has(item.kelas) || 
-          assignedClassNamesLower.has(item.kelas.toString().trim().toLowerCase()) ||
+        const itemKelasStr = String(item.kelas || '');
+        const itemKelasNorm = itemKelasStr.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim();
+        const isClassMatch = itemKelasStr && (
+          assignedClassIds.has(itemKelasStr) || 
+          assignedClassNamesLower.has(itemKelasStr.toLowerCase().trim()) ||
           Array.from(assignedClassNamesLower).some(c => c.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() === itemKelasNorm)
         );
         return isStudentMatch || isClassMatch;
       }) : (db.pengaduanSiswa || []),
       kehadiran: (db.kehadiran || []).filter(item => {
+        if (!item) return false;
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
-        const itemKelasNorm = item.kelas ? item.kelas.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() : '';
-        const isClassMatch = item.kelas && (
-          assignedClassIds.has(item.kelas) || 
-          assignedClassNamesLower.has(item.kelas.toString().trim().toLowerCase()) ||
+        const itemKelasStr = String(item.kelas || '');
+        const itemKelasNorm = itemKelasStr.toLowerCase().replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim();
+        const isClassMatch = itemKelasStr && (
+          assignedClassIds.has(itemKelasStr) || 
+          assignedClassNamesLower.has(itemKelasStr.toLowerCase().trim()) ||
           Array.from(assignedClassNamesLower).some(c => c.replace(/kelas/g, '').replace(/[^0-9-]/g, '').trim() === itemKelasNorm)
         );
         const matchedStudent = findSiswa(db, item.siswaId, item);
@@ -247,8 +304,10 @@ export default function App() {
         return isStudentMatch || isClassMatch || isMappedStudentMatch;
       }),
       laporanKejadian: (db.laporanKejadian || []).filter(item => {
+        if (!item) return false;
         const isStudentMatch = item.siswaId && assignedStudentIds.has(item.siswaId);
-        const isClassMatch = item.kelasId && (assignedClassIds.has(item.kelasId) || assignedClassNamesLower.has(item.kelasId.toString().trim().toLowerCase()));
+        const itemKlIdStr = String(item.kelasId || '');
+        const isClassMatch = itemKlIdStr && (assignedClassIds.has(itemKlIdStr) || assignedClassNamesLower.has(itemKlIdStr.toLowerCase().trim()));
         return isStudentMatch || isClassMatch;
       }),
     };
@@ -1180,58 +1239,8 @@ export default function App() {
                 const allSiswa = db?.siswa || [];
                 const allKelas = db?.kelas || [];
                 const q = siswaSearchQuery.toLowerCase().trim();
-
-                // Base student pool for dropdown fallback when no search query
-                const basePool = selectedSiswaKelasId 
-                  ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas)
-                  : allSiswa;
-
-                // Precision scored search: when searching (q non-empty), search across ALL students so students in any class can be found!
-                // Prioritize matching students within the currently selected class with a score bonus
-                const searchPool = q ? allSiswa : basePool;
-
-                const scoredResults = searchPool
-                  .map((s) => {
-                    const nameLower = (s.nama || '').toLowerCase().trim();
-                    const nisStr = (s.nis || '').toString().trim();
-                    const nisnStr = (s.nisn || '').toString().trim();
-                    const nameWords = nameLower.split(/\s+/);
-
-                    if (!q) {
-                      return { student: s, score: 1 };
-                    }
-
-                    let score = 0;
-                    if (nameLower === q) {
-                      score = 120; // Exact full name match
-                    } else if (nameLower.startsWith(q)) {
-                      score = 100; // Match start of full name (Nama Depan)
-                    } else if (nameWords.some((w) => w.startsWith(q))) {
-                      score = 85; // Match start of any word in name
-                    } else if (nameLower.includes(q)) {
-                      score = 60; // Substring in name
-                    } else if (nisStr === q || nisnStr === q) {
-                      score = 90; // Exact NIS or NISN
-                    } else if (nisStr.startsWith(q) || nisnStr.startsWith(q)) {
-                      score = 75; // Prefix in NIS or NISN
-                    } else if (nisStr.includes(q) || nisnStr.includes(q)) {
-                      score = 40; // Substring in NIS or NISN
-                    }
-
-                    // If user has a class selected, give bonus to students of that class
-                    if (score > 0 && selectedSiswaKelasId && s.kelasId === selectedSiswaKelasId) {
-                      score += 25;
-                    }
-
-                    return { student: s, score };
-                  })
-                  .filter((item) => item.score > 0)
-                  .sort((a, b) => {
-                    if (b.score !== a.score) return b.score - a.score;
-                    return (a.student.nama || '').localeCompare(b.student.nama || '', undefined, { sensitivity: 'base', numeric: true });
-                  });
-
-                const filteredList = scoredResults.map((item) => item.student);
+                const basePool = selectedSiswaKelasId ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas) : allSiswa;
+                const filteredList = studentSearchResults;
                 const selectedStudentObj = allSiswa.find((s) => s.id === selectedSiswaId);
 
                 // Helper to highlight matching characters

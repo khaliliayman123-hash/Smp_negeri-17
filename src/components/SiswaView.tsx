@@ -1111,10 +1111,25 @@ export default function SiswaView({
       if (sid) ekonomiMap.set(sid, e);
     });
 
-    const isValidInfo = (str?: string) => {
-      if (!str) return false;
-      const clean = str.trim().toLowerCase();
-      return clean !== '' && clean !== '-' && clean !== 'tidak ada' && clean !== 'sehat' && clean !== 'normal' && clean !== 'tidak' && clean !== 'none';
+    const isValidInfo = (val?: any): boolean => {
+      if (val === null || val === undefined) return false;
+      if (typeof val === 'boolean') return val;
+      if (typeof val === 'number') return val !== 0 && !isNaN(val);
+      if (typeof val !== 'string') return false;
+      const clean = val.trim().toLowerCase();
+      return (
+        clean !== '' &&
+        clean !== '-' &&
+        clean !== 'tidak ada' &&
+        clean !== 'sehat' &&
+        clean !== 'normal' &&
+        clean !== 'tidak' &&
+        clean !== 'none' &&
+        clean !== 'false' &&
+        clean !== '0' &&
+        clean !== 'null' &&
+        clean !== 'undefined'
+      );
     };
 
     const infoMap = new Map<string, {
@@ -1143,7 +1158,12 @@ export default function SiswaView({
       isPkh: boolean;
     }>();
 
-    (db.siswa || []).forEach(s => {
+    // Fast path: if logged in as student, only evaluate for the student to maximize performance
+    const targetStudents = (isStudent && currentUser)
+      ? (db.siswa || []).filter(s => s.id === currentUser.id)
+      : (db.siswa || []);
+
+    targetStudents.forEach(s => {
       const sid = s.id;
       const pelanggaranList = pelanggaranMap.get(sid) || [];
       const remisiList = remisiMap.get(sid) || [];
@@ -1153,9 +1173,12 @@ export default function SiswaView({
       const activePelanggaran = pelanggaranList.filter(p => p.status === 'Proses' || p.status === 'Belum Ditindak').length;
       const beratSedangPelanggaran = pelanggaranList.filter(p => p.kategori === 'Berat' || p.kategori === 'Sedang').length;
       const cList = catatanMap.get(sid) || [];
-      const hasDisciplineNote = cList.some(c => (c.kategori || '').toLowerCase().includes('perilaku') || (c.kategori || '').toLowerCase().includes('karakter'));
+      const hasDisciplineNote = cList.some(c => {
+        const kat = String(c.kategori || '').toLowerCase();
+        return kat.includes('perilaku') || kat.includes('karakter');
+      });
       const suList = suratMap.get(sid) || [];
-      const hasContract = suList.some(su => (su.jenisSurat || '').includes('Kontrak'));
+      const hasContract = suList.some(su => String(su.jenisSurat || '').includes('Kontrak'));
       const hasDisiplin = pelanggaranList.length > 0 || netPoin > 0 || hasDisciplineNote || hasContract;
 
       const kes = kesehatanMap.get(sid);
@@ -1167,15 +1190,16 @@ export default function SiswaView({
       const akad = akademikMap.get(sid);
       const prList = prestasiMap.get(sid) || [];
       const avgRapor = Number(akad?.rataRataRaport) || 0;
-      const hasAkadNote = cList.some(c => (c.kategori || '').toLowerCase().includes('akademik'));
+      const hasAkadNote = cList.some(c => String(c.kategori || '').toLowerCase().includes('akademik'));
+      const catatanWaliStr = String(akad?.catatanWaliKelas || '').toLowerCase();
       const needsAcademicHelp = (avgRapor > 0 && avgRapor < 75) || 
-        !!(akad?.catatanWaliKelas && (akad.catatanWaliKelas.toLowerCase().includes('perlu') || akad.catatanWaliKelas.toLowerCase().includes('kurang') || akad.catatanWaliKelas.toLowerCase().includes('remedial') || akad.catatanWaliKelas.toLowerCase().includes('bimbingan')));
+        (catatanWaliStr !== '' && (catatanWaliStr.includes('perlu') || catatanWaliStr.includes('kurang') || catatanWaliStr.includes('remedial') || catatanWaliStr.includes('bimbingan')));
       const isHighAcademic = avgRapor >= 85 || prList.length > 0;
-      const hasAkademik = avgRapor > 0 || prList.length > 0 || hasAkadNote || !!(akad?.catatanWaliKelas && akad.catatanWaliKelas !== '-');
+      const hasAkademik = avgRapor > 0 || prList.length > 0 || hasAkadNote || (catatanWaliStr !== '' && catatanWaliStr !== '-');
 
       const koList = konselingMap.get(sid) || [];
       const hvList = homeVisitMap.get(sid) || [];
-      const hasSuratPanggilan = suList.some(su => (su.jenisSurat || '').includes('Panggilan'));
+      const hasSuratPanggilan = suList.some(su => String(su.jenisSurat || '').includes('Panggilan'));
       const hasKonseling = koList.length > 0 || hvList.length > 0 || hasSuratPanggilan;
 
       const eko = ekonomiMap.get(sid);
@@ -1191,9 +1215,9 @@ export default function SiswaView({
         beratSedangPelanggaran,
         hasDisiplin,
         hasHealth,
-        disease: hasDisease ? kes?.penyakit : undefined,
-        allergy: hasAllergy ? kes?.alergi : undefined,
-        disability: hasDisability ? kes?.disabilitas : undefined,
+        disease: hasDisease ? String(kes?.penyakit || '') : undefined,
+        allergy: hasAllergy ? String(kes?.alergi || '') : undefined,
+        disability: hasDisability ? String(kes?.disabilitas || '') : undefined,
         hasAkademik,
         avgRapor,
         hasAkademikNote: hasAkadNote,
@@ -1212,16 +1236,20 @@ export default function SiswaView({
     });
 
     return infoMap;
-  }, [db.siswa, db.pelanggaran, db.remisiPoin, db.konseling, db.homeVisit, db.surat, db.prestasi, db.catatanPerkembangan, db.kesehatan, db.akademik, db.ekonomi]);
+  }, [db.siswa, db.pelanggaran, db.remisiPoin, db.konseling, db.homeVisit, db.surat, db.prestasi, db.catatanPerkembangan, db.kesehatan, db.akademik, db.ekonomi, isStudent, currentUser]);
 
   // Compute category counts within the active class scope
   const categoryCounts = useMemo(() => {
+    if (isStudent) {
+      return { total: 0, disiplin: 0, akademik: 0, kesehatan: 0, konseling: 0, afirmasi: 0 };
+    }
     const scopeStudents = (db.siswa || []).filter(s => {
       if (currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass) {
         const studentClassObj = db.kelas?.find(k => k.id === s.kelasId);
-        const studentClassName = studentClassObj?.namaKelas || s.kelasId;
+        const studentClassName = String(studentClassObj?.namaKelas || s.kelasId || '').toLowerCase().trim();
+        const allowedClassName = String(waliKelasAllowedClass.namaKelas || '').toLowerCase().trim();
         const matchesAllowed = s.kelasId === waliKelasAllowedClass.id || 
-                               (studentClassName && waliKelasAllowedClass.namaKelas && studentClassName.toLowerCase().trim() === waliKelasAllowedClass.namaKelas.toLowerCase().trim());
+                               (studentClassName !== '' && allowedClassName !== '' && studentClassName === allowedClassName);
         if (!matchesAllowed) return false;
       }
       if (selectedKelas !== 'All' && s.kelasId !== selectedKelas) return false;
@@ -1246,7 +1274,7 @@ export default function SiswaView({
     });
 
     return { total, disiplin, akademik, kesehatan, konseling, afirmasi };
-  }, [db.siswa, db.kelas, currentUser, waliKelasAllowedClass, selectedKelas, studentCategoryData]);
+  }, [db.siswa, db.kelas, currentUser, isStudent, waliKelasAllowedClass, selectedKelas, studentCategoryData]);
 
   const handleResetFilters = () => {
     setSelectedCategory('all');
@@ -1285,9 +1313,10 @@ export default function SiswaView({
         // Enforce restriction for Wali Kelas
         if (currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass) {
           const studentClassObj = db.kelas?.find(k => k.id === s.kelasId);
-          const studentClassName = studentClassObj?.namaKelas || s.kelasId;
+          const studentClassName = String(studentClassObj?.namaKelas || s.kelasId || '').toLowerCase().trim();
+          const allowedClassName = String(waliKelasAllowedClass.namaKelas || '').toLowerCase().trim();
           const matchesAllowed = s.kelasId === waliKelasAllowedClass.id || 
-                                 (studentClassName && waliKelasAllowedClass.namaKelas && studentClassName.toLowerCase().trim() === waliKelasAllowedClass.namaKelas.toLowerCase().trim());
+                                 (studentClassName !== '' && allowedClassName !== '' && studentClassName === allowedClassName);
           if (!matchesAllowed) return false;
         }
 
