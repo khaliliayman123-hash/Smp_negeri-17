@@ -40,7 +40,10 @@ import {
   ChevronUp,
   HelpCircle,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  Calendar,
+  CalendarDays,
+  RotateCcw
 } from 'lucide-react';
 
 interface PengaduanViewProps {
@@ -133,6 +136,63 @@ export default function PengaduanView({
   const [statusFilter, setStatusFilter] = useState('Semua');
   const [kategoriFilter, setKategoriFilter] = useState('Semua');
   const [kelasFilter, setKelasFilter] = useState('Semua');
+  const [startDateKejadian, setStartDateKejadian] = useState('');
+  const [endDateKejadian, setEndDateKejadian] = useState('');
+
+  // Robust date comparator helper for YYYY-MM-DD, DD/MM/YYYY, etc.
+  const parseDateToComparable = (dateStr?: string): string => {
+    if (!dateStr) return '';
+    const trimmed = String(dateStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      return trimmed.substring(0, 10);
+    }
+    const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+    if (dmyMatch) {
+      const day = dmyMatch[1].padStart(2, '0');
+      const month = dmyMatch[2].padStart(2, '0');
+      const year = dmyMatch[3];
+      return `${year}-${month}-${day}`;
+    }
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+    return trimmed;
+  };
+
+  const handleSetDatePreset = (preset: 'today' | 'last7' | 'last30' | 'thisMonth' | 'all') => {
+    const now = new Date();
+    const format = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    if (preset === 'today') {
+      const todayStr = format(now);
+      setStartDateKejadian(todayStr);
+      setEndDateKejadian(todayStr);
+    } else if (preset === 'last7') {
+      const past = new Date();
+      past.setDate(now.getDate() - 7);
+      setStartDateKejadian(format(past));
+      setEndDateKejadian(format(now));
+    } else if (preset === 'last30') {
+      const past = new Date();
+      past.setDate(now.getDate() - 30);
+      setStartDateKejadian(format(past));
+      setEndDateKejadian(format(now));
+    } else if (preset === 'thisMonth') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      setStartDateKejadian(format(firstDay));
+      setEndDateKejadian(format(lastDay));
+    } else if (preset === 'all') {
+      setStartDateKejadian('');
+      setEndDateKejadian('');
+    }
+  };
 
   // Modal State for Photo Viewer
   const [viewingPhoto, setViewingPhoto] = useState<{ src: string; title: string; filename?: string } | null>(null);
@@ -303,8 +363,25 @@ export default function PengaduanView({
       list = list.filter(item => item && item.kelas === kelasFilter);
     }
 
+    // Filter by Tanggal Kejadian date range
+    if (startDateKejadian) {
+      list = list.filter(item => {
+        if (!item || !item.tanggalKejadian) return false;
+        const normalized = parseDateToComparable(item.tanggalKejadian);
+        return normalized >= startDateKejadian;
+      });
+    }
+
+    if (endDateKejadian) {
+      list = list.filter(item => {
+        if (!item || !item.tanggalKejadian) return false;
+        const normalized = parseDateToComparable(item.tanggalKejadian);
+        return normalized <= endDateKejadian;
+      });
+    }
+
     return list;
-  }, [rawComplaintsList, searchQuery, statusFilter, kategoriFilter, kelasFilter]);
+  }, [rawComplaintsList, searchQuery, statusFilter, kategoriFilter, kelasFilter, startDateKejadian, endDateKejadian]);
 
   // Statistical calculations for Pie Charts and Percentages
   const analyticsData = useMemo(() => {
@@ -904,17 +981,28 @@ export default function PengaduanView({
                 </div>
 
                 {/* Filter quick status indicator if active */}
-                {(kategoriFilter !== 'Semua' || statusFilter !== 'Semua' || kelasFilter !== 'Semua' || searchQuery.trim() !== '') && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-[11px] text-emerald-800">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Filter size={12} />
-                      Filter Aktif: {kategoriFilter !== 'Semua' ? kategoriFilter : ''} {statusFilter !== 'Semua' ? `(${statusFilter})` : ''} {kelasFilter !== 'Semua' ? `[${kelasFilter}]` : ''}
+                {(kategoriFilter !== 'Semua' || statusFilter !== 'Semua' || kelasFilter !== 'Semua' || searchQuery.trim() !== '' || startDateKejadian !== '' || endDateKejadian !== '') && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-800">
+                    <span className="flex flex-wrap items-center gap-1.5 font-medium">
+                      <Filter size={12} className="text-emerald-700 font-bold" />
+                      <strong>Filter Aktif:</strong>
+                      {kategoriFilter !== 'Semua' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">{kategoriFilter}</span>}
+                      {statusFilter !== 'Semua' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">{statusFilter}</span>}
+                      {kelasFilter !== 'Semua' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">Kelas: {kelasFilter}</span>}
+                      {(startDateKejadian || endDateKejadian) && (
+                        <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
+                          <Calendar size={11} className="text-emerald-600" /> Kejadian: {startDateKejadian || '...'} s/d {endDateKejadian || '...'}
+                        </span>
+                      )}
+                      {searchQuery.trim() !== '' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">"{searchQuery}"</span>}
                     </span>
                     <button
                       onClick={() => {
                         setKategoriFilter('Semua');
                         setStatusFilter('Semua');
                         setKelasFilter('Semua');
+                        setStartDateKejadian('');
+                        setEndDateKejadian('');
                         setSearchQuery('');
                       }}
                       className="font-bold underline hover:text-emerald-950 cursor-pointer"
@@ -1184,73 +1272,228 @@ export default function PengaduanView({
 
             {/* Filter Bar (for Teachers / BK) */}
             {isTeacherOrAdmin && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari siswa, judul, kronologis..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition"
-                  />
+              <div className="space-y-3 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari siswa, judul, kronologis..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-7 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition font-medium text-slate-700"
+                    >
+                      <option value="Semua">Semua Status</option>
+                      <option value="Menunggu Respon">Menunggu Respon</option>
+                      <option value="Sedang Ditangani">Sedang Ditangani</option>
+                      <option value="Selesai">Selesai</option>
+                      <option value="Ditolak">Ditolak</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <select
+                      value={kategoriFilter}
+                      onChange={(e) => setKategoriFilter(e.target.value)}
+                      className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition font-medium text-slate-700"
+                    >
+                      <option value="Semua">Semua Kategori</option>
+                      <option value="Perundungan / Bullying">Perundungan / Bullying</option>
+                      <option value="Fasilitas Belajar">Fasilitas Belajar</option>
+                      <option value="Kedisiplinan & Ketertiban">Kedisiplinan</option>
+                      <option value="Masalah Akademik & Kelas">Masalah Akademik</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <select
+                      value={kelasFilter}
+                      onChange={(e) => setKelasFilter(e.target.value)}
+                      className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition font-medium text-slate-700"
+                    >
+                      <option value="Semua">Semua Kelas</option>
+                      {(db?.kelas || []).map(k => (
+                        <option key={k.id} value={k.namaKelas}>{k.namaKelas}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition"
-                  >
-                    <option value="Semua">Semua Status</option>
-                    <option value="Menunggu Respon">Menunggu Respon</option>
-                    <option value="Sedang Ditangani">Sedang Ditangani</option>
-                    <option value="Selesai">Selesai</option>
-                    <option value="Ditolak">Ditolak</option>
-                  </select>
+                {/* Date Picker Range Bar for Tanggal Kejadian */}
+                <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                      <Calendar size={14} className="text-emerald-600" />
+                      Rentang Tanggal Kejadian:
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-2xs">
+                        <span className="text-[11px] text-slate-400 font-semibold">Dari</span>
+                        <input
+                          type="date"
+                          value={startDateKejadian}
+                          onChange={(e) => setStartDateKejadian(e.target.value)}
+                          className="text-xs text-slate-700 bg-transparent outline-hidden cursor-pointer"
+                          title="Tanggal mulai kejadian"
+                        />
+                      </div>
+
+                      <span className="text-slate-400 font-bold">s/d</span>
+
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-2xs">
+                        <span className="text-[11px] text-slate-400 font-semibold">Sampai</span>
+                        <input
+                          type="date"
+                          value={endDateKejadian}
+                          onChange={(e) => setEndDateKejadian(e.target.value)}
+                          className="text-xs text-slate-700 bg-transparent outline-hidden cursor-pointer"
+                          title="Tanggal akhir kejadian"
+                        />
+                      </div>
+
+                      {(startDateKejadian || endDateKejadian) && (
+                        <button
+                          type="button"
+                          onClick={() => { setStartDateKejadian(''); setEndDateKejadian(''); }}
+                          className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                          title="Hapus filter rentang tanggal"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">Pilihan Cepat:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDatePreset('today')}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer border ${
+                        startDateKejadian === new Date().toISOString().split('T')[0] && endDateKejadian === new Date().toISOString().split('T')[0]
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      Hari Ini
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDatePreset('last7')}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                    >
+                      7 Hari
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDatePreset('last30')}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                    >
+                      30 Hari
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDatePreset('thisMonth')}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                    >
+                      Bulan Ini
+                    </button>
+                    {(startDateKejadian || endDateKejadian) && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetDatePreset('all')}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <RotateCcw size={10} /> Reset Tanggal
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <select
-                    value={kategoriFilter}
-                    onChange={(e) => setKategoriFilter(e.target.value)}
-                    className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition"
-                  >
-                    <option value="Semua">Semua Kategori</option>
-                    <option value="Perundungan / Bullying">Perundungan / Bullying</option>
-                    <option value="Fasilitas Belajar">Fasilitas Belajar</option>
-                    <option value="Kedisiplinan & Ketertiban">Kedisiplinan</option>
-                    <option value="Masalah Akademik & Kelas">Masalah Akademik</option>
-                    <option value="Lainnya">Lainnya</option>
-                  </select>
-                </div>
-
-                <div>
-                  <select
-                    value={kelasFilter}
-                    onChange={(e) => setKelasFilter(e.target.value)}
-                    className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-hidden transition"
-                  >
-                    <option value="Semua">Semua Kelas</option>
-                    {(db?.kelas || []).map(k => (
-                      <option key={k.id} value={k.namaKelas}>{k.namaKelas}</option>
-                    ))}
-                  </select>
-                </div>
+                {/* Active Filter Indicators Bar */}
+                {(kategoriFilter !== 'Semua' || statusFilter !== 'Semua' || kelasFilter !== 'Semua' || searchQuery.trim() !== '' || startDateKejadian !== '' || endDateKejadian !== '') && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-800">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="flex items-center gap-1 font-bold">
+                        <Filter size={12} /> Filter Aktif:
+                      </span>
+                      {kategoriFilter !== 'Semua' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">{kategoriFilter}</span>}
+                      {statusFilter !== 'Semua' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">{statusFilter}</span>}
+                      {kelasFilter !== 'Semua' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">Kelas: {kelasFilter}</span>}
+                      {(startDateKejadian || endDateKejadian) && (
+                        <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1 font-semibold text-emerald-900">
+                          <Calendar size={11} className="text-emerald-600" /> Kejadian: {startDateKejadian || '...'} s/d {endDateKejadian || '...'}
+                        </span>
+                      )}
+                      {searchQuery.trim() !== '' && <span className="bg-white px-2 py-0.5 rounded border border-emerald-200 font-semibold">"{searchQuery}"</span>}
+                      <span className="text-emerald-700 font-semibold">({complaintsList.length} laporan ditemukan)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKategoriFilter('Semua');
+                        setStatusFilter('Semua');
+                        setKelasFilter('Semua');
+                        setStartDateKejadian('');
+                        setEndDateKejadian('');
+                        setSearchQuery('');
+                      }}
+                      className="font-bold underline hover:text-emerald-950 cursor-pointer flex items-center gap-1"
+                    >
+                      <RotateCcw size={11} /> Reset Filter
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           {/* Table / Cards List */}
           {complaintsList.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 space-y-2">
+            <div className="p-12 text-center text-slate-400 space-y-3">
               <FileText size={36} className="mx-auto text-slate-300" />
               <p className="text-sm font-bold text-slate-600">Belum Ada Data Pengaduan</p>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 {isStudent 
                   ? 'Anda belum pernah mengajukan pengaduan. Klik tombol "Ajukan Pengaduan" di atas jika ada keluhan atau laporan.'
-                  : 'Tidak ada data pengaduan yang sesuai dengan kriteria filter yang dipilih.'}
+                  : 'Tidak ada data pengaduan yang sesuai dengan kriteria filter atau rentang tanggal yang dipilih.'}
               </p>
+              {isTeacherOrAdmin && (kategoriFilter !== 'Semua' || statusFilter !== 'Semua' || kelasFilter !== 'Semua' || searchQuery.trim() !== '' || startDateKejadian !== '' || endDateKejadian !== '') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKategoriFilter('Semua');
+                    setStatusFilter('Semua');
+                    setKelasFilter('Semua');
+                    setStartDateKejadian('');
+                    setEndDateKejadian('');
+                    setSearchQuery('');
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <RotateCcw size={12} /> Reset Semua Filter
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1273,12 +1516,17 @@ export default function PengaduanView({
                       <tr key={item.id} className="hover:bg-slate-50/60 transition">
                         {/* 1. Tanggal & Siswa */}
                         <td className="p-3.5 pl-5 align-top">
-                          <div className="space-y-0.5">
+                          <div className="space-y-1">
                             <span className="font-bold text-slate-800 block text-xs">{item.namaSiswa || 'Siswa'}</span>
                             <span className="text-[10px] text-slate-500 block">Kelas: <strong className="text-emerald-700">{item.kelas || '-'}</strong></span>
-                            <span className="text-[10px] text-slate-400 block flex items-center gap-1 mt-1">
-                              <Clock size={11} /> {item.tanggalPengaduan || item.tanggalKejadian || '-'}
-                            </span>
+                            <div className="space-y-0.5 pt-1">
+                              <span className="text-[10px] text-slate-700 block flex items-center gap-1 font-semibold">
+                                <Calendar size={11} className="text-emerald-600" /> Kejadian: <span>{item.tanggalKejadian || '-'}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 block flex items-center gap-1">
+                                <Clock size={11} /> Dilaporkan: {item.tanggalPengaduan || '-'}
+                              </span>
+                            </div>
                           </div>
                         </td>
 

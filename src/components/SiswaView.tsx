@@ -32,7 +32,17 @@ import {
   AlertCircle,
   Mail,
   Printer,
-  FileDown
+  FileDown,
+  Filter,
+  CheckCircle2,
+  AlertTriangle,
+  Stethoscope,
+  GraduationCap,
+  Scale,
+  RotateCcw,
+  SlidersHorizontal,
+  HeartHandshake,
+  Wallet
 } from 'lucide-react';
 import { 
   DatabaseState, 
@@ -139,6 +149,8 @@ export default function SiswaView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedKelas, setSelectedKelas] = useState('All');
   const [selectedGender, setSelectedGender] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'disiplin' | 'akademik' | 'kesehatan' | 'konseling' | 'afirmasi'>('all');
+  const [selectedSubFilter, setSelectedSubFilter] = useState<string>('all');
 
   // List of available unique classes
   const availableClasses = useMemo(() => {
@@ -157,7 +169,7 @@ export default function SiswaView({
   };
   
   // Sorting State
-  const [sortBy, setSortBy] = useState<'nama' | 'nis' | 'kelas'>('nama');
+  const [sortBy, setSortBy] = useState<'nama' | 'nis' | 'kelas' | 'poin'>('nama');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Pagination State
@@ -1014,9 +1026,261 @@ export default function SiswaView({
     }
   };
 
-  // Filter and Sort Students
+  // Pre-indexed category computation for fast, accurate profile classification
+  const studentCategoryData = useMemo(() => {
+    const pelanggaranMap = new Map<string, typeof db.pelanggaran>();
+    const remisiMap = new Map<string, typeof db.remisiPoin>();
+    const konselingMap = new Map<string, typeof db.konseling>();
+    const homeVisitMap = new Map<string, typeof db.homeVisit>();
+    const suratMap = new Map<string, typeof db.surat>();
+    const prestasiMap = new Map<string, typeof db.prestasi>();
+    const catatanMap = new Map<string, typeof db.catatanPerkembangan>();
+    const kesehatanMap = new Map<string, Kesehatan>();
+    const akademikMap = new Map<string, Akademik>();
+    const ekonomiMap = new Map<string, Ekonomi>();
+
+    (db.pelanggaran || []).forEach(p => {
+      const sid = p.siswaId || (p as any).siswa_id;
+      if (sid) {
+        const arr = pelanggaranMap.get(sid) || [];
+        arr.push(p);
+        pelanggaranMap.set(sid, arr);
+      }
+    });
+
+    (db.remisiPoin || []).forEach(r => {
+      if (r.siswaId) {
+        const arr = remisiMap.get(r.siswaId) || [];
+        arr.push(r);
+        remisiMap.set(r.siswaId, arr);
+      }
+    });
+
+    (db.konseling || []).forEach(k => {
+      if (k.siswaId) {
+        const arr = konselingMap.get(k.siswaId) || [];
+        arr.push(k);
+        konselingMap.set(k.siswaId, arr);
+      }
+    });
+
+    (db.homeVisit || []).forEach(h => {
+      if (h.siswaId) {
+        const arr = homeVisitMap.get(h.siswaId) || [];
+        arr.push(h);
+        homeVisitMap.set(h.siswaId, arr);
+      }
+    });
+
+    (db.surat || []).forEach(s => {
+      if (s.siswaId) {
+        const arr = suratMap.get(s.siswaId) || [];
+        arr.push(s);
+        suratMap.set(s.siswaId, arr);
+      }
+    });
+
+    (db.prestasi || []).forEach(p => {
+      if (p.siswaId) {
+        const arr = prestasiMap.get(p.siswaId) || [];
+        arr.push(p);
+        prestasiMap.set(p.siswaId, arr);
+      }
+    });
+
+    (db.catatanPerkembangan || []).forEach(c => {
+      if (c.siswaId) {
+        const arr = catatanMap.get(c.siswaId) || [];
+        arr.push(c);
+        catatanMap.set(c.siswaId, arr);
+      }
+    });
+
+    (db.kesehatan || []).forEach(k => {
+      const sid = k.id || (k as any).siswaId;
+      if (sid) kesehatanMap.set(sid, k);
+    });
+
+    (db.akademik || []).forEach(a => {
+      const sid = a.id || (a as any).siswaId;
+      if (sid) akademikMap.set(sid, a);
+    });
+
+    (db.ekonomi || []).forEach(e => {
+      const sid = e.id || (e as any).siswaId;
+      if (sid) ekonomiMap.set(sid, e);
+    });
+
+    const isValidInfo = (str?: string) => {
+      if (!str) return false;
+      const clean = str.trim().toLowerCase();
+      return clean !== '' && clean !== '-' && clean !== 'tidak ada' && clean !== 'sehat' && clean !== 'normal' && clean !== 'tidak' && clean !== 'none';
+    };
+
+    const infoMap = new Map<string, {
+      netPoin: number;
+      totalPelanggaran: number;
+      activePelanggaran: number;
+      beratSedangPelanggaran: number;
+      hasDisiplin: boolean;
+      hasHealth: boolean;
+      disease?: string;
+      allergy?: string;
+      disability?: string;
+      hasAkademik: boolean;
+      avgRapor: number;
+      hasAkademikNote: boolean;
+      needsAcademicHelp: boolean;
+      isHighAcademic: boolean;
+      achievementsCount: number;
+      konselingCount: number;
+      hasHomeVisit: boolean;
+      hasSurat: boolean;
+      hasKonseling: boolean;
+      hasAfirmasi: boolean;
+      isPip: boolean;
+      isKip: boolean;
+      isPkh: boolean;
+    }>();
+
+    (db.siswa || []).forEach(s => {
+      const sid = s.id;
+      const pelanggaranList = pelanggaranMap.get(sid) || [];
+      const remisiList = remisiMap.get(sid) || [];
+      const rawPoin = pelanggaranList.reduce((sum, p) => sum + (Number(p.poin) || 0), 0);
+      const remisiPoin = remisiList.reduce((sum, r) => sum + (Number(r.poin) || 0), 0);
+      const netPoin = Math.max(0, rawPoin - remisiPoin);
+      const activePelanggaran = pelanggaranList.filter(p => p.status === 'Proses' || p.status === 'Belum Ditindak').length;
+      const beratSedangPelanggaran = pelanggaranList.filter(p => p.kategori === 'Berat' || p.kategori === 'Sedang').length;
+      const cList = catatanMap.get(sid) || [];
+      const hasDisciplineNote = cList.some(c => (c.kategori || '').toLowerCase().includes('perilaku') || (c.kategori || '').toLowerCase().includes('karakter'));
+      const suList = suratMap.get(sid) || [];
+      const hasContract = suList.some(su => (su.jenisSurat || '').includes('Kontrak'));
+      const hasDisiplin = pelanggaranList.length > 0 || netPoin > 0 || hasDisciplineNote || hasContract;
+
+      const kes = kesehatanMap.get(sid);
+      const hasDisease = isValidInfo(kes?.penyakit);
+      const hasAllergy = isValidInfo(kes?.alergi);
+      const hasDisability = isValidInfo(kes?.disabilitas);
+      const hasHealth = hasDisease || hasAllergy || hasDisability;
+
+      const akad = akademikMap.get(sid);
+      const prList = prestasiMap.get(sid) || [];
+      const avgRapor = Number(akad?.rataRataRaport) || 0;
+      const hasAkadNote = cList.some(c => (c.kategori || '').toLowerCase().includes('akademik'));
+      const needsAcademicHelp = (avgRapor > 0 && avgRapor < 75) || 
+        !!(akad?.catatanWaliKelas && (akad.catatanWaliKelas.toLowerCase().includes('perlu') || akad.catatanWaliKelas.toLowerCase().includes('kurang') || akad.catatanWaliKelas.toLowerCase().includes('remedial') || akad.catatanWaliKelas.toLowerCase().includes('bimbingan')));
+      const isHighAcademic = avgRapor >= 85 || prList.length > 0;
+      const hasAkademik = avgRapor > 0 || prList.length > 0 || hasAkadNote || !!(akad?.catatanWaliKelas && akad.catatanWaliKelas !== '-');
+
+      const koList = konselingMap.get(sid) || [];
+      const hvList = homeVisitMap.get(sid) || [];
+      const hasSuratPanggilan = suList.some(su => (su.jenisSurat || '').includes('Panggilan'));
+      const hasKonseling = koList.length > 0 || hvList.length > 0 || hasSuratPanggilan;
+
+      const eko = ekonomiMap.get(sid);
+      const isPip = !!eko?.pip;
+      const isKip = !!eko?.kip;
+      const isPkh = !!eko?.pkh;
+      const hasAfirmasi = isPip || isKip || isPkh;
+
+      infoMap.set(sid, {
+        netPoin,
+        totalPelanggaran: pelanggaranList.length,
+        activePelanggaran,
+        beratSedangPelanggaran,
+        hasDisiplin,
+        hasHealth,
+        disease: hasDisease ? kes?.penyakit : undefined,
+        allergy: hasAllergy ? kes?.alergi : undefined,
+        disability: hasDisability ? kes?.disabilitas : undefined,
+        hasAkademik,
+        avgRapor,
+        hasAkademikNote: hasAkadNote,
+        needsAcademicHelp,
+        isHighAcademic,
+        achievementsCount: prList.length,
+        konselingCount: koList.length,
+        hasHomeVisit: hvList.length > 0,
+        hasSurat: hasSuratPanggilan,
+        hasKonseling,
+        hasAfirmasi,
+        isPip,
+        isKip,
+        isPkh,
+      });
+    });
+
+    return infoMap;
+  }, [db.siswa, db.pelanggaran, db.remisiPoin, db.konseling, db.homeVisit, db.surat, db.prestasi, db.catatanPerkembangan, db.kesehatan, db.akademik, db.ekonomi]);
+
+  // Compute category counts within the active class scope
+  const categoryCounts = useMemo(() => {
+    const scopeStudents = (db.siswa || []).filter(s => {
+      if (currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass) {
+        const studentClassObj = db.kelas?.find(k => k.id === s.kelasId);
+        const studentClassName = studentClassObj?.namaKelas || s.kelasId;
+        const matchesAllowed = s.kelasId === waliKelasAllowedClass.id || 
+                               (studentClassName && waliKelasAllowedClass.namaKelas && studentClassName.toLowerCase().trim() === waliKelasAllowedClass.namaKelas.toLowerCase().trim());
+        if (!matchesAllowed) return false;
+      }
+      if (selectedKelas !== 'All' && s.kelasId !== selectedKelas) return false;
+      return true;
+    });
+
+    let total = scopeStudents.length;
+    let disiplin = 0;
+    let akademik = 0;
+    let kesehatan = 0;
+    let konseling = 0;
+    let afirmasi = 0;
+
+    scopeStudents.forEach(s => {
+      const info = studentCategoryData.get(s.id);
+      if (!info) return;
+      if (info.hasDisiplin) disiplin++;
+      if (info.hasAkademik) akademik++;
+      if (info.hasHealth) kesehatan++;
+      if (info.hasKonseling) konseling++;
+      if (info.hasAfirmasi) afirmasi++;
+    });
+
+    return { total, disiplin, akademik, kesehatan, konseling, afirmasi };
+  }, [db.siswa, db.kelas, currentUser, waliKelasAllowedClass, selectedKelas, studentCategoryData]);
+
+  const handleResetFilters = () => {
+    setSelectedCategory('all');
+    setSelectedSubFilter('all');
+    setSearchQuery('');
+    if (currentUser.role !== UserRole.WALI_KELAS) {
+      setSelectedKelas('All');
+    }
+    setSelectedGender('All');
+    setSortBy('nama');
+    setSortOrder('asc');
+    setCurrentPage(1);
+  };
+
+  const handleSelectStudentForView = (s: Siswa) => {
+    setViewingSiswa(s);
+    if (selectedCategory === 'disiplin') {
+      setActiveDetailTab('history');
+    } else if (selectedCategory === 'kesehatan') {
+      setActiveDetailTab('health');
+    } else if (selectedCategory === 'akademik') {
+      setActiveDetailTab('achievement');
+    } else if (selectedCategory === 'konseling') {
+      setActiveDetailTab('history');
+    } else if (selectedCategory === 'afirmasi') {
+      setActiveDetailTab('economy');
+    } else {
+      setActiveDetailTab('bio');
+    }
+  };
+
+  // Filter and Sort Students with Category Support
   const filteredStudents = useMemo(() => {
-    return db.siswa
+    return (db.siswa || [])
       .filter((s) => {
         // Enforce restriction for Wali Kelas
         if (currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass) {
@@ -1030,13 +1294,59 @@ export default function SiswaView({
         const nameStr = s.nama ? String(s.nama).toLowerCase() : '';
         const nisStr = s.nis ? String(s.nis) : '';
         const nisnStr = s.nisn ? String(s.nisn) : '';
-        const q = searchQuery.toLowerCase();
-        const matchesSearch = nameStr.includes(q) || 
-                              nisStr.includes(searchQuery) || 
-                              nisnStr.includes(searchQuery);
+        const q = searchQuery.toLowerCase().trim();
+        const matchesSearch = !q || 
+                              nameStr.includes(q) || 
+                              nisStr.includes(q) || 
+                              nisnStr.includes(q);
         const matchesKelas = selectedKelas === 'All' || s.kelasId === selectedKelas;
         const matchesGender = selectedGender === 'All' || s.jenisKelamin === selectedGender;
-        return matchesSearch && matchesKelas && matchesGender;
+
+        if (!matchesSearch || !matchesKelas || !matchesGender) return false;
+
+        // Category Filter Logic
+        if (selectedCategory === 'all') return true;
+
+        const info = studentCategoryData.get(s.id);
+        if (!info) return false;
+
+        if (selectedCategory === 'disiplin') {
+          if (selectedSubFilter === 'aktif') return info.activePelanggaran > 0;
+          if (selectedSubFilter === 'sedang_berat') return info.beratSedangPelanggaran > 0;
+          if (selectedSubFilter === 'poin_tinggi') return info.netPoin >= 20;
+          if (selectedSubFilter === 'bersih') return info.totalPelanggaran === 0 && info.netPoin === 0;
+          return info.hasDisiplin;
+        }
+
+        if (selectedCategory === 'akademik') {
+          if (selectedSubFilter === 'perlu_bimbingan') return info.needsAcademicHelp;
+          if (selectedSubFilter === 'berprestasi') return info.isHighAcademic;
+          if (selectedSubFilter === 'ada_prestasi') return info.achievementsCount > 0;
+          return info.hasAkademik;
+        }
+
+        if (selectedCategory === 'kesehatan') {
+          if (selectedSubFilter === 'penyakit') return !!info.disease;
+          if (selectedSubFilter === 'alergi') return !!info.allergy;
+          if (selectedSubFilter === 'disabilitas') return !!info.disability;
+          return info.hasHealth;
+        }
+
+        if (selectedCategory === 'konseling') {
+          if (selectedSubFilter === 'individu') return info.konselingCount > 0;
+          if (selectedSubFilter === 'home_visit') return info.hasHomeVisit;
+          if (selectedSubFilter === 'surat') return info.hasSurat;
+          return info.hasKonseling;
+        }
+
+        if (selectedCategory === 'afirmasi') {
+          if (selectedSubFilter === 'pip') return info.isPip;
+          if (selectedSubFilter === 'kip') return info.isKip;
+          if (selectedSubFilter === 'pkh') return info.isPkh;
+          return info.hasAfirmasi;
+        }
+
+        return true;
       })
       .sort((a, b) => {
         let fieldA: any = a.nama;
@@ -1047,13 +1357,19 @@ export default function SiswaView({
         } else if (sortBy === 'kelas') {
           fieldA = db.kelas.find(k => k.id === a.kelasId)?.namaKelas || '';
           fieldB = db.kelas.find(k => k.id === b.kelasId)?.namaKelas || '';
+        } else if (sortBy === 'poin') {
+          const infoA = studentCategoryData.get(a.id);
+          const infoB = studentCategoryData.get(b.id);
+          fieldA = infoA?.netPoin || 0;
+          fieldB = infoB?.netPoin || 0;
+          return sortOrder === 'asc' ? fieldA - fieldB : fieldB - fieldA;
         }
         
         if (fieldA < fieldB) return sortOrder === 'asc' ? -1 : 1;
         if (fieldA > fieldB) return sortOrder === 'asc' ? 1 : -1;
         return 0;
       });
-  }, [db.siswa, searchQuery, selectedKelas, selectedGender, sortBy, sortOrder]);
+  }, [db.siswa, db.kelas, currentUser, waliKelasAllowedClass, searchQuery, selectedKelas, selectedGender, selectedCategory, selectedSubFilter, studentCategoryData, sortBy, sortOrder]);
 
   // Paginated lists
   const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
@@ -1384,55 +1700,390 @@ export default function SiswaView({
         {!isStudent && (
           <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between">
           <div>
-            {/* Filter and Search Bar */}
-            <div className="p-4 bg-slate-50/50 border-b border-slate-100 grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="relative sm:col-span-1">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                <input 
-                  type="text" 
-                  placeholder="Cari nama, NIS, NISN..." 
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
-                />
+            {/* Category Quick Filter Chips */}
+            <div className="p-3 bg-slate-50/90 border-b border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Filter size={13} className="text-emerald-600" /> Filter Kategori Siswa:
+                </span>
+                {(selectedCategory !== 'all' || selectedKelas !== 'All' || searchQuery !== '' || selectedGender !== 'All' || selectedSubFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="text-[11px] text-slate-500 hover:text-rose-600 font-semibold flex items-center gap-1 transition cursor-pointer"
+                    title="Reset semua filter ke pengaturan awal"
+                  >
+                    <RotateCcw size={11} /> Reset Filter
+                  </button>
+                )}
               </div>
-
-              {/* Class Filter */}
-              <div>
-                <select 
-                  value={currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass ? waliKelasAllowedClass.id : selectedKelas} 
-                  onChange={(e) => { setSelectedKelas(e.target.value); setCurrentPage(1); }}
-                  disabled={currentUser.role === UserRole.WALI_KELAS}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-600 font-semibold"
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory('all'); setSelectedSubFilter('all'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedCategory === 'all'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
                 >
-                  {currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass ? (
-                    <option value={waliKelasAllowedClass.id}>{waliKelasAllowedClass.namaKelas} (Kelas Anda)</option>
-                  ) : (
-                    <>
-                      <option value="All">Semua Kelas</option>
-                      {db.kelas.map(k => <option key={k.id} value={k.id}>{k.namaKelas}</option>)}
-                    </>
+                  <span>Semua Profil</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'all' ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-600 font-bold'}`}>
+                    {categoryCounts.total}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory('disiplin'); setSelectedSubFilter('all_disiplin'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedCategory === 'disiplin'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-amber-50 hover:text-amber-800 border border-slate-200'
+                  }`}
+                >
+                  <Scale size={13} className={selectedCategory === 'disiplin' ? 'text-white' : 'text-amber-600'} />
+                  <span>⚖️ Disiplin</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'disiplin' ? 'bg-amber-700 text-amber-100' : 'bg-amber-100 text-amber-800 font-bold'}`}>
+                    {categoryCounts.disiplin}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory('akademik'); setSelectedSubFilter('all_akademik'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedCategory === 'akademik'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-800 border border-slate-200'
+                  }`}
+                >
+                  <GraduationCap size={13} className={selectedCategory === 'akademik' ? 'text-white' : 'text-blue-600'} />
+                  <span>📚 Akademik</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'akademik' ? 'bg-blue-700 text-blue-100' : 'bg-blue-100 text-blue-800 font-bold'}`}>
+                    {categoryCounts.akademik}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory('kesehatan'); setSelectedSubFilter('all_kesehatan'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedCategory === 'kesehatan'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-800 border border-slate-200'
+                  }`}
+                >
+                  <Stethoscope size={13} className={selectedCategory === 'kesehatan' ? 'text-white' : 'text-rose-600'} />
+                  <span>🩺 Kesehatan</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'kesehatan' ? 'bg-rose-700 text-rose-100' : 'bg-rose-100 text-rose-800 font-bold'}`}>
+                    {categoryCounts.kesehatan}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory('konseling'); setSelectedSubFilter('all_konseling'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedCategory === 'konseling'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-teal-50 hover:text-teal-800 border border-slate-200'
+                  }`}
+                >
+                  <HeartHandshake size={13} className={selectedCategory === 'konseling' ? 'text-white' : 'text-teal-600'} />
+                  <span>🤝 Konseling BK</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'konseling' ? 'bg-teal-700 text-teal-100' : 'bg-teal-100 text-teal-800 font-bold'}`}>
+                    {categoryCounts.konseling}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCategory('afirmasi'); setSelectedSubFilter('all_afirmasi'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedCategory === 'afirmasi'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-800 border border-slate-200'
+                  }`}
+                >
+                  <Wallet size={13} className={selectedCategory === 'afirmasi' ? 'text-white' : 'text-emerald-600'} />
+                  <span>💰 Afirmasi / Bantuan</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'afirmasi' ? 'bg-emerald-700 text-emerald-100' : 'bg-emerald-100 text-emerald-800 font-bold'}`}>
+                    {categoryCounts.afirmasi}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar Controls */}
+            <div className="p-4 bg-slate-50/50 border-b border-slate-100 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Cari nama, NIS, NISN..." 
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                    className="pl-9 pr-7 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
                   )}
-                </select>
+                </div>
+
+                {/* Class Filter */}
+                <div>
+                  <select 
+                    value={currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass ? waliKelasAllowedClass.id : selectedKelas} 
+                    onChange={(e) => { setSelectedKelas(e.target.value); setCurrentPage(1); }}
+                    disabled={currentUser.role === UserRole.WALI_KELAS}
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-600 font-semibold text-slate-700"
+                  >
+                    {currentUser.role === UserRole.WALI_KELAS && waliKelasAllowedClass ? (
+                      <option value={waliKelasAllowedClass.id}>{waliKelasAllowedClass.namaKelas} (Kelas Anda)</option>
+                    ) : (
+                      <>
+                        <option value="All">Semua Rombel / Kelas</option>
+                        {db.kelas.map(k => <option key={k.id} value={k.id}>{k.namaKelas}</option>)}
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                {/* Category Dropdown Filter */}
+                <div>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setSelectedCategory(val);
+                      if (val === 'disiplin') setSelectedSubFilter('all_disiplin');
+                      else if (val === 'akademik') setSelectedSubFilter('all_akademik');
+                      else if (val === 'kesehatan') setSelectedSubFilter('all_kesehatan');
+                      else if (val === 'konseling') setSelectedSubFilter('all_konseling');
+                      else if (val === 'afirmasi') setSelectedSubFilter('all_afirmasi');
+                      else setSelectedSubFilter('all');
+                      setCurrentPage(1);
+                    }}
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 font-semibold text-slate-700"
+                  >
+                    <option value="all">Semua Kategori Profil</option>
+                    <option value="disiplin">⚖️ Kategori Disiplin & Perilaku</option>
+                    <option value="akademik">📚 Kategori Akademik & Prestasi</option>
+                    <option value="kesehatan">🩺 Kategori Kesehatan & Medis</option>
+                    <option value="konseling">🤝 Kategori Layanan Konseling</option>
+                    <option value="afirmasi">💰 Kategori Afirmasi (KIP/PIP)</option>
+                  </select>
+                </div>
+
+                {/* Gender Filter */}
+                <div>
+                  <select 
+                    value={selectedGender} 
+                    onChange={(e) => { setSelectedGender(e.target.value); setCurrentPage(1); }}
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 text-slate-700 font-medium"
+                  >
+                    <option value="All">Semua Gender</option>
+                    <option value="Laki-laki">Laki-laki (L)</option>
+                    <option value="Perempuan">Perempuan (P)</option>
+                  </select>
+                </div>
+
+                {/* Sorting Filter */}
+                <div>
+                  <select 
+                    value={`${sortBy}-${sortOrder}`} 
+                    onChange={(e) => { 
+                      const [field, order] = e.target.value.split('-');
+                      setSortBy(field as any);
+                      setSortOrder(order as any);
+                    }}
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500 text-slate-700 font-medium"
+                  >
+                    <option value="nama-asc">Urut Nama (A-Z)</option>
+                    <option value="nama-desc">Urut Nama (Z-A)</option>
+                    <option value="nis-asc">Urut NIS Terkecil</option>
+                    <option value="nis-desc">Urut NIS Terbesar</option>
+                    <option value="poin-desc">Urut Poin Pelanggaran</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Sorting Filter */}
-              <div>
-                <select 
-                  value={`${sortBy}-${sortOrder}`} 
-                  onChange={(e) => { 
-                    const [field, order] = e.target.value.split('-');
-                    setSortBy(field as any);
-                    setSortOrder(order as any);
-                  }}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs w-full focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="nama-asc">Nama (A-Z)</option>
-                  <option value="nama-desc">Nama (Z-A)</option>
-                  <option value="nis-asc">NIS Terkecil</option>
-                  <option value="nis-desc">NIS Terbesar</option>
-                </select>
-              </div>
+              {/* Dynamic Sub-criteria Filter Row when a category is selected */}
+              {selectedCategory !== 'all' && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60 text-xs">
+                  <span className="font-semibold text-slate-500 flex items-center gap-1 text-[11px]">
+                    <SlidersHorizontal size={12} className="text-slate-400" />
+                    Kriteria Khusus:
+                  </span>
+
+                  {selectedCategory === 'disiplin' && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'all_disiplin', label: 'Semua Kasus Disiplin' },
+                        { id: 'aktif', label: 'Pelanggaran Aktif (Proses)' },
+                        { id: 'sedang_berat', label: 'Kasus Sedang / Berat' },
+                        { id: 'poin_tinggi', label: 'Poin Tinggi (≥ 20)' },
+                        { id: 'bersih', label: 'Disiplin Bersih (0 Poin)' },
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => { setSelectedSubFilter(opt.id); setCurrentPage(1); }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                            selectedSubFilter === opt.id
+                              ? 'bg-amber-600 text-white font-bold shadow-xs'
+                              : 'bg-white hover:bg-amber-50 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedCategory === 'akademik' && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'all_akademik', label: 'Semua Data Akademik' },
+                        { id: 'perlu_bimbingan', label: 'Perlu Bimbingan (Nilai < 75)' },
+                        { id: 'berprestasi', label: 'Berprestasi Tinggi (≥ 85 / Juara)' },
+                        { id: 'ada_prestasi', label: 'Memiliki Prestasi/Juara' },
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => { setSelectedSubFilter(opt.id); setCurrentPage(1); }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                            selectedSubFilter === opt.id
+                              ? 'bg-blue-600 text-white font-bold shadow-xs'
+                              : 'bg-white hover:bg-blue-50 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedCategory === 'kesehatan' && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'all_kesehatan', label: 'Semua Catatan Medis' },
+                        { id: 'penyakit', label: 'Riwayat Penyakit' },
+                        { id: 'alergi', label: 'Alergi Khusus' },
+                        { id: 'disabilitas', label: 'Kebutuhan Khusus / Disabilitas' },
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => { setSelectedSubFilter(opt.id); setCurrentPage(1); }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                            selectedSubFilter === opt.id
+                              ? 'bg-rose-600 text-white font-bold shadow-xs'
+                              : 'bg-white hover:bg-rose-50 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedCategory === 'konseling' && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'all_konseling', label: 'Semua Layanan BK' },
+                        { id: 'individu', label: 'Konseling Individu' },
+                        { id: 'home_visit', label: 'Pernah Home Visit' },
+                        { id: 'surat', label: 'Surat Panggilan BK' },
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => { setSelectedSubFilter(opt.id); setCurrentPage(1); }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                            selectedSubFilter === opt.id
+                              ? 'bg-teal-600 text-white font-bold shadow-xs'
+                              : 'bg-white hover:bg-teal-50 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedCategory === 'afirmasi' && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'all_afirmasi', label: 'Semua Penerima Bantuan' },
+                        { id: 'pip', label: 'Program Indonesia Pintar (PIP)' },
+                        { id: 'kip', label: 'Kartu Indonesia Pintar (KIP)' },
+                        { id: 'pkh', label: 'Program Keluarga Harapan (PKH)' },
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => { setSelectedSubFilter(opt.id); setCurrentPage(1); }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                            selectedSubFilter === opt.id
+                              ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                              : 'bg-white hover:bg-emerald-50 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Active Filter Summary Bar */}
+              {(selectedCategory !== 'all' || selectedKelas !== 'All' || searchQuery !== '' || selectedGender !== 'All') && (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-100/80 rounded-xl text-xs text-slate-600 border border-slate-200/60">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold text-slate-500">Filter Aktif:</span>
+                    {selectedCategory !== 'all' && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-slate-800 border border-slate-200 flex items-center gap-1">
+                        Kategori: <span className="text-emerald-700 capitalize">{selectedCategory}</span>
+                      </span>
+                    )}
+                    {selectedKelas !== 'All' && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-slate-800 border border-slate-200">
+                        {db.kelas.find(k => k.id === selectedKelas)?.namaKelas || selectedKelas}
+                      </span>
+                    )}
+                    {selectedGender !== 'All' && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-slate-800 border border-slate-200">
+                        {selectedGender}
+                      </span>
+                    )}
+                    {searchQuery && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-slate-800 border border-slate-200">
+                        "{searchQuery}"
+                      </span>
+                    )}
+                    <span className="text-slate-400 font-medium">({filteredStudents.length} siswa ditemukan)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="text-[11px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
+                  >
+                    Hapus Filter
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Students List Grid */}
@@ -1452,22 +2103,147 @@ export default function SiswaView({
                   {paginatedStudents.length > 0 ? (
                     paginatedStudents.map((s) => {
                       const kelasNama = db.kelas.find(k => k.id === s.kelasId || k.namaKelas.toLowerCase().trim() === s.kelasId?.toLowerCase().trim())?.namaKelas || s.kelasId || '-';
+                      const info = studentCategoryData.get(s.id);
                       return (
                         <tr key={s.id} className="hover:bg-slate-50/50 transition-all">
-                          <td className="py-3.5 px-4 flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200/50 flex items-center justify-center">
-                              {s.foto ? (
-                                <img src={s.foto} alt={s.nama} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="font-bold text-slate-500 uppercase">{s.nama.slice(0, 2)}</span>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-700">{s.nama}</p>
-                              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400 font-medium">
-                                <span>Masuk: {s.tahunMasuk}</span>
-                                <span>•</span>
-                                <span>TP: {s.tahunPelajaran || db.tahunPelajaran.find(tp => tp.isActive)?.tahun || '2025/2026'}</span>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200/50 flex items-center justify-center">
+                                {s.foto ? (
+                                  <img src={s.foto} alt={s.nama} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="font-bold text-slate-500 uppercase">{s.nama.slice(0, 2)}</span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-800 truncate">{s.nama}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                                  <span>Masuk: {s.tahunMasuk}</span>
+                                  <span>•</span>
+                                  <span>TP: {s.tahunPelajaran || db.tahunPelajaran.find(tp => tp.isActive)?.tahun || '2025/2026'}</span>
+                                </div>
+
+                                {/* Contextual Category Badges based on active filter or critical markers */}
+                                {info && (
+                                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                                    {/* Disiplin indicator */}
+                                    {selectedCategory === 'disiplin' && (
+                                      info.netPoin > 0 ? (
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                          <AlertTriangle size={10} className="text-amber-700" />
+                                          {info.netPoin} Poin ({info.totalPelanggaran} Kasus)
+                                          {info.activePelanggaran > 0 && <span className="text-rose-600 font-black">• Proses</span>}
+                                        </span>
+                                      ) : info.totalPelanggaran > 0 ? (
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 flex items-center gap-1">
+                                          <CheckCircle2 size={10} className="text-teal-600" />
+                                          Kasus Selesai (0 Poin Aktif)
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                          <CheckCircle2 size={10} className="text-emerald-600" />
+                                          Disiplin Bersih
+                                        </span>
+                                      )
+                                    )}
+
+                                    {/* Akademik indicator */}
+                                    {selectedCategory === 'akademik' && (
+                                      <>
+                                        {info.avgRapor > 0 && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                            Rata-rata: {info.avgRapor}
+                                          </span>
+                                        )}
+                                        {info.achievementsCount > 0 && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                                            🏆 {info.achievementsCount} Prestasi
+                                          </span>
+                                        )}
+                                        {info.needsAcademicHelp && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                            ⚠️ Perlu Bimbingan
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* Kesehatan indicator */}
+                                    {selectedCategory === 'kesehatan' && (
+                                      <>
+                                        {info.disease && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                            🩺 {info.disease}
+                                          </span>
+                                        )}
+                                        {info.allergy && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                            ⚠️ Alergi: {info.allergy}
+                                          </span>
+                                        )}
+                                        {info.disability && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                            ♿ {info.disability}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* Konseling indicator */}
+                                    {selectedCategory === 'konseling' && (
+                                      <>
+                                        {info.konselingCount > 0 && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                                            🤝 {info.konselingCount} Sesi Konseling
+                                          </span>
+                                        )}
+                                        {info.hasHomeVisit && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                            🏠 Home Visit
+                                          </span>
+                                        )}
+                                        {info.hasSurat && (
+                                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                            ✉️ Surat Panggilan
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* Afirmasi indicator */}
+                                    {selectedCategory === 'afirmasi' && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                        💰 Penerima Bantuan: {[info.isPip ? 'PIP' : '', info.isKip ? 'KIP' : '', info.isPkh ? 'PKH' : ''].filter(Boolean).join(', ') || 'Afirmasi'}
+                                      </span>
+                                    )}
+
+                                    {/* General overview compact tags */}
+                                    {selectedCategory === 'all' && (
+                                      <>
+                                        {info.netPoin > 0 && (
+                                          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200" title={`${info.netPoin} Poin Pelanggaran`}>
+                                            ⚠️ {info.netPoin} Poin
+                                          </span>
+                                        )}
+                                        {info.hasHealth && (
+                                          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-rose-50 text-rose-700 border border-rose-200" title={info.disease || info.allergy || 'Catatan Medis'}>
+                                            🩺 Medis
+                                          </span>
+                                        )}
+                                        {info.achievementsCount > 0 && (
+                                          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200" title={`${info.achievementsCount} Prestasi Siswa`}>
+                                            🏆 Prestasi
+                                          </span>
+                                        )}
+                                        {info.hasAfirmasi && (
+                                          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Penerima Bantuan Sekolah">
+                                            💰 Bantuan
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1497,9 +2273,9 @@ export default function SiswaView({
                           <td className="py-3.5 px-4 text-center">
                             <div className="flex justify-center items-center gap-1.5">
                               <button 
-                                onClick={() => { setViewingSiswa(s); setActiveDetailTab('bio'); }}
-                                title="Lihat Profil"
-                                className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition"
+                                onClick={() => handleSelectStudentForView(s)}
+                                title="Lihat Profil Lengkap Siswa"
+                                className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
                               >
                                 <Eye size={14} />
                               </button>
@@ -1527,14 +2303,14 @@ export default function SiswaView({
                                   <button 
                                     onClick={() => openSiswaEditor(s)}
                                     title="Edit Siswa"
-                                    className="p-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg transition"
+                                    className="p-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg transition cursor-pointer"
                                   >
                                     <Edit2 size={14} />
                                   </button>
                                   <button 
                                     onClick={() => handleDeleteClick(s.id)}
                                     title="Hapus Siswa"
-                                    className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition"
+                                    className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition cursor-pointer"
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -1547,8 +2323,21 @@ export default function SiswaView({
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
-                        Tidak ada data siswa ditemukan.
+                      <td colSpan={6} className="py-12 text-center text-slate-500">
+                        <div className="flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
+                          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                            <Filter size={24} />
+                          </div>
+                          <p className="font-semibold text-slate-700 text-sm">Tidak ada siswa yang sesuai dengan filter.</p>
+                          <p className="text-xs text-slate-400">Coba ubah kata kunci pencarian, kelas rombel, atau kriteria kategori profil.</p>
+                          <button
+                            type="button"
+                            onClick={handleResetFilters}
+                            className="mt-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                          >
+                            <RotateCcw size={13} /> Reset Filter
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )}
