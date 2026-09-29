@@ -852,13 +852,18 @@ export default function App() {
         {/* Card Frame with glassmorphism styling */}
         <div id="login-card" className="bg-white/80 backdrop-blur-md w-full max-w-md p-8 rounded-2xl border border-slate-100 shadow-xl relative z-10 space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-16 h-16 bg-gradient-to-tr from-emerald-600 to-teal-700 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
+            <div className="w-16 h-16 bg-gradient-to-tr from-emerald-600 to-teal-700 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md mb-2">
               <GraduationCap size={36} />
             </div>
-            <h1 className="text-base md:text-lg font-extrabold text-slate-800 tracking-tight leading-snug uppercase">
-              Sistem Himpunan Data Siswa (HDS)
-            </h1>
-            <h2 className="text-xs md:text-sm font-bold text-emerald-600 tracking-wide uppercase leading-normal">
+            <div>
+              <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight leading-none">
+                PANDA BK17
+              </h1>
+              <p className="text-xs md:text-sm font-semibold text-slate-600 tracking-normal mt-1">
+                (Pemetaan & Analisis Data BK17)
+              </p>
+            </div>
+            <h2 className="text-xs md:text-sm font-bold text-emerald-600 tracking-wide uppercase leading-normal pt-0.5">
               UPTD SMPN 17 KOTA TANGERANG SELATAN
             </h2>
             <p className="text-[11px] text-slate-400 max-w-[320px] mx-auto leading-relaxed">
@@ -1487,7 +1492,7 @@ export default function App() {
               <GraduationCap size={22} />
             </div>
             <div>
-              <h2 className="font-bold text-xs text-white uppercase tracking-wider">Sistem HDS BK</h2>
+              <h2 className="font-bold text-xs text-white tracking-wider">PANDA BK17</h2>
               <p className="text-[10px] text-slate-400">UPTD SMPN 17 Kota Tangerang Selatan</p>
             </div>
           </div>
@@ -1645,7 +1650,7 @@ export default function App() {
           <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold">
             <GraduationCap size={18} />
           </div>
-          <span className="font-bold text-xs uppercase tracking-wider">HDS BK</span>
+          <span className="font-bold text-xs tracking-wider">PANDA BK17</span>
         </div>
         
         <div className="flex items-center gap-2">
@@ -1804,7 +1809,7 @@ export default function App() {
             <h1 className="text-xs font-semibold text-slate-500">
               Selamat datang kembali, <span className="text-slate-800 font-bold">{currentUser.nama}</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium">Sistem Informasi HDS Bimbingan Konseling UPTD SMPN 17 Kota Tangerang Selatan</p>
+            <p className="text-[10px] text-slate-400 font-medium">PANDA BK17 (Pemetaan & Analisis Data) - UPTD SMPN 17 Kota Tangerang Selatan</p>
           </div>
           
           <div className="flex items-center gap-4">
