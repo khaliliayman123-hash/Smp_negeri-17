@@ -15,10 +15,15 @@ import {
   GraduationCap, 
   X,
   BookOpen,
-  Printer
+  Printer,
+  QrCode,
+  Camera,
+  Sparkles
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Kehadiran, Siswa } from '../types';
 import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
+import KehadiranQrScanner from './KehadiranQrScanner';
+import StudentQrCardModal from './StudentQrCardModal';
 
 interface KehadiranViewProps {
   db: DatabaseState | null;
@@ -70,6 +75,8 @@ export default function KehadiranView({
 
   // Modal states
   const [showModal, setShowModal] = useState<boolean>(false);
+  const [showQrScanner, setShowQrScanner] = useState<boolean>(false);
+  const [viewingQrSiswa, setViewingQrSiswa] = useState<Siswa | null>(null);
   const [editingItem, setEditingItem] = useState<Kehadiran | null>(null);
   const [formKehadiran, setFormKehadiran] = useState<{
     siswaId: string;
@@ -632,6 +639,29 @@ export default function KehadiranView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            {/* Scan QR Code Button */}
+            <button
+              onClick={() => setShowQrScanner(true)}
+              className="px-4 py-2.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-300 hover:from-emerald-300 hover:to-teal-200 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-2 shadow-lg cursor-pointer transform hover:scale-[1.02] active:scale-[0.98]"
+              title="Buka Pemindai Kamera untuk Rekap Cepat Presensi QR Siswa"
+            >
+              <Camera size={16} className="text-slate-950" />
+              <span>Scan QR Code Piket</span>
+            </button>
+
+            {/* Kartu QR Siswa Button */}
+            <button
+              onClick={() => {
+                const first = activeStudents[0] || (db?.siswa && db.siswa[0]);
+                if (first) setViewingQrSiswa(first);
+              }}
+              className="px-3.5 py-2.5 bg-emerald-800/80 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-emerald-600/50 shadow-sm cursor-pointer"
+              title="Lihat / Cetak Kartu Presensi QR Siswa"
+            >
+              <QrCode size={15} className="text-emerald-300" />
+              <span className="hidden sm:inline">Kartu QR Siswa</span>
+            </button>
+
             <button
               onClick={() => handleDownloadKelasDoc(selectedClassId)}
               className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer"
@@ -646,6 +676,24 @@ export default function KehadiranView({
             </button>
           </div>
         </div>
+
+        {/* Guru Piket Quick Access Guidance Banner */}
+        {currentUser.role === UserRole.GURU_PIKET && (
+          <div className="mt-4 p-3.5 bg-emerald-500/20 border border-emerald-400/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+              <p className="text-emerald-100 text-[11px] leading-relaxed">
+                <strong className="text-white">Akses Guru Piket Aktif:</strong> Pindai QR Code kartu pelajar siswa di pintu masuk gerbang atau piket kelas dengan kamera perangkat untuk mencatat presensi harian secara langsung.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowQrScanner(true)}
+              className="px-3.5 py-1.5 bg-white text-slate-950 font-black rounded-lg text-xs hover:bg-emerald-100 transition shrink-0 cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+            >
+              <Camera size={14} className="text-emerald-600" /> Buka Kamera Piket
+            </button>
+          </div>
+        )}
 
         {/* Metrics Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
@@ -954,6 +1002,16 @@ export default function KehadiranView({
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
+                            onClick={() => {
+                              const sObj = db?.siswa.find(s => s.id === att.siswaId);
+                              if (sObj) setViewingQrSiswa(sObj);
+                            }}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition cursor-pointer"
+                            title="Lihat / Cetak Kartu QR Presensi Siswa"
+                          >
+                            <QrCode size={14} />
+                          </button>
+                          <button
                             onClick={() => handleOpenEditModal(att)}
                             className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition cursor-pointer"
                             title="Ubah / Edit Data Presensi"
@@ -1150,6 +1208,28 @@ export default function KehadiranView({
             </form>
           </div>
         </div>
+      )}
+
+      {/* QR Code Attendance Scanner Modal */}
+      {showQrScanner && (
+        <KehadiranQrScanner
+          db={db}
+          currentUser={currentUser}
+          onSaveKehadiran={onSaveKehadiran}
+          onClose={() => setShowQrScanner(false)}
+          defaultBulan={attendanceFilterBulan}
+          defaultMinggu={attendanceFilterMinggu}
+        />
+      )}
+
+      {/* Student QR Card Modal */}
+      {viewingQrSiswa && (
+        <StudentQrCardModal
+          siswa={viewingQrSiswa}
+          db={db}
+          onClose={() => setViewingQrSiswa(null)}
+          onSelectAnotherStudent={(s) => setViewingQrSiswa(s)}
+        />
       )}
     </div>
   );
