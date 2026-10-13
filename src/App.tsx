@@ -578,6 +578,31 @@ export default function App() {
     return filteredDb.laporanKejadian.filter(l => l.status === 'Belum Dibaca').length;
   }, [filteredDb]);
 
+  // Notifikasi pengaduan masuk pada kolom menu Layanan Pengaduan
+  const incomingPengaduanCount = React.useMemo(() => {
+    if (!currentUser) return 0;
+    const list = filteredDb?.pengaduanSiswa || db?.pengaduanSiswa || [];
+    
+    // Untuk siswa: hitung jika ada respon/tanggapan dari Guru BK pada pengaduannya
+    if (currentUser.role === UserRole.SISWA) {
+      const sId = currentUser.id;
+      const sNis = (currentUser.username || '').toLowerCase().trim();
+      const sName = (currentUser.nama || '').toLowerCase().trim();
+      return list.filter(p => {
+        if (!p) return false;
+        const isMyComplaint = p.siswaId === sId || 
+          (p.nis && p.nis.toLowerCase().trim() === sNis) || 
+          (p.namaSiswa && p.namaSiswa.toLowerCase().trim() === sName);
+        return isMyComplaint && (p.status === 'Sedang Ditangani' || p.status === 'Selesai' || Boolean(p.tanggapanBk && p.tanggapanBk.trim()));
+      }).length;
+    }
+
+    // Untuk Guru BK, Wali Kelas, dan Admin: hitung pengaduan masuk berstatus 'Menunggu Respon'
+    return list.filter(p => p && (!p.status || p.status === 'Menunggu Respon')).length;
+  }, [filteredDb, db, currentUser]);
+
+  const hasIncomingPengaduan = incomingPengaduanCount > 0;
+
   const handleMarkAsRead = async (reportId: string) => {
     setDb(prev => {
       if (!prev) return prev;
@@ -1518,9 +1543,29 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => { setActiveMenu('pengaduan'); }}
-                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                  className={`p-3 rounded-xl text-left flex items-center justify-between transition cursor-pointer relative ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
-                  <AlertCircle size={16} /> Layanan Pengaduan
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AlertCircle size={16} className={hasIncomingPengaduan ? "text-rose-400 shrink-0" : "shrink-0"} />
+                    <span className="flex items-center gap-2 truncate">
+                      <span>Layanan Pengaduan</span>
+                      {hasIncomingPengaduan && (
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {hasIncomingPengaduan && (
+                    <span 
+                      className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white shadow-xs shrink-0 flex items-center gap-1 animate-pulse"
+                      title={`${incomingPengaduanCount} tanggapan/pengaduan aktif`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                      {incomingPengaduanCount}
+                    </span>
+                  )}
                 </button>
               </>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
@@ -1551,9 +1596,29 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => { setActiveMenu('pengaduan'); }}
-                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                  className={`p-3 rounded-xl text-left flex items-center justify-between transition cursor-pointer relative ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
-                  <AlertCircle size={16} /> Layanan Pengaduan
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AlertCircle size={16} className={hasIncomingPengaduan ? "text-rose-400 shrink-0" : "shrink-0"} />
+                    <span className="flex items-center gap-2 truncate">
+                      <span>Layanan Pengaduan</span>
+                      {hasIncomingPengaduan && (
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {hasIncomingPengaduan && (
+                    <span 
+                      className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white shadow-xs shrink-0 flex items-center gap-1 animate-pulse"
+                      title={`${incomingPengaduanCount} pengaduan masuk menunggu respon`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                      {incomingPengaduanCount}
+                    </span>
+                  )}
                 </button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
@@ -1611,9 +1676,29 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => { setActiveMenu('pengaduan'); }}
-                  className={`p-3 rounded-xl text-left flex items-center gap-3 transition cursor-pointer ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
+                  className={`p-3 rounded-xl text-left flex items-center justify-between transition cursor-pointer relative ${activeMenu === 'pengaduan' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 hover:text-white'}`}
                 >
-                  <AlertCircle size={16} /> Layanan Pengaduan
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AlertCircle size={16} className={hasIncomingPengaduan ? "text-rose-400 shrink-0" : "shrink-0"} />
+                    <span className="flex items-center gap-2 truncate">
+                      <span>Layanan Pengaduan</span>
+                      {hasIncomingPengaduan && (
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {hasIncomingPengaduan && (
+                    <span 
+                      className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white shadow-xs shrink-0 flex items-center gap-1 animate-pulse"
+                      title={`${incomingPengaduanCount} pengaduan masuk menunggu respon`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                      {incomingPengaduanCount}
+                    </span>
+                  )}
                 </button>
                 <button 
                   onClick={() => { setActiveMenu('dokumen'); }}
@@ -1776,7 +1861,26 @@ export default function App() {
             {currentUser.role === UserRole.SISWA ? (
               <>
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Profil Saya (HDS)</button>
-                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800 text-emerald-400">Layanan Pengaduan</button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} 
+                  className="p-2.5 rounded-lg text-left hover:bg-slate-800 text-emerald-400 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>Layanan Pengaduan</span>
+                    {hasIncomingPengaduan && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                      </span>
+                    )}
+                  </span>
+                  {hasIncomingPengaduan && (
+                    <span className="bg-rose-600 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 animate-pulse">
+                      <span className="w-1 h-1 rounded-full bg-white"></span>
+                      {incomingPengaduanCount} Baru
+                    </span>
+                  )}
+                </button>
               </>
             ) : currentUser.role === UserRole.WALI_KELAS ? (
               <>
@@ -1784,7 +1888,26 @@ export default function App() {
                 <button onClick={() => { setActiveMenu('kehadiran'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Rekap Kehadiran</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
-                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan Pengaduan</button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} 
+                  className="p-2.5 rounded-lg text-left hover:bg-slate-800 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>Layanan Pengaduan</span>
+                    {hasIncomingPengaduan && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                      </span>
+                    )}
+                  </span>
+                  {hasIncomingPengaduan && (
+                    <span className="bg-rose-600 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 animate-pulse">
+                      <span className="w-1 h-1 rounded-full bg-white"></span>
+                      {incomingPengaduanCount} Baru
+                    </span>
+                  )}
+                </button>
               </>
             ) : currentUser.role === UserRole.GURU_PIKET ? (
               <>
@@ -1799,7 +1922,26 @@ export default function App() {
                 <button onClick={() => { setActiveMenu('siswa'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Direktori Siswa (HDS)</button>
                 <button onClick={() => { setActiveMenu('walikelas'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Ruang Wali Kelas</button>
                 <button onClick={() => { setActiveMenu('layanan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan BK & Disiplin</button>
-                <button onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Layanan Pengaduan</button>
+                <button 
+                  onClick={() => { setActiveMenu('pengaduan'); setMobileMenuOpen(false); }} 
+                  className="p-2.5 rounded-lg text-left hover:bg-slate-800 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>Layanan Pengaduan</span>
+                    {hasIncomingPengaduan && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                      </span>
+                    )}
+                  </span>
+                  {hasIncomingPengaduan && (
+                    <span className="bg-rose-600 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 animate-pulse">
+                      <span className="w-1 h-1 rounded-full bg-white"></span>
+                      {incomingPengaduanCount} Baru
+                    </span>
+                  )}
+                </button>
                 <button onClick={() => { setActiveMenu('dokumen'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Arsip & Surat Resmi</button>
                 <button onClick={() => { setActiveMenu('master'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Pelaporan & Master</button>
                 <button onClick={() => { setActiveMenu('pengaturan'); setMobileMenuOpen(false); }} className="p-2.5 rounded-lg text-left hover:bg-slate-800">Koneksi Google Sheets</button>
