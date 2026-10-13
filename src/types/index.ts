@@ -292,6 +292,8 @@ export interface Kehadiran {
   mingguKe: string; // e.g., "Minggu 1", "Minggu 2"
   bulan: string;    // e.g., "Juli"
   tahun: string;    // e.g., "2026"
+  tanggal?: string; // e.g., "2026-10-12"
+  timestamp?: string; // ISO date-time string
   hadir: number;
   sakit: number;
   izin: number;

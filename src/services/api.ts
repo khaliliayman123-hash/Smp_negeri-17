@@ -841,8 +841,8 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
       l.namaUser = 'Arta Polta, S.Pd';
       migrated = true;
     }
-    if (l.namaUser === 'Novita Kusuma Wardhani, S.Pd' || l.namaUser === 'Dwi Susanti, S.Pd') {
-      l.namaUser = 'Nanda Putri Utami, S.Pd';
+    if (l.namaUser === 'Novita Kusuma Wardhani, S.Pd' || l.namaUser === 'Nanda Putri Utami, S.Pd' || l.namaUser === 'Nanda Putri  Utami, S.Pd') {
+      l.namaUser = 'Dwi Susanti, S.Pd';
       migrated = true;
     }
     return l;
@@ -983,15 +983,29 @@ export function sanitizeDatabaseState(parsed: any): { sanitized: DatabaseState; 
     return s;
   });
 
-  // Update guruPelapor in violations
+  // Update guruPelapor and tindakLanjut in violations (kedisiplinan & poin)
   parsed.pelanggaran = parsed.pelanggaran.map((p: any) => {
     if (p) {
       if (p.guruPelapor === 'Ahmad Dahlan, S.Pd.' || p.guruPelapor === 'Aulia Rohmah, S.Pd,.MM') {
         p.guruPelapor = 'Arta Polta, S.Pd';
         migrated = true;
-      } else if (p.guruPelapor === 'Novita Kusuma Wardhani, S.Pd' || p.guruPelapor === 'Dwi Susanti, S.Pd') {
-        p.guruPelapor = 'Nanda Putri Utami, S.Pd';
+      } else if (
+        p.guruPelapor === 'Novita Kusuma Wardhani, S.Pd' || 
+        p.guruPelapor === 'Nanda Putri Utami, S.Pd' ||
+        p.guruPelapor === 'Nanda Putri  Utami, S.Pd'
+      ) {
+        p.guruPelapor = 'Dwi Susanti, S.Pd';
         migrated = true;
+      }
+
+      // Perbaiki dan ganti nama di kolom tindak lanjut jika ada referensi nama Nanda Putri Utami
+      if (p.tindakLanjut && typeof p.tindakLanjut === 'string') {
+        if (p.tindakLanjut.includes('Nanda Putri Utami') || p.tindakLanjut.includes('Nanda Putri  Utami')) {
+          p.tindakLanjut = p.tindakLanjut
+            .replace(/Nanda Putri\s+Utami,\s*S\.Pd/g, 'Dwi Susanti, S.Pd')
+            .replace(/Nanda Putri\s+Utami/g, 'Dwi Susanti, S.Pd');
+          migrated = true;
+        }
       }
     }
     return p;

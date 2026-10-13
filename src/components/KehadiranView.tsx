@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Calendar, 
+  CalendarRange,
   Users, 
   CheckCircle2, 
   Plus, 
@@ -18,7 +19,8 @@ import {
   Printer,
   QrCode,
   Camera,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Kehadiran, Siswa } from '../types';
 import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
@@ -73,6 +75,11 @@ export default function KehadiranView({
   const [attendanceFilterMinggu, setAttendanceFilterMinggu] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Date Range Filter States
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [datePreset, setDatePreset] = useState<string>('ALL');
+
   // Modal states
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showQrScanner, setShowQrScanner] = useState<boolean>(false);
@@ -84,6 +91,7 @@ export default function KehadiranView({
     bulan: string;
     mingguKe: string;
     tahun: string;
+    tanggal?: string;
     hadir: number;
     sakit: number;
     izin: number;
@@ -95,12 +103,164 @@ export default function KehadiranView({
     bulan: 'Juli',
     mingguKe: 'Minggu 1',
     tahun: '2026',
+    tanggal: '',
     hadir: 5,
     sakit: 0,
     izin: 0,
     alfa: 0,
     keterangan: 'Presensi minggu terdata'
   });
+
+  // Month index mapping for date calculations
+  const MONTH_NAME_MAP: Record<string, number> = useMemo(() => ({
+    'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5,
+    'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
+  }), []);
+
+  // Format date helper for Indonesian locale
+  const formatDateIndo = useCallback((dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  }, []);
+
+  // Determine date span of a Kehadiran record (whether from exact tanggal, timestamp, or bulan+minggu+tahun)
+  const getRecordDateRange = useCallback((k: Kehadiran): { start: Date; end: Date } | null => {
+    // 1. If explicit tanggal (YYYY-MM-DD or parseable)
+    if (k.tanggal) {
+      const str = String(k.tanggal).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        return {
+          start: new Date(str + 'T00:00:00'),
+          end: new Date(str + 'T23:59:59')
+        };
+      }
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const dStart = new Date(d);
+        dStart.setHours(0, 0, 0, 0);
+        const dEnd = new Date(d);
+        dEnd.setHours(23, 59, 59, 999);
+        return { start: dStart, end: dEnd };
+      }
+    }
+
+    // 2. If timestamp exists
+    if (k.timestamp) {
+      const d = new Date(k.timestamp);
+      if (!isNaN(d.getTime())) {
+        const dStart = new Date(d);
+        dStart.setHours(0, 0, 0, 0);
+        const dEnd = new Date(d);
+        dEnd.setHours(23, 59, 59, 999);
+        return { start: dStart, end: dEnd };
+      }
+    }
+
+    // 3. Fallback: derive from tahun + bulan + mingguKe
+    const tahunStr = k.tahun || '2026';
+    const year = parseInt(tahunStr, 10) || 2026;
+    const bulanStr = String(k.bulan || '').toLowerCase().trim();
+    const monthIdx = MONTH_NAME_MAP[bulanStr];
+
+    if (monthIdx !== undefined) {
+      const mingguStr = String(k.mingguKe || '').toLowerCase().trim();
+      let startDay = 1;
+      let endDay = new Date(year, monthIdx + 1, 0).getDate();
+
+      if (mingguStr.includes('1')) {
+        startDay = 1;
+        endDay = 7;
+      } else if (mingguStr.includes('2')) {
+        startDay = 8;
+        endDay = 14;
+      } else if (mingguStr.includes('3')) {
+        startDay = 15;
+        endDay = 21;
+      } else if (mingguStr.includes('4')) {
+        startDay = 22;
+        endDay = 28;
+      } else if (mingguStr.includes('5')) {
+        startDay = 29;
+        endDay = new Date(year, monthIdx + 1, 0).getDate();
+      }
+
+      return {
+        start: new Date(year, monthIdx, startDay, 0, 0, 0),
+        end: new Date(year, monthIdx, endDay, 23, 59, 59)
+      };
+    }
+
+    return null;
+  }, [MONTH_NAME_MAP]);
+
+  // Quick preset filter handler
+  const handleApplyPreset = (preset: string) => {
+    setDatePreset(preset);
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    if (preset === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+      return;
+    }
+
+    if (preset === 'TODAY') {
+      const todayStr = `${yyyy}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+      return;
+    }
+
+    if (preset === 'THIS_WEEK') {
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      setStartDate(`${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`);
+      setEndDate(`${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`);
+      return;
+    }
+
+    if (preset === 'THIS_MONTH') {
+      const m = now.getMonth();
+      const firstDay = `${yyyy}-${pad(m + 1)}-01`;
+      const lastDayNum = new Date(yyyy, m + 1, 0).getDate();
+      const lastDay = `${yyyy}-${pad(m + 1)}-${pad(lastDayNum)}`;
+      setStartDate(firstDay);
+      setEndDate(lastDay);
+      return;
+    }
+
+    if (preset === 'SEM_1') {
+      setStartDate(`${yyyy}-07-01`);
+      setEndDate(`${yyyy}-12-31`);
+      return;
+    }
+
+    if (preset === 'SEM_2') {
+      setStartDate(`${yyyy}-01-01`);
+      setEndDate(`${yyyy}-06-30`);
+      return;
+    }
+  };
+
+  // Reset date range filter
+  const handleResetDateFilter = () => {
+    setStartDate('');
+    setEndDate('');
+    setDatePreset('ALL');
+  };
 
   // Helper to extract student's class name
   const getStudentClassName = (student: Siswa): string => {
@@ -164,9 +324,24 @@ export default function KehadiranView({
         }
       }
 
+      // 5. Date Range filter (Start Date & End Date)
+      if (startDate || endDate) {
+        const range = getRecordDateRange(k);
+        if (range) {
+          if (startDate) {
+            const fStart = new Date(startDate + 'T00:00:00');
+            if (range.end < fStart) return false;
+          }
+          if (endDate) {
+            const fEnd = new Date(endDate + 'T23:59:59');
+            if (range.start > fEnd) return false;
+          }
+        }
+      }
+
       return true;
     });
-  }, [db, activeStudents, selectedClassId, searchQuery, attendanceFilterBulan, attendanceFilterMinggu]);
+  }, [db, activeStudents, selectedClassId, searchQuery, attendanceFilterBulan, attendanceFilterMinggu, startDate, endDate, getRecordDateRange]);
 
   // Attendance metrics
   const classAttendanceMetrics = useMemo(() => {
@@ -233,7 +408,29 @@ export default function KehadiranView({
     const student = db.siswa.find(s => s.id === siswaId);
     if (!student) return;
 
-    const records = db.kehadiran.filter(k => k.siswaId === siswaId);
+    let records = db.kehadiran.filter(k => k.siswaId === siswaId);
+    if (attendanceFilterBulan !== 'ALL') {
+      records = records.filter(k => String(k.bulan || '').toLowerCase().trim() === attendanceFilterBulan.toLowerCase().trim());
+    }
+    if (attendanceFilterMinggu !== 'ALL') {
+      records = records.filter(k => String(k.mingguKe || '').toLowerCase().trim() === attendanceFilterMinggu.toLowerCase().trim());
+    }
+    if (startDate || endDate) {
+      records = records.filter(k => {
+        const range = getRecordDateRange(k);
+        if (!range) return true;
+        if (startDate) {
+          const fStart = new Date(startDate + 'T00:00:00');
+          if (range.end < fStart) return false;
+        }
+        if (endDate) {
+          const fEnd = new Date(endDate + 'T23:59:59');
+          if (range.start > fEnd) return false;
+        }
+        return true;
+      });
+    }
+
     const kelasObj = db.kelas.find(c => c.id === student.kelasId || c.namaKelas === student.kelasId);
     const namaKelas = kelasObj?.namaKelas || getStudentClassName(student) || 'Semua Kelas';
     const waliKelasObj = db.users.find(u => u.id === kelasObj?.waliKelasId) || currentUser;
@@ -400,6 +597,22 @@ export default function KehadiranView({
       // Filter records by Week if selected
       if (attendanceFilterMinggu !== 'ALL') {
         records = records.filter(k => String(k.mingguKe || '').toLowerCase().trim() === attendanceFilterMinggu.toLowerCase().trim());
+      }
+      // Filter records by Date Range if selected
+      if (startDate || endDate) {
+        records = records.filter(k => {
+          const range = getRecordDateRange(k);
+          if (!range) return true;
+          if (startDate) {
+            const fStart = new Date(startDate + 'T00:00:00');
+            if (range.end < fStart) return false;
+          }
+          if (endDate) {
+            const fEnd = new Date(endDate + 'T23:59:59');
+            if (range.start > fEnd) return false;
+          }
+          return true;
+        });
       }
 
       let h = 0, sk = 0, iz = 0, al = 0;
@@ -823,6 +1036,106 @@ export default function KehadiranView({
             </div>
           </div>
         </div>
+
+        {/* Date Range Filter Controls */}
+        <div className="pt-3 border-t border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 shrink-0">
+              <CalendarRange size={15} className="text-emerald-600" />
+              <span>Rentang Tanggal:</span>
+            </div>
+
+            {/* Quick Presets Pills */}
+            <div className="flex flex-wrap items-center gap-1 bg-slate-100/90 p-1 rounded-xl">
+              {[
+                { id: 'ALL', label: 'Semua Waktu' },
+                { id: 'TODAY', label: 'Hari Ini' },
+                { id: 'THIS_WEEK', label: 'Minggu Ini' },
+                { id: 'THIS_MONTH', label: 'Bulan Ini' },
+                { id: 'SEM_1', label: 'Sem 1 (Ganjil)' },
+                { id: 'SEM_2', label: 'Sem 2 (Genap)' }
+              ].map(preset => {
+                const isActive = datePreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleApplyPreset(preset.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                      isActive 
+                        ? 'bg-emerald-600 text-white shadow-xs' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Date Pickers */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
+              <span className="text-[11px] font-semibold text-slate-400">Dari:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setDatePreset('CUSTOM');
+                }}
+                className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                title="Pilih tanggal mulai"
+              />
+              <span className="text-slate-300 font-bold text-xs">-</span>
+              <span className="text-[11px] font-semibold text-slate-400">Sampai:</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setDatePreset('CUSTOM');
+                }}
+                className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                title="Pilih tanggal akhir"
+              />
+            </div>
+
+            {/* Reset Button */}
+            {(startDate || endDate || datePreset !== 'ALL') && (
+              <button
+                type="button"
+                onClick={handleResetDateFilter}
+                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 rounded-xl text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                title="Reset filter rentang tanggal"
+              >
+                <RotateCcw size={12} />
+                <span>Reset Tanggal</span>
+              </button>
+            )}
+          </div>
+
+          {/* Active Filter Indicator Badge */}
+          {(startDate || endDate) && (
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200/80 rounded-xl px-3 py-1.5 text-xs text-emerald-800 self-start lg:self-auto">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[11px] font-medium">
+                Periode:{' '}
+                <strong>{startDate ? formatDateIndo(startDate) : 'Awal'}</strong>
+                {' '}s.d.{' '}
+                <strong>{endDate ? formatDateIndo(endDate) : 'Sekarang'}</strong>
+                {' '}({filteredKehadiran.length} data)
+              </span>
+              <button
+                type="button"
+                onClick={handleResetDateFilter}
+                className="p-0.5 text-emerald-600 hover:text-emerald-900 rounded-md hover:bg-emerald-100/60 transition cursor-pointer ml-1"
+                title="Hapus filter rentang ini"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Weekly Breakdown Cards */}
@@ -892,10 +1205,18 @@ export default function KehadiranView({
       <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
         <div className="p-4 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-extrabold text-slate-800 text-xs flex items-center gap-2">
-              <Calendar size={15} className="text-emerald-600" />
-              Daftar Rekapitulasi Presensi Terdaftar ({filteredKehadiran.length} data)
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-extrabold text-slate-800 text-xs flex items-center gap-2">
+                <Calendar size={15} className="text-emerald-600" />
+                Daftar Rekapitulasi Presensi Terdaftar ({filteredKehadiran.length} data)
+              </h3>
+              {(startDate || endDate) && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                  <CalendarRange size={11} />
+                  Periode: {startDate ? formatDateIndo(startDate) : 'Awal'} s.d. {endDate ? formatDateIndo(endDate) : 'Sekarang'}
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
               Data presensi yang diinput tersimpan secara permanen dan dapat diubah/dihapus sewaktu-waktu.
             </p>
@@ -913,17 +1234,34 @@ export default function KehadiranView({
           <div className="py-14 text-center p-6 space-y-3">
             <Calendar size={36} className="mx-auto text-slate-300" />
             <div className="space-y-1">
-              <p className="font-extrabold text-slate-700 text-sm">Belum Ada Rekap Presensi Terdaftar</p>
+              <p className="font-extrabold text-slate-700 text-sm">
+                {startDate || endDate 
+                  ? 'Tidak Ada Catatan Presensi pada Periode Ini'
+                  : 'Belum Ada Rekap Presensi Terdaftar'}
+              </p>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Silakan klik tombol <strong className="text-slate-600">"Input Presensi Baru"</strong> di atas untuk menginput catatan presensi siswa kelas Anda.
+                {startDate || endDate
+                  ? 'Tidak ada data presensi yang sesuai dengan rentang tanggal yang dipilih. Coba sesuaikan tanggal atau reset filter rentang.'
+                  : 'Silakan klik tombol "Input Presensi Baru" di atas untuk menginput catatan presensi siswa kelas Anda.'}
               </p>
             </div>
-            <button
-              onClick={handleOpenAddModal}
-              className="mt-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus size={14} /> Input Presensi Sekarang
-            </button>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              {(startDate || endDate || datePreset !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={handleResetDateFilter}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw size={13} /> Reset Filter Tanggal
+                </button>
+              )}
+              <button
+                onClick={handleOpenAddModal}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} /> Input Presensi Sekarang
+              </button>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">

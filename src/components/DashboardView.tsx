@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, 
   GraduationCap, 
   MessageSquare, 
   AlertTriangle, 
   Bell, 
+  BellRing,
   TrendingUp, 
   Award, 
   CheckCircle2, 
@@ -27,7 +28,17 @@ import {
   Check,
   Clock,
   UserCheck,
-  TrendingDown
+  TrendingDown,
+  Sliders,
+  X,
+  Search,
+  Volume2,
+  VolumeX,
+  Copy,
+  ChevronRight,
+  ExternalLink,
+  Flame,
+  FileText
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -74,30 +85,249 @@ export default function DashboardView({ db, currentUser, onNavigateToSiswa }: Da
   const [violationMetric, setViolationMetric] = useState<'kasus' | 'poin'>('kasus');
   const [violationChartType, setViolationChartType] = useState<'classBar' | 'gradePie' | 'monthlyTrend'>('classBar');
 
+  // =========================================================
+  // AUTOMATED POINT THRESHOLD NOTIFICATION SYSTEM (GURU BK)
+  // =========================================================
+  const [pointThreshold, setPointThreshold] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('hds_bk_threshold_poin');
+      return saved ? Math.max(1, parseInt(saved, 10)) : 40;
+    } catch {
+      return 40;
+    }
+  });
+
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hds_bk_sound_alert') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [isAlertBannerDismissed, setIsAlertBannerDismissed] = useState<boolean>(false);
+  const [isThresholdModalOpen, setIsThresholdModalOpen] = useState<boolean>(false);
+  const [modalFilterGrade, setModalFilterGrade] = useState<'ALL' | '7' | '8' | '9'>('ALL');
+  const [modalSearchQuery, setModalSearchQuery] = useState<string>('');
+  const [customThresholdInput, setCustomThresholdInput] = useState<string>('');
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const handleUpdateThreshold = (val: number) => {
+    const valid = Math.max(1, Math.min(500, Math.floor(val)));
+    setPointThreshold(valid);
+    try {
+      localStorage.setItem('hds_bk_threshold_poin', valid.toString());
+    } catch (e) {
+      console.error(e);
+    }
+    setIsAlertBannerDismissed(false);
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {
+      // Audio may be blocked by autoplay policies until interaction
+    }
+  };
+
+  const handleToggleSound = () => {
+    const nextVal = !soundEnabled;
+    setSoundEnabled(nextVal);
+    try {
+      localStorage.setItem('hds_bk_sound_alert', nextVal ? 'true' : 'false');
+    } catch (e) {
+      console.error(e);
+    }
+    if (nextVal) {
+      playNotificationSound();
+    }
+  };
+
   // Basic KPI Calculations
   const totalSiswa = db.siswa.length;
   const totalKelas = db.kelas.length;
   const totalKonseling = db.konseling.length;
   const totalPelanggaran = db.pelanggaran.length;
 
-  // Compute student violations totals with remisi reduction
-  const siswaViolationMap: Record<string, number> = {};
-  db.pelanggaran.forEach(p => {
-    siswaViolationMap[p.siswaId] = (siswaViolationMap[p.siswaId] || 0) + Number(p.poin || 0);
-  });
-  if (db.remisiPoin) {
-    db.remisiPoin.forEach(r => {
-      if (siswaViolationMap[r.siswaId] !== undefined) {
-        siswaViolationMap[r.siswaId] = Math.max(0, siswaViolationMap[r.siswaId] - Number(r.poin || 0));
-      }
+  // Student violations and net points after remisi calculation
+  const studentViolationAnalytics = useMemo(() => {
+    const remisiMap: Record<string, number> = {};
+    (db.remisiPoin || []).forEach(r => {
+      remisiMap[r.siswaId] = (remisiMap[r.siswaId] || 0) + Number(r.poin || 0);
     });
-  }
+
+    const violationMap: Record<string, typeof db.pelanggaran> = {};
+    db.pelanggaran.forEach(p => {
+      if (!violationMap[p.siswaId]) violationMap[p.siswaId] = [];
+      violationMap[p.siswaId].push(p);
+    });
+
+    return db.siswa.map(s => {
+      const violations = violationMap[s.id] || [];
+      const rawPoints = violations.reduce((acc, p) => acc + Number(p.poin || 0), 0);
+      const remisiPoints = remisiMap[s.id] || 0;
+      const netPoints = Math.max(0, rawPoints - remisiPoints);
+
+      const sortedViolations = [...violations].sort((a, b) => {
+        const timeA = new Date(a.tanggal).getTime() || 0;
+        const timeB = new Date(b.tanggal).getTime() || 0;
+        return timeB - timeA;
+      });
+
+      const latestViolation = sortedViolations[0] || null;
+      const worstViolation = [...violations].sort((a, b) => Number(b.poin || 0) - Number(a.poin || 0))[0] || null;
+
+      const kelasObj = db.kelas.find(k => k.id === s.kelasId || k.namaKelas === s.kelasId);
+      const rawNamaKelas = kelasObj ? kelasObj.namaKelas : (s.kelasId || '-');
+      const namaKelas = normalizeClassName(rawNamaKelas);
+      const gradeLevel = namaKelas.includes('7') ? '7' : namaKelas.includes('8') ? '8' : namaKelas.includes('9') ? '9' : '7';
+
+      return {
+        ...s,
+        namaKelas,
+        gradeLevel,
+        rawPoints,
+        remisiPoints,
+        netPoints,
+        totalKasus: violations.length,
+        latestViolation,
+        worstViolation,
+        violations: sortedViolations
+      };
+    });
+  }, [db.siswa, db.pelanggaran, db.remisiPoin, db.kelas]);
+
+  // Students exceeding the current active threshold
+  const thresholdExceededStudents = useMemo(() => {
+    return studentViolationAnalytics
+      .filter(s => s.netPoints >= pointThreshold)
+      .sort((a, b) => b.netPoints - a.netPoints);
+  }, [studentViolationAnalytics, pointThreshold]);
+
+  // Filtered students for modal display (grade + search)
+  const filteredModalStudents = useMemo(() => {
+    return thresholdExceededStudents.filter(s => {
+      if (modalFilterGrade !== 'ALL' && s.gradeLevel !== modalFilterGrade) return false;
+      if (modalSearchQuery.trim()) {
+        const q = modalSearchQuery.toLowerCase().trim();
+        const matchesName = (s.nama || '').toLowerCase().includes(q);
+        const matchesNis = String(s.nis || '').includes(q);
+        const matchesKelas = s.namaKelas.toLowerCase().includes(q);
+        if (!matchesName && !matchesNis && !matchesKelas) return false;
+      }
+      return true;
+    });
+  }, [thresholdExceededStudents, modalFilterGrade, modalSearchQuery]);
+
+  // Play notification chime when threshold exceeded students change
+  useEffect(() => {
+    if (soundEnabled && thresholdExceededStudents.length > 0) {
+      playNotificationSound();
+    }
+  }, [thresholdExceededStudents.length, soundEnabled]);
 
   // High risk students with > 100 points
-  const highRiskStudents = db.siswa.map(s => {
-    const pts = siswaViolationMap[s.id] || 0;
-    return { ...s, pts };
-  }).filter(s => s.pts > 100);
+  const highRiskStudents = useMemo(() => {
+    return thresholdExceededStudents.filter(s => s.netPoints > 100).map(s => ({ ...s, pts: s.netPoints }));
+  }, [thresholdExceededStudents]);
+
+  const handleCopyStudentNotification = (s: typeof thresholdExceededStudents[0]) => {
+    const text = `🚨 *PEMBERITAHUAN PELANGGARAN DISIPLIN SISWA (BK SMPN 17 TANGSEL)* 🚨\n----------------------------------------\nNama Siswa: *${s.nama}*\nNIS: ${s.nis || '-'}\nKelas: *${s.namaKelas}*\nTotal Akumulasi Poin: *${s.netPoints} Poin* ${s.remisiPoints > 0 ? `(Kotor: ${s.rawPoints}, Remisi: -${s.remisiPoints})` : ''}\nJumlah Catatan Kasus: ${s.totalKasus} Kasus\n${s.latestViolation ? `Kasus Terakhir: ${s.latestViolation.jenisPelanggaran} (${s.latestViolation.poin} Poin) - Tgl: ${s.latestViolation.tanggal}` : ''}\nStatus Tindak Lanjut: ${s.netPoints >= 100 ? 'Kritis / Sidang Pleno Skorsing' : s.netPoints >= 75 ? 'Panggilan Orang Tua II & SP-2' : s.netPoints >= 50 ? 'Panggilan Orang Tua I & SP-1' : 'Peringatan & Bimbingan Khusus BK'}\n----------------------------------------\n*Catatan Guru BK*: Mohon perhatian Wali Kelas dan Orang Tua untuk koordinasi penanganan siswa.`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyFeedback(s.id);
+      setTimeout(() => setCopyFeedback(null), 2500);
+    });
+  };
+
+  const handleCopyAllExceededStudents = () => {
+    if (thresholdExceededStudents.length === 0) return;
+    const header = `📋 *REKAP SISWA MELAMPAUI AMBANG BATAS DISIPLIN (≥ ${pointThreshold} POIN)*\nUPTD SMPN 17 Tangerang Selatan - Tanggal: ${new Date().toLocaleDateString('id-ID')}\nTotal Siswa Terdeteksi: ${thresholdExceededStudents.length} Siswa\n========================================\n\n`;
+
+    const body = thresholdExceededStudents.map((s, idx) => {
+      return `${idx + 1}. *${s.nama}* (${s.namaKelas}) - *${s.netPoints} Pts* [${s.totalKasus} Kasus]\n   NIS: ${s.nis || '-'} | Kasus Terakhir: ${s.latestViolation?.jenisPelanggaran || '-'} (${s.latestViolation?.tanggal || '-'})`;
+    }).join('\n\n');
+
+    navigator.clipboard.writeText(header + body).then(() => {
+      setCopyFeedback('ALL');
+      setTimeout(() => setCopyFeedback(null), 3000);
+    });
+  };
+
+  const getDisciplineSeverity = (pts: number) => {
+    if (pts >= 100) {
+      return {
+        label: 'Kritis (≥100)',
+        sublabel: 'Sidang Pleno & Skorsing',
+        badgeBg: 'bg-purple-600 text-white',
+        border: 'border-purple-200',
+        cardBg: 'bg-purple-50/60',
+        textColor: 'text-purple-900',
+        barColor: 'bg-purple-600',
+        pillBg: 'bg-purple-100 text-purple-800'
+      };
+    }
+    if (pts >= 75) {
+      return {
+        label: 'Tinggi (75-99)',
+        sublabel: 'Panggilan Ortu II & SP-2',
+        badgeBg: 'bg-rose-600 text-white',
+        border: 'border-rose-200',
+        cardBg: 'bg-rose-50/60',
+        textColor: 'text-rose-900',
+        barColor: 'bg-rose-600',
+        pillBg: 'bg-rose-100 text-rose-800'
+      };
+    }
+    if (pts >= 50) {
+      return {
+        label: 'Sedang (50-74)',
+        sublabel: 'Panggilan Ortu I & SP-1',
+        badgeBg: 'bg-amber-600 text-white',
+        border: 'border-amber-200',
+        cardBg: 'bg-amber-50/60',
+        textColor: 'text-amber-900',
+        barColor: 'bg-amber-600',
+        pillBg: 'bg-amber-100 text-amber-800'
+      };
+    }
+    if (pts >= 30) {
+      return {
+        label: 'Waspada (30-49)',
+        sublabel: 'Peringatan Tertulis & Pembinaan',
+        badgeBg: 'bg-orange-500 text-white',
+        border: 'border-orange-200',
+        cardBg: 'bg-orange-50/60',
+        textColor: 'text-orange-900',
+        barColor: 'bg-orange-500',
+        pillBg: 'bg-orange-100 text-orange-800'
+      };
+    }
+    return {
+      label: 'Pembinaan (<30)',
+      sublabel: 'Konseling Preventif Awal',
+      badgeBg: 'bg-blue-600 text-white',
+      border: 'border-blue-200',
+      cardBg: 'bg-blue-50/60',
+      textColor: 'text-blue-900',
+      barColor: 'bg-blue-600',
+      pillBg: 'bg-blue-100 text-blue-800'
+    };
+  };
 
   // Students with no counseling logged
   const studentsWithNoCounseling = db.siswa.filter(s => {
@@ -393,6 +623,214 @@ export default function DashboardView({ db, currentUser, onNavigateToSiswa }: Da
           </p>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* SISTEM NOTIFIKASI OTOMATIS DISIPLIN SISWA (GURU BK)      */}
+      {/* ========================================================= */}
+      {thresholdExceededStudents.length > 0 ? (
+        !isAlertBannerDismissed ? (
+          <div 
+            id="automated-violation-alert-banner"
+            className="bg-gradient-to-r from-rose-600 via-rose-700 to-amber-700 rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden border border-rose-400/40"
+          >
+            {/* Background Watermark Icon */}
+            <div className="absolute -right-6 -bottom-8 opacity-10 pointer-events-none text-white">
+              <ShieldAlert size={220} />
+            </div>
+
+            <div className="relative z-10 space-y-4">
+              {/* Header row */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rose-500/40 pb-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-amber-300 shadow-inner shrink-0">
+                    <BellRing size={22} className="animate-bounce" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="bg-white/20 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-white/30 tracking-wider">
+                        Notifikasi Otomatis Guru BK
+                      </span>
+                      <span className="bg-amber-400 text-amber-950 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Flame size={11} /> Ambang Batas: ≥ {pointThreshold} Poin
+                      </span>
+                    </div>
+                    <h2 className="text-lg sm:text-xl font-black tracking-tight text-white mt-1">
+                      {thresholdExceededStudents.length} Siswa Melampaui Batas Toleransi Pelanggaran Disiplin
+                    </h2>
+                  </div>
+                </div>
+
+                {/* Quick Toolbar */}
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                  <button
+                    type="button"
+                    onClick={handleToggleSound}
+                    title={soundEnabled ? 'Bunyi Notifikasi: AKTIF (Klik untuk mematikan)' : 'Bunyi Notifikasi: NONAKTIF (Klik untuk mengaktifkan)'}
+                    className={`p-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer backdrop-blur-sm border ${
+                      soundEnabled 
+                        ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/40' 
+                        : 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20'
+                    }`}
+                  >
+                    {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                    <span className="text-[11px] hidden md:inline">{soundEnabled ? 'Suara ON' : 'Suara OFF'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsThresholdModalOpen(true)}
+                    className="px-3 py-2 bg-white/20 hover:bg-white/30 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 backdrop-blur-sm border border-white/30 cursor-pointer shadow-xs"
+                  >
+                    <Sliders size={14} />
+                    <span>Atur Batas Poin</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAlertBannerDismissed(true)}
+                    title="Tutup Sementara"
+                    className="p-2 bg-black/20 hover:bg-black/30 text-white/80 hover:text-white rounded-xl transition cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Description */}
+              <p className="text-xs sm:text-sm text-rose-100 max-w-3xl leading-relaxed">
+                Sistem PANDA BK17 secara otomatis mendeteksi siswa yang telah mencapai batas akumulasi poin kedisiplinan (setelah memperhitungkan pengurangan remisi). Perlu tindakan preventif segera melalui layanan bimbingan konseling, koordinasi dengan wali kelas, atau panggilan orang tua.
+              </p>
+
+              {/* Student Chips Preview */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-rose-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle size={13} className="text-amber-300" /> Siswa Teratas yang Memerlukan Tindak Lanjut:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {thresholdExceededStudents.slice(0, 4).map(s => {
+                    const sev = getDisciplineSeverity(s.netPoints);
+                    return (
+                      <div 
+                        key={s.id} 
+                        className="bg-white/95 backdrop-blur-sm rounded-2xl p-3 text-slate-800 shadow-md border border-white/40 flex flex-col justify-between hover:bg-white transition"
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-extrabold text-xs text-slate-900 truncate" title={s.nama}>
+                              {s.nama}
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              {s.namaKelas} • NIS: {s.nis || '-'}
+                            </p>
+                          </div>
+                          <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg shrink-0 ${sev.badgeBg}`}>
+                            {s.netPoints} Pts
+                          </span>
+                        </div>
+
+                        {s.latestViolation && (
+                          <p className="text-[10px] text-rose-700 bg-rose-50 px-2 py-1 rounded-lg mt-2 truncate font-medium">
+                            {s.latestViolation.jenisPelanggaran}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-slate-100 text-[10px]">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${sev.pillBg}`}>
+                            {sev.label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToSiswa(s.id, 'pelanggaran')}
+                            className="font-bold text-rose-600 hover:text-rose-800 flex items-center gap-0.5 cursor-pointer"
+                          >
+                            Tindak Lanjut <ArrowRight size={10} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsThresholdModalOpen(true)}
+                    className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-amber-950 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.01]"
+                  >
+                    <ShieldAlert size={15} />
+                    <span>Lihat Semua ({thresholdExceededStudents.length}) & Kelola Panggilan BK</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyAllExceededStudents}
+                    className="px-3.5 py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer backdrop-blur-sm"
+                  >
+                    <Copy size={13} />
+                    <span>{copyFeedback === 'ALL' ? 'Tersalin ke Clipboard!' : 'Salin Rekap Teks'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1 text-[11px] text-rose-200">
+                  <Info size={13} />
+                  <span>Sistem memantau pelanggaran disiplin secara real-time</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                <Bell size={16} className="text-rose-600 animate-pulse" />
+              </div>
+              <div className="text-xs">
+                <p className="font-extrabold text-slate-900">
+                  Perhatian Guru BK: Terdapat <span className="text-rose-600 underline font-black">{thresholdExceededStudents.length} siswa</span> melampaui batas kedisiplinan (≥ {pointThreshold} Poin)
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Banner disembunyikan sementara. Anda dapat membuka daftar lengkap atau menyesuaikan batas kapan saja.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsThresholdModalOpen(true)}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <ShieldAlert size={13} /> Buka Detail Siswa
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAlertBannerDismissed(false)}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Tampilkan Banner
+              </button>
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="bg-emerald-50/90 border border-emerald-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+            <p className="text-emerald-900 font-medium">
+              <strong className="font-bold text-emerald-950">Status Kedisiplinan Terkendali:</strong> Tidak ada siswa yang melampaui batas toleransi aktif (<strong>≥ {pointThreshold} Poin</strong>). Seluruh siswa dalam batas aman.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsThresholdModalOpen(true)}
+            className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 transition flex items-center gap-1 cursor-pointer shrink-0"
+          >
+            <Sliders size={12} /> Sesuaikan Ambang Batas
+          </button>
+        </div>
+      )}
 
       {/* Statistics Cards */}
       <div id="stats-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1100,52 +1538,126 @@ export default function DashboardView({ db, currentUser, onNavigateToSiswa }: Da
           
           {/* Notifications Card */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-800 flex items-center gap-2 text-sm">
-                <Bell size={18} className="text-rose-500 animate-pulse" />
-                Notifikasi Prioritas BK
-              </h3>
-              <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2.5 py-0.5 rounded-full">
-                Sistem Deteksi
-              </span>
+            <div className="p-5 border-b border-slate-100 bg-slate-50/70 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-slate-800 flex items-center gap-2 text-sm">
+                  <BellRing size={18} className="text-rose-500 animate-pulse" />
+                  Notifikasi Prioritas BK
+                </h3>
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                  thresholdExceededStudents.length > 0 
+                    ? 'bg-rose-100 text-rose-700' 
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {thresholdExceededStudents.length} Siswa Terdeteksi
+                </span>
+              </div>
+
+              {/* Quick Threshold Level Pills */}
+              <div className="flex items-center justify-between gap-1 bg-white p-1 rounded-xl border border-slate-200/80 text-[10px] font-bold">
+                <span className="text-slate-400 pl-1.5 flex items-center gap-1 font-semibold">
+                  <Sliders size={10} /> Batas:
+                </span>
+                {[20, 40, 60, 80, 100].map(pt => (
+                  <button
+                    key={pt}
+                    type="button"
+                    onClick={() => handleUpdateThreshold(pt)}
+                    className={`px-2 py-0.5 rounded-lg transition cursor-pointer font-black ${
+                      pointThreshold === pt
+                        ? 'bg-rose-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    ≥{pt}
+                  </button>
+                ))}
+              </div>
             </div>
             
-            <div className="p-5 space-y-4 max-h-[560px] overflow-y-auto">
+            <div className="p-5 space-y-4 max-h-[580px] overflow-y-auto">
               
-              {/* Alert 1: Violations > 100 Points */}
-              {highRiskStudents.length > 0 ? (
-                <div className="space-y-2">
-                  <span className="text-[10px] uppercase font-black text-rose-600 tracking-wider flex items-center gap-1">
-                    <AlertTriangle size={12} /> Siswa Pelanggaran Kritis (&gt;100 poin)
-                  </span>
-                  {highRiskStudents.map(s => (
-                    <div key={s.id} className="p-3 bg-rose-50 border border-rose-100 rounded-2xl flex flex-col space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-bold text-xs text-rose-900">{s.nama}</p>
-                          <p className="text-[10px] text-rose-700">
-                            NIS: {s.nis || '-'} | {(() => { const name = db.kelas.find(k => k.id === s.kelasId)?.namaKelas || '-'; return name.startsWith('Kelas ') ? name : `Kelas ${name}`; })()}
-                          </p>
+              {/* Alert 1: Violations Exceeding Threshold */}
+              {thresholdExceededStudents.length > 0 ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-black text-rose-600 tracking-wider flex items-center gap-1">
+                      <AlertTriangle size={12} /> Melampaui Batas (≥{pointThreshold} Poin)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsThresholdModalOpen(true)}
+                      className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-0.5"
+                    >
+                      Buka Semua ({thresholdExceededStudents.length}) <ChevronRight size={11} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {thresholdExceededStudents.slice(0, 5).map(s => {
+                      const sev = getDisciplineSeverity(s.netPoints);
+                      return (
+                        <div key={s.id} className={`p-3 rounded-2xl border flex flex-col space-y-2 ${sev.cardBg} ${sev.border}`}>
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-xs text-slate-900 truncate">{s.nama}</p>
+                              <p className="text-[10px] text-slate-600 font-medium">
+                                {s.namaKelas} • NIS: {s.nis || '-'}
+                              </p>
+                            </div>
+                            <span className={`text-[11px] font-black px-2 py-0.5 rounded-full shrink-0 shadow-2xs ${sev.badgeBg}`}>
+                              {s.netPoints} Pts
+                            </span>
+                          </div>
+
+                          {s.latestViolation && (
+                            <p className="text-[10px] text-slate-700 bg-white/80 backdrop-blur-xs p-1.5 rounded-xl border border-slate-200/50 truncate font-medium">
+                              <span className="font-bold text-rose-700">Terakhir:</span> {s.latestViolation.jenisPelanggaran} ({s.latestViolation.poin} pts)
+                            </p>
+                          )}
+
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 text-[10px]">
+                            <span className={`px-1.5 py-0.2 rounded font-bold text-[9px] ${sev.pillBg}`}>
+                              {sev.label}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToSiswa(s.id, 'konseling')}
+                                className="font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer text-[10px]"
+                              >
+                                Konseling
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => onNavigateToSiswa(s.id, 'pelanggaran')}
+                                className="font-black text-rose-700 hover:text-rose-900 flex items-center gap-0.5 cursor-pointer text-[10px]"
+                              >
+                                Kasus <ArrowRight size={10} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <span className="bg-rose-600 text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-xs">
-                          {s.pts} Pts
-                        </span>
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={() => onNavigateToSiswa(s.id, 'pelanggaran')}
-                        className="text-[10px] font-black text-rose-700 hover:text-rose-900 flex items-center justify-end gap-1 mt-1 transition cursor-pointer"
-                      >
-                        Buka Detail Kasus <ArrowRight size={11} />
-                      </button>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
+
+                  {thresholdExceededStudents.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsThresholdModalOpen(true)}
+                      className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition text-center cursor-pointer border border-rose-200 flex items-center justify-center gap-1.5"
+                    >
+                      <ShieldAlert size={13} />
+                      <span>Lihat +{thresholdExceededStudents.length - 5} Siswa Lainnya</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2.5">
                   <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
                   <span className="text-xs font-bold text-emerald-800">
-                    Tidak ada siswa kritis di atas 100 poin kedisiplinan!
+                    Tidak ada siswa melampaui batas {pointThreshold} poin!
                   </span>
                 </div>
               )}
@@ -1227,6 +1739,365 @@ export default function DashboardView({ db, currentUser, onNavigateToSiswa }: Da
 
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL: PUSAT NOTIFIKASI DISIPLIN & TINDAK LANJUT BK     */}
+      {/* ========================================================= */}
+      {isThresholdModalOpen && (
+        <div 
+          id="bk-threshold-notification-modal" 
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+        >
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
+            
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/80">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center border border-rose-200/80 shadow-xs shrink-0">
+                  <ShieldAlert size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-black text-slate-900">
+                      Pusat Notifikasi Disiplin Siswa Guru BK
+                    </h2>
+                    <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                      Otomatis
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Monitoring dini siswa dengan akumulasi pelanggaran disiplin melampaui batas toleransi
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-block bg-slate-200 text-slate-700 text-xs font-black px-3 py-1 rounded-full">
+                  {thresholdExceededStudents.length} Siswa Terdeteksi
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsThresholdModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                  title="Tutup Modal"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Threshold Configuration & Sound Bar */}
+            <div className="bg-slate-50 p-4 border-b border-slate-200/80 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sliders size={13} className="text-rose-600" />
+                    Setel Ambang Batas Poin Disiplin:
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    Siswa dengan total poin (setelah remisi) <strong className="text-slate-800">≥ {pointThreshold} poin</strong> otomatis memicu notifikasi.
+                  </p>
+                </div>
+
+                {/* Sound Toggle */}
+                <button
+                  type="button"
+                  onClick={handleToggleSound}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 self-start md:self-auto cursor-pointer border ${
+                    soundEnabled 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' 
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {soundEnabled ? <Volume2 size={14} className="text-emerald-600" /> : <VolumeX size={14} className="text-slate-400" />}
+                  <span>{soundEnabled ? 'Bunyi Alert: Aktif' : 'Bunyi Alert: Nonaktif'}</span>
+                </button>
+              </div>
+
+              {/* Threshold Preset Buttons & Custom Form */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {[
+                  { pts: 20, label: '≥ 20 Pts (Pembinaan)' },
+                  { pts: 40, label: '≥ 40 Pts (Peringatan I / SP-1)' },
+                  { pts: 60, label: '≥ 60 Pts (Panggilan Ortu I)' },
+                  { pts: 80, label: '≥ 80 Pts (Panggilan Ortu II)' },
+                  { pts: 100, label: '≥ 100 Pts (Sidang Pleno Kritis)' }
+                ].map(item => (
+                  <button
+                    key={item.pts}
+                    type="button"
+                    onClick={() => handleUpdateThreshold(item.pts)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                      pointThreshold === item.pts
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs font-black'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+
+                {/* Custom Threshold Input */}
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const num = parseInt(customThresholdInput, 10);
+                    if (!isNaN(num) && num > 0) {
+                      handleUpdateThreshold(num);
+                      setCustomThresholdInput('');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-xl border border-slate-200"
+                >
+                  <span className="text-[11px] font-bold text-slate-400">Kustom:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    placeholder="Contoh: 50"
+                    value={customThresholdInput}
+                    onChange={(e) => setCustomThresholdInput(e.target.value)}
+                    className="w-20 text-xs px-1.5 py-0.5 border border-slate-200 rounded-lg outline-none focus:border-rose-500 font-bold text-slate-800"
+                  />
+                  <button
+                    type="submit"
+                    className="px-2 py-0.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 transition cursor-pointer"
+                  >
+                    Terapkan
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+              {/* Grade Selector */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold self-start sm:self-auto">
+                {(['ALL', '7', '8', '9'] as const).map(g => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setModalFilterGrade(g)}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer text-xs ${
+                      modalFilterGrade === g 
+                        ? 'bg-white text-slate-900 shadow-xs font-black' 
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {g === 'ALL' ? 'Semua Tingkat' : `Kelas ${g}`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Box */}
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama, NIS, atau kelas..."
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-rose-500 focus:bg-white transition"
+                />
+                {modalSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setModalSearchQuery('')}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Body: Student Cards List */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 bg-slate-50/50">
+              {filteredModalStudents.length === 0 ? (
+                <div className="p-10 text-center space-y-3 bg-white rounded-2xl border border-slate-200/80">
+                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-800">
+                      Tidak Ada Siswa yang Ditemukan
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      {thresholdExceededStudents.length === 0 
+                        ? `Tidak ada siswa yang melampaui batas toleransi ${pointThreshold} poin pada seluruh data.`
+                        : `Tidak ada siswa yang cocok dengan filter pencarian "${modalSearchQuery}" atau tingkat kelas yang dipilih.`}
+                    </p>
+                  </div>
+                  {modalSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setModalSearchQuery('')}
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                    >
+                      Reset Kata Kunci Pencarian
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredModalStudents.map(s => {
+                  const sev = getDisciplineSeverity(s.netPoints);
+                  const isCopied = copyFeedback === s.id;
+
+                  return (
+                    <div 
+                      key={s.id}
+                      className={`p-4 bg-white rounded-2xl border transition-all hover:shadow-md space-y-3 ${sev.border}`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 ${sev.badgeBg}`}>
+                            {s.netPoints}
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-extrabold text-slate-900 text-sm">
+                                {s.nama}
+                              </h4>
+                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${sev.pillBg}`}>
+                                {sev.label}
+                              </span>
+                              <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg font-bold">
+                                {sev.sublabel}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Kelas: <strong className="text-slate-800">{s.namaKelas}</strong> • NIS: {s.nis || '-'} • NISN: {s.nisn || '-'} • JK: {s.jenisKelamin}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Point Details Badge */}
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <div className="text-right text-[11px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+                            <span className="text-slate-400 font-bold block text-[9px] uppercase">Akumulasi Poin</span>
+                            <span className="font-black text-slate-900 text-xs">
+                              {s.netPoints} Pts
+                            </span>
+                            {s.remisiPoints > 0 && (
+                              <span className="text-emerald-600 block text-[9px] font-bold">
+                                (Kotor: {s.rawPoints}, Remisi: -{s.remisiPoints})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Latest Violation Detail */}
+                      {s.latestViolation ? (
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/60 text-xs space-y-1">
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="font-bold text-rose-700 uppercase flex items-center gap-1">
+                              <AlertTriangle size={11} /> Catatan Pelanggaran Terakhir
+                            </span>
+                            <span className="text-slate-500 flex items-center gap-1">
+                              <Calendar size={11} /> {s.latestViolation.tanggal}
+                            </span>
+                          </div>
+                          <p className="font-extrabold text-slate-800">
+                            {s.latestViolation.jenisPelanggaran}
+                          </p>
+                          <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-600 pt-1">
+                            <span>
+                              Kategori: <strong className="text-slate-700">{s.latestViolation.kategori}</strong> (+{s.latestViolation.poin} poin)
+                            </span>
+                            <span>
+                              Tindak Lanjut: <strong className="text-slate-700">{s.latestViolation.tindakLanjut || '-'}</strong> ({s.latestViolation.status})
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 bg-slate-50 rounded-xl text-xs text-slate-500 italic">
+                          Belum ada rincian kejadian tercatat.
+                        </div>
+                      )}
+
+                      {/* Student Action Toolbar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          Total Pelanggaran: <strong className="text-slate-800">{s.totalKasus} Kasus</strong>
+                        </span>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyStudentNotification(s)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                              isCopied
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                            }`}
+                            title="Salin ringkasan data siswa untuk dikirim ke Wali Kelas / Orang Tua via WhatsApp"
+                          >
+                            {isCopied ? <Check size={13} /> : <Copy size={13} />}
+                            <span>{isCopied ? 'Tersalin!' : 'Salin Info WA'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsThresholdModalOpen(false);
+                              onNavigateToSiswa(s.id, 'konseling');
+                            }}
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <MessageSquare size={13} />
+                            <span>Mulai Konseling BK</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsThresholdModalOpen(false);
+                              onNavigateToSiswa(s.id, 'pelanggaran');
+                            }}
+                            className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <ShieldAlert size={13} />
+                            <span>Buka Rekam Kasus</span>
+                            <ArrowRight size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyAllExceededStudents}
+                  disabled={thresholdExceededStudents.length === 0}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-slate-200"
+                >
+                  <Copy size={13} />
+                  <span>{copyFeedback === 'ALL' ? 'Seluruh Data Tersalin!' : 'Salin Seluruh Rekap Teks'}</span>
+                </button>
+                <span className="text-[11px] text-slate-400 hidden md:inline">
+                  Dapat ditempel langsung ke laporan rapat koordinasi kesiswaan
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsThresholdModalOpen(false)}
+                className="w-full sm:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Tutup Jendela
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

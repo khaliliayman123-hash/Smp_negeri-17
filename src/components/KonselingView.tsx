@@ -3575,6 +3575,17 @@ export default function KonselingView({
                     <input type="text" placeholder="e.g., Terlambat masuk sekolah, bolos" value={formPelanggaran.jenisPelanggaran || ''} onChange={(e) => setFormPelanggaran(prev => ({ ...prev, jenisPelanggaran: e.target.value }))} className="p-2.5 border border-slate-200 rounded-xl w-full" required />
                   </div>
                   <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Guru Pelapor</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., Dwi Susanti, S.Pd" 
+                      value={formPelanggaran.guruPelapor || ''} 
+                      onChange={(e) => setFormPelanggaran(prev => ({ ...prev, guruPelapor: e.target.value }))} 
+                      className="p-2.5 border border-slate-200 rounded-xl w-full" 
+                      required 
+                    />
+                  </div>
+                  <div>
                     <label className="block text-[10px] font-bold text-slate-500 mb-1">Tindak Lanjut & Sanksi</label>
                     <textarea rows={2} value={formPelanggaran.tindakLanjut || ''} onChange={(e) => setFormPelanggaran(prev => ({ ...prev, tindakLanjut: e.target.value }))} className="p-2.5 border border-slate-200 rounded-xl w-full" required />
                   </div>
