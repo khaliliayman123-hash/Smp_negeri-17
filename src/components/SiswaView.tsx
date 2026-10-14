@@ -183,16 +183,50 @@ export default function SiswaView({
       const cId = String(currentUser.id || '').trim().toLowerCase();
       const cUser = String(currentUser.username || '').trim().toLowerCase();
       const cNama = String(currentUser.nama || '').trim().toLowerCase();
-      return list.find(s => {
-        if (!s) return false;
-        const sId = String(s.id || '').trim().toLowerCase();
-        const sNis = String(s.nis ?? '').trim().toLowerCase();
-        const sNisn = String(s.nisn ?? '').trim().toLowerCase();
-        const sNama = String(s.nama || '').trim().toLowerCase();
-        return (cId && sId === cId) ||
-               (cUser && (sNis === cUser || sNisn === cUser || sId === cUser)) ||
-               (cNama && sNama === cNama);
-      }) || null;
+      const isPlaceholderUser = !cUser || cUser === '12345678' || cUser === '0' || cUser === '-' || cUser === '123';
+
+      // 1. Strict match by unique student ID (most accurate, deterministic across classes)
+      if (cId) {
+        const matchById = list.find(s => s && String(s.id || '').trim().toLowerCase() === cId);
+        if (matchById) return matchById;
+      }
+
+      // 2. Strict match by exact student full name (case-insensitive)
+      if (cNama) {
+        const matchByName = list.find(s => s && String(s.nama || '').trim().toLowerCase() === cNama);
+        if (matchByName) return matchByName;
+
+        const normCNama = cNama.replace(/[^a-z0-9]/g, '');
+        if (normCNama.length >= 3) {
+          const matchByNorm = list.find(s => s && String(s.nama || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normCNama);
+          if (matchByNorm) return matchByNorm;
+        }
+      }
+
+      // 3. Match by unique NISN
+      const cNisn = (currentUser as any).nisn ? String((currentUser as any).nisn).trim() : (!isPlaceholderUser && cUser.length >= 9 ? cUser : '');
+      if (cNisn && cNisn !== '0') {
+        const matchByNisn = list.find(s => s && String(s.nisn ?? '').trim() === cNisn);
+        if (matchByNisn) return matchByNisn;
+      }
+
+      // 4. Match by valid non-placeholder NIS
+      if (!isPlaceholderUser) {
+        const matchByNis = list.find(s => {
+          const sNis = String(s.nis ?? '').trim().toLowerCase();
+          return sNis && sNis !== '12345678' && sNis !== '0' && sNis === cUser;
+        });
+        if (matchByNis) return matchByNis;
+      }
+
+      // 5. Check preSelectedSiswaId as fallback
+      if (preSelectedSiswaId) {
+        const target = String(preSelectedSiswaId).trim().toLowerCase();
+        const match = list.find(s => s && String(s.id).toLowerCase() === target);
+        if (match) return match;
+      }
+
+      return null;
     }
     if (preSelectedSiswaId) {
       const target = String(preSelectedSiswaId).trim().toLowerCase();

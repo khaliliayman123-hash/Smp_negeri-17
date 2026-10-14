@@ -133,13 +133,14 @@ export default function App() {
       ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas)
       : allSiswa;
 
-    const searchPool = q ? allSiswa : basePool;
+    const searchPool = selectedSiswaKelasId ? basePool : allSiswa;
 
     return searchPool
       .map((s) => {
         const nameLower = (s.nama || '').toLowerCase().trim();
         const nisStr = (s.nis || '').toString().trim();
         const nisnStr = (s.nisn || '').toString().trim();
+        const isPlaceholderNis = !nisStr || nisStr === '12345678' || nisStr === '0' || nisStr === '-';
         const nameWords = nameLower.split(/\s+/);
 
         if (!q) {
@@ -155,12 +156,10 @@ export default function App() {
           score = 85;
         } else if (nameLower.includes(q)) {
           score = 60;
-        } else if (nisStr === q || nisnStr === q) {
+        } else if (nisnStr && nisnStr !== '0' && (nisnStr === q || nisnStr.startsWith(q))) {
           score = 90;
-        } else if (nisStr.startsWith(q) || nisnStr.startsWith(q)) {
-          score = 75;
-        } else if (nisStr.includes(q) || nisnStr.includes(q)) {
-          score = 40;
+        } else if (!isPlaceholderNis && (nisStr === q || nisStr.startsWith(q))) {
+          score = 80;
         }
 
         if (score > 0 && selectedSiswaKelasId && s.kelasId === selectedSiswaKelasId) {
@@ -589,6 +588,7 @@ export default function App() {
       const sId = String(currentUser.id || '').trim().toLowerCase();
       const sNis = String(currentUser.username || '').trim().toLowerCase();
       const sName = String(currentUser.nama || '').trim().toLowerCase();
+      const isPlaceholderNis = !sNis || sNis === '12345678' || sNis === '0' || sNis === '-';
       const sNisDigits = sNis.replace(/\D/g, '');
 
       return rawList.filter(p => {
@@ -598,10 +598,11 @@ export default function App() {
         const pNisDigits = pNis.replace(/\D/g, '');
         const pName = String(p.namaSiswa ?? '').trim().toLowerCase();
         const pTanggapan = String(p.tanggapanBk ?? '').trim();
+        const isPNisPlaceholder = !pNis || pNis === '12345678' || pNis === '0' || pNis === '-';
         
         const isMyComplaint = 
           (sId && pId === sId) || 
-          (sNis && pNis && (pNis === sNis || (sNisDigits && pNisDigits && sNisDigits === pNisDigits))) || 
+          (!isPlaceholderNis && !isPNisPlaceholder && sNis && pNis && (pNis === sNis || (sNisDigits && pNisDigits && sNisDigits === pNisDigits))) || 
           (sName && pName && pName === sName);
 
         const hasResponse = p.status === 'Sedang Ditangani' || p.status === 'Selesai' || pTanggapan.length > 0;

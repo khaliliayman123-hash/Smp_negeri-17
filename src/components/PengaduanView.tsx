@@ -105,12 +105,13 @@ export default function PengaduanView({
     const siswaList = db.siswa || [];
     const username = (currentUser.username || '').trim().toLowerCase();
     const userNama = (currentUser.nama || '').trim().toLowerCase();
+    const isPlaceholderUser = !username || username === '12345678' || username === '0' || username === '-';
 
     return (
       siswaList.find(s => s && s.id === currentUser.id) ||
-      siswaList.find(s => s && s.nis && s.nis.toString().trim().toLowerCase() === username) ||
-      siswaList.find(s => s && s.nisn && s.nisn.toString().trim().toLowerCase() === username) ||
       siswaList.find(s => s && s.nama && s.nama.toString().trim().toLowerCase() === userNama) ||
+      siswaList.find(s => s && s.nisn && String(s.nisn).trim().toLowerCase() === username) ||
+      (!isPlaceholderUser ? siswaList.find(s => s && s.nis && String(s.nis).trim().toLowerCase() === username && String(s.nis).trim() !== '12345678') : null) ||
       null
     );
   }, [db, currentUser, isStudent]);

@@ -1988,34 +1988,33 @@ export const apiService = {
       return sId === uLower;
     });
 
-    // If not matched by ID, try match by NISN, exact Name, or NIS
+    // If not matched by ID, try match by exact Name or distinct NISN or non-placeholder NIS
     if (!s) {
-      const candidates = siswaPool.filter((student) => {
-        const sNis = student.nis ? student.nis.toString().trim().toLowerCase() : '';
-        const sNisn = student.nisn ? student.nisn.toString().trim().toLowerCase() : '';
-        const sNama = student.nama ? student.nama.toString().trim().toLowerCase() : '';
-        const sId = student.id ? student.id.toString().trim().toLowerCase() : '';
-        const sNisDigits = sNis.replace(/\D/g, '');
-        const sNisnDigits = sNisn.replace(/\D/g, '');
+      // 2a. Match by exact full student name (case-insensitive)
+      s = siswaPool.find(student => student && student.nama && student.nama.toString().trim().toLowerCase() === uLower);
+    }
 
-        return sNisn === uLower || sNama === uLower || sNis === uLower || sId === uLower ||
-               (uDigits && (sNisDigits === uDigits || sNisnDigits === uDigits));
-      });
+    if (!s) {
+      // 2b. Match by unique NISN (excluding 0)
+      if (uDigits && uDigits.length >= 8) {
+        s = siswaPool.find(student => {
+          const sNisn = student.nisn ? student.nisn.toString().trim().toLowerCase() : '';
+          const sNisnDigits = sNisn.replace(/\D/g, '');
+          return sNisn && sNisn !== '0' && (sNisn === uLower || (sNisnDigits && sNisnDigits === uDigits));
+        });
+      }
+    }
 
-      if (candidates.length === 1) {
-        s = candidates[0];
-      } else if (candidates.length > 1) {
-        // Disambiguate by checking which candidate matches the entered password (NISN, NIS, or specific password)
-        s = candidates.find((cand) => {
-          const cNis = cand.nis ? cand.nis.toString().trim().toLowerCase() : '';
-          const cNisn = cand.nisn ? cand.nisn.toString().trim().toLowerCase() : '';
-          const cPass = (cand as any).password ? (cand as any).password.toString().trim().toLowerCase() : '';
-          const cCleanP = pLower.replace(/\D/g, '');
-          const cCleanNis = cNis.replace(/\D/g, '');
-          const cCleanNisn = cNisn.replace(/\D/g, '');
-          return (cNisn && cNisn === pLower) || (cNis && cNis === pLower) || (cPass && cPass === pLower) ||
-                 (cCleanP && (cCleanP === cCleanNis || cCleanP === cCleanNisn));
-        }) || candidates[0];
+    if (!s) {
+      // 2c. Match by valid NIS (strictly excluding placeholder '12345678' to prevent collision across Grade 7 students)
+      const isPlaceholderInput = uLower === '12345678' || uDigits === '12345678' || uLower === '0' || uLower === '-';
+      if (!isPlaceholderInput) {
+        s = siswaPool.find(student => {
+          const sNis = student.nis ? student.nis.toString().trim().toLowerCase() : '';
+          const sNisDigits = sNis.replace(/\D/g, '');
+          const isPlaceholderNis = !sNis || sNis === '12345678' || sNis === '0' || sNis === '-';
+          return !isPlaceholderNis && (sNis === uLower || (uDigits && sNisDigits === uDigits));
+        });
       }
     }
 
@@ -2048,15 +2047,20 @@ export const apiService = {
         return { success: false, message: 'Password salah. Gunakan nomor NIS atau NISN resmi Anda (atau password default: siswa123).' };
       }
 
+      const isPlaceholderNis = !s.nis || String(s.nis).trim() === '12345678' || String(s.nis).trim() === '0' || String(s.nis).trim() === '-';
+      const studentUsername = (!isPlaceholderNis && s.nis) 
+        ? String(s.nis).trim() 
+        : (s.nisn && String(s.nisn).trim() !== '0' ? String(s.nisn).trim() : s.id);
+
       const studentUser: User = {
         id: s.id,
-        username: s.nis ? s.nis.toString() : s.id,
+        username: studentUsername,
         nama: s.nama,
         role: UserRole.SISWA,
-        email: s.email || `${s.nis || s.id}@student.sch.id`,
+        email: s.email || `${s.nisn || s.nis || s.id}@student.sch.id`,
         isActive: true
       };
-      apiService.addLog(s.id, s.nama, UserRole.SISWA, 'Login', 'Siswa berhasil login menggunakan NIS/NISN.');
+      apiService.addLog(s.id, s.nama, UserRole.SISWA, 'Login', 'Siswa berhasil login.');
       return { success: true, user: studentUser };
     }
 
