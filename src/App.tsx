@@ -581,24 +581,36 @@ export default function App() {
   // Notifikasi pengaduan masuk pada kolom menu Layanan Pengaduan
   const incomingPengaduanCount = React.useMemo(() => {
     if (!currentUser) return 0;
-    const list = filteredDb?.pengaduanSiswa || db?.pengaduanSiswa || [];
+    const rawList = filteredDb?.pengaduanSiswa || db?.pengaduanSiswa || [];
+    if (!Array.isArray(rawList)) return 0;
     
     // Untuk siswa: hitung jika ada respon/tanggapan dari Guru BK pada pengaduannya
     if (currentUser.role === UserRole.SISWA) {
-      const sId = currentUser.id;
-      const sNis = (currentUser.username || '').toLowerCase().trim();
-      const sName = (currentUser.nama || '').toLowerCase().trim();
-      return list.filter(p => {
+      const sId = String(currentUser.id || '').trim().toLowerCase();
+      const sNis = String(currentUser.username || '').trim().toLowerCase();
+      const sName = String(currentUser.nama || '').trim().toLowerCase();
+      const sNisDigits = sNis.replace(/\D/g, '');
+
+      return rawList.filter(p => {
         if (!p) return false;
-        const isMyComplaint = p.siswaId === sId || 
-          (p.nis && p.nis.toLowerCase().trim() === sNis) || 
-          (p.namaSiswa && p.namaSiswa.toLowerCase().trim() === sName);
-        return isMyComplaint && (p.status === 'Sedang Ditangani' || p.status === 'Selesai' || Boolean(p.tanggapanBk && p.tanggapanBk.trim()));
+        const pId = String(p.siswaId || '').trim().toLowerCase();
+        const pNis = String(p.nis ?? '').trim().toLowerCase();
+        const pNisDigits = pNis.replace(/\D/g, '');
+        const pName = String(p.namaSiswa ?? '').trim().toLowerCase();
+        const pTanggapan = String(p.tanggapanBk ?? '').trim();
+        
+        const isMyComplaint = 
+          (sId && pId === sId) || 
+          (sNis && pNis && (pNis === sNis || (sNisDigits && pNisDigits && sNisDigits === pNisDigits))) || 
+          (sName && pName && pName === sName);
+
+        const hasResponse = p.status === 'Sedang Ditangani' || p.status === 'Selesai' || pTanggapan.length > 0;
+        return isMyComplaint && hasResponse;
       }).length;
     }
 
     // Untuk Guru BK, Wali Kelas, dan Admin: hitung pengaduan masuk berstatus 'Menunggu Respon'
-    return list.filter(p => p && (!p.status || p.status === 'Menunggu Respon')).length;
+    return rawList.filter(p => p && (!p.status || p.status === 'Menunggu Respon')).length;
   }, [filteredDb, db, currentUser]);
 
   const hasIncomingPengaduan = incomingPengaduanCount > 0;
@@ -915,7 +927,7 @@ export default function App() {
     }
   };
 
-  if (isLoading && !db) {
+  if (!db) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-xs text-slate-400">
         <Sparkles size={48} className="text-emerald-600 animate-spin mb-4" />

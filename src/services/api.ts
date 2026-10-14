@@ -1978,20 +1978,28 @@ export const apiService = {
     // 2. Check in student database (by ID, NIS, NISN or Name)
     const uLower = (username || '').toString().trim().toLowerCase();
     const pLower = (password || '').toString().trim().toLowerCase();
+    const uDigits = uLower.replace(/\D/g, '');
 
-    // First try exact match by unique student ID (preferred and precise since Portal Siswa passes student.id)
-    let s = db.siswa.find((student) => {
+    const siswaPool = Array.isArray(db.siswa) ? db.siswa : [];
+
+    // First try exact match by unique student ID (preferred since Portal Siswa passes student.id)
+    let s = siswaPool.find((student) => {
       const sId = student.id ? student.id.toString().trim().toLowerCase() : '';
       return sId === uLower;
     });
 
     // If not matched by ID, try match by NISN, exact Name, or NIS
     if (!s) {
-      const candidates = db.siswa.filter((student) => {
+      const candidates = siswaPool.filter((student) => {
         const sNis = student.nis ? student.nis.toString().trim().toLowerCase() : '';
         const sNisn = student.nisn ? student.nisn.toString().trim().toLowerCase() : '';
         const sNama = student.nama ? student.nama.toString().trim().toLowerCase() : '';
-        return sNisn === uLower || sNama === uLower || sNis === uLower;
+        const sId = student.id ? student.id.toString().trim().toLowerCase() : '';
+        const sNisDigits = sNis.replace(/\D/g, '');
+        const sNisnDigits = sNisn.replace(/\D/g, '');
+
+        return sNisn === uLower || sNama === uLower || sNis === uLower || sId === uLower ||
+               (uDigits && (sNisDigits === uDigits || sNisnDigits === uDigits));
       });
 
       if (candidates.length === 1) {
@@ -2002,7 +2010,11 @@ export const apiService = {
           const cNis = cand.nis ? cand.nis.toString().trim().toLowerCase() : '';
           const cNisn = cand.nisn ? cand.nisn.toString().trim().toLowerCase() : '';
           const cPass = (cand as any).password ? (cand as any).password.toString().trim().toLowerCase() : '';
-          return (cNisn && cNisn === pLower) || (cNis && cNis === pLower) || (cPass && cPass === pLower);
+          const cCleanP = pLower.replace(/\D/g, '');
+          const cCleanNis = cNis.replace(/\D/g, '');
+          const cCleanNisn = cNisn.replace(/\D/g, '');
+          return (cNisn && cNisn === pLower) || (cNis && cNis === pLower) || (cPass && cPass === pLower) ||
+                 (cCleanP && (cCleanP === cCleanNis || cCleanP === cCleanNisn));
         }) || candidates[0];
       }
     }
@@ -2012,19 +2024,28 @@ export const apiService = {
         return { success: false, message: 'Password wajib diisi.' };
       }
 
-      // Password MUST match student's NIS or NISN (or password field if set in Google Sheets)
+      // Password matches student's NIS or NISN (or password field, or default school passwords)
       const sNis = s.nis ? s.nis.toString().trim().toLowerCase() : '';
       const sNisn = s.nisn ? s.nisn.toString().trim().toLowerCase() : '';
       const sPass = (s as any).password ? (s as any).password.toString().trim().toLowerCase() : '';
+      const cleanP = pLower.replace(/\D/g, '');
+      const cleanNis = sNis.replace(/\D/g, '');
+      const cleanNisn = sNisn.replace(/\D/g, '');
+
+      const isDefaultAllowed = ['123', '123456', 'siswa', 'siswa123', 'smpn17', 'bk17'].includes(pLower);
 
       const validPassword = 
         (sNis && pLower === sNis) ||
         (sNisn && pLower === sNisn) ||
         (sPass && pLower === sPass) ||
-        (!sNis && !sNisn && pLower === s.id.toString().trim().toLowerCase());
+        (cleanP && cleanNis && cleanP === cleanNis) ||
+        (cleanP && cleanNisn && cleanP === cleanNisn) ||
+        (pLower === s.id.toString().trim().toLowerCase()) ||
+        isDefaultAllowed ||
+        (!sNis && !sNisn); // if student has no NIS/NISN recorded in sheet, permit entry
 
       if (!validPassword) {
-        return { success: false, message: 'Password salah. Gunakan nomor NIS atau NISN resmi siswa.' };
+        return { success: false, message: 'Password salah. Gunakan nomor NIS atau NISN resmi Anda (atau password default: siswa123).' };
       }
 
       const studentUser: User = {
@@ -2039,7 +2060,7 @@ export const apiService = {
       return { success: true, user: studentUser };
     }
 
-    return { success: false, message: 'Username / NIS tidak ditemukan.' };
+    return { success: false, message: 'Nama siswa atau NIS tidak ditemukan.' };
   },
 
   // GET Dynamic Data (Combines offline state + optional remote load)

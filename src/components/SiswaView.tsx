@@ -177,27 +177,47 @@ export default function SiswaView({
   const itemsPerPage = 8;
 
   // Selected Student for detail view or edit
-  const [viewingSiswa, setViewingSiswa] = useState<Siswa | null>(
-    isStudent 
-      ? (db.siswa.find(s => s.id === currentUser.id) || null)
-      : preSelectedSiswaId ? (db.siswa.find(s => s.id === preSelectedSiswaId) || null) : null
-  );
+  const resolveStudent = (list?: Siswa[]): Siswa | null => {
+    if (!list || list.length === 0) return null;
+    if (isStudent && currentUser) {
+      const cId = String(currentUser.id || '').trim().toLowerCase();
+      const cUser = String(currentUser.username || '').trim().toLowerCase();
+      const cNama = String(currentUser.nama || '').trim().toLowerCase();
+      return list.find(s => {
+        if (!s) return false;
+        const sId = String(s.id || '').trim().toLowerCase();
+        const sNis = String(s.nis ?? '').trim().toLowerCase();
+        const sNisn = String(s.nisn ?? '').trim().toLowerCase();
+        const sNama = String(s.nama || '').trim().toLowerCase();
+        return (cId && sId === cId) ||
+               (cUser && (sNis === cUser || sNisn === cUser || sId === cUser)) ||
+               (cNama && sNama === cNama);
+      }) || null;
+    }
+    if (preSelectedSiswaId) {
+      const target = String(preSelectedSiswaId).trim().toLowerCase();
+      return list.find(s => s && String(s.id).toLowerCase() === target) || null;
+    }
+    return null;
+  };
+
+  const [viewingSiswa, setViewingSiswa] = useState<Siswa | null>(() => resolveStudent(db?.siswa));
 
   useEffect(() => {
     if (isStudent) {
-      const mySiswa = db.siswa.find(s => s.id === currentUser.id);
+      const mySiswa = resolveStudent(db?.siswa);
       if (mySiswa) setViewingSiswa(mySiswa);
     }
-  }, [currentUser.id, db.siswa, isStudent]);
+  }, [currentUser, db?.siswa, isStudent]);
 
   useEffect(() => {
-    if (viewingSiswa) {
-      const updated = db.siswa.find(s => s.id === viewingSiswa.id);
+    if (viewingSiswa && db?.siswa) {
+      const updated = db.siswa.find(s => s && s.id === viewingSiswa.id);
       if (updated && JSON.stringify(updated) !== JSON.stringify(viewingSiswa)) {
         setViewingSiswa(updated);
       }
     }
-  }, [db.siswa]);
+  }, [db?.siswa]);
   const [activeDetailTab, setActiveDetailTab] = useState<string>(preSelectedSubTab || 'bio');
   
   // CRUD Form State
@@ -2442,17 +2462,27 @@ export default function SiswaView({
                   {viewingSiswa.foto ? (
                     <img src={viewingSiswa.foto} alt={viewingSiswa.nama} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="font-bold text-2xl uppercase text-white">{viewingSiswa.nama.slice(0, 2)}</span>
+                    <span className="font-bold text-2xl uppercase text-white">{String(viewingSiswa.nama || 'SW').slice(0, 2)}</span>
                   )}
                 </div>
                 
-                <h3 className="font-bold text-sm mt-3">{viewingSiswa.nama}</h3>
-                <p className="text-[10px] text-emerald-100">NIS: {viewingSiswa.nis} | {(() => { const name = db.kelas.find(k => k.id === viewingSiswa.kelasId || k.namaKelas.toLowerCase().trim() === viewingSiswa.kelasId?.toLowerCase().trim())?.namaKelas || viewingSiswa.kelasId || '-'; return name.startsWith('Kelas ') ? name : `Kelas ${name}`; })()}</p>
+                <h3 className="font-bold text-sm mt-3">{viewingSiswa.nama || 'Profil Siswa'}</h3>
+                <p className="text-[10px] text-emerald-100">
+                  NIS: {viewingSiswa.nis || '-'} | {(() => { 
+                    const sKl = String(viewingSiswa.kelasId || '').toLowerCase().trim();
+                    const cls = (db?.kelas || []).find(k => 
+                      String(k.id || '').toLowerCase().trim() === sKl || 
+                      String(k.namaKelas || '').toLowerCase().trim() === sKl
+                    );
+                    const name = String(cls?.namaKelas || viewingSiswa.kelasId || '-').trim(); 
+                    return name.startsWith('Kelas ') ? name : `Kelas ${name}`; 
+                  })()}
+                </p>
                 
                 {/* Visual points tracker */}
                 {(() => {
-                  const originalPts = db.pelanggaran.filter(p => p.siswaId === viewingSiswa.id).reduce((sum, p) => sum + Number(p.poin), 0);
-                  const remisiPts = (db.remisiPoin || []).filter(r => r.siswaId === viewingSiswa.id).reduce((sum, r) => sum + Number(r.poin), 0);
+                  const originalPts = (db?.pelanggaran || []).filter(p => p && p.siswaId === viewingSiswa.id).reduce((sum, p) => sum + (Number(p.poin) || 0), 0);
+                  const remisiPts = (db?.remisiPoin || []).filter(r => r && r.siswaId === viewingSiswa.id).reduce((sum, r) => sum + (Number(r.poin) || 0), 0);
                   const pts = Math.max(0, originalPts - remisiPts);
                   return (
                     <span className={`mt-3 text-[10px] font-bold px-3 py-1 rounded-full ${
@@ -2549,8 +2579,8 @@ export default function SiswaView({
                 
                 {/* 1. BIODATA VIEW */}
                 {activeDetailTab === 'bio' && (() => {
-                  const ot = db.orangTua.find(o => o.id === viewingSiswa.id);
-                  const ak = db.akademik.find(a => a.id === viewingSiswa.id);
+                  const ot = (db?.orangTua || []).find(o => o.id === viewingSiswa.id);
+                  const ak = (db?.akademik || []).find(a => a.id === viewingSiswa.id);
                   return (
                     <div className="space-y-3">
                       <div>
@@ -2736,7 +2766,7 @@ export default function SiswaView({
 
                 {/* 2. KESEHATAN VIEW */}
                 {activeDetailTab === 'health' && (() => {
-                  const ks = db.kesehatan.find(k => k.id === viewingSiswa.id);
+                  const ks = (db?.kesehatan || []).find(k => k.id === viewingSiswa.id);
                   return ks ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-3 gap-2">
@@ -2773,8 +2803,8 @@ export default function SiswaView({
 
                 {/* 3. EKONOMI VIEW */}
                 {activeDetailTab === 'economy' && (() => {
-                  const ek = db.ekonomi.find(e => e.id === viewingSiswa.id);
-                  const ot = db.orangTua.find(o => o.id === viewingSiswa.id);
+                  const ek = (db?.ekonomi || []).find(e => e.id === viewingSiswa.id);
+                  const ot = (db?.orangTua || []).find(o => o.id === viewingSiswa.id);
                   return ek ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
@@ -2813,7 +2843,7 @@ export default function SiswaView({
 
                 {/* 4. PSIKOLOGI VIEW */}
                 {activeDetailTab === 'psycho' && (() => {
-                  const pk = db.psikologi.find(p => p.id === viewingSiswa.id);
+                  const pk = (db?.psikologi || []).find(p => p.id === viewingSiswa.id);
                   return pk ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
@@ -2852,8 +2882,8 @@ export default function SiswaView({
 
                 {/* 5. HISTORY (DISCIPLINARY AND COUNSELING TIMELINE) */}
                 {activeDetailTab === 'history' && (() => {
-                  const vl = db.pelanggaran.filter(p => p.siswaId === viewingSiswa.id || (p as any).idSiswa === viewingSiswa.id || p.siswaId === viewingSiswa.nis || findSiswa(db, p.siswaId, p)?.id === viewingSiswa.id);
-                  const cs = db.konseling.filter(c => c.siswaId === viewingSiswa.id || (c as any).idSiswa === viewingSiswa.id || c.siswaId === viewingSiswa.nis || findSiswa(db, c.siswaId, c)?.id === viewingSiswa.id);
+                  const vl = (db?.pelanggaran || []).filter(p => p && (p.siswaId === viewingSiswa.id || (p as any).idSiswa === viewingSiswa.id || p.siswaId === viewingSiswa.nis || findSiswa(db, p.siswaId, p)?.id === viewingSiswa.id));
+                  const cs = (db?.konseling || []).filter(c => c && (c.siswaId === viewingSiswa.id || (c as any).idSiswa === viewingSiswa.id || c.siswaId === viewingSiswa.nis || findSiswa(db, c.siswaId, c)?.id === viewingSiswa.id));
                   return (
                     <div className="space-y-4">
                       {/* Counseling logs */}
@@ -2923,7 +2953,7 @@ export default function SiswaView({
 
                 {/* 6. ACHIEVEMENT (PRESTASI) VIEW */}
                 {activeDetailTab === 'achievement' && (() => {
-                  const pr = db.prestasi.filter(p => p.siswaId === viewingSiswa.id || (p as any).idSiswa === viewingSiswa.id || p.siswaId === viewingSiswa.nis || findSiswa(db, p.siswaId, p)?.id === viewingSiswa.id);
+                  const pr = (db?.prestasi || []).filter(p => p && (p.siswaId === viewingSiswa.id || (p as any).idSiswa === viewingSiswa.id || p.siswaId === viewingSiswa.nis || findSiswa(db, p.siswaId, p)?.id === viewingSiswa.id));
                   return (
                     <div className="space-y-4">
                       <div className="flex justify-between items-center pb-2 border-b border-slate-100">
@@ -3332,8 +3362,26 @@ export default function SiswaView({
             <div className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 space-y-3">
               <Eye size={40} className="text-slate-300 stroke-1" />
               <div>
-                <p className="font-bold text-xs text-slate-600">Profil Siswa Kosong</p>
-                <p className="text-[10px] text-slate-400 mt-1 max-w-[200px] mx-auto">Pilih salah satu siswa dari direktori kiri untuk menampilkan rincian komprehensif.</p>
+                <p className="font-bold text-xs text-slate-600">
+                  {isStudent ? 'Sedang Menyiapkan Profil HDS Anda...' : 'Profil Siswa Kosong'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
+                  {isStudent 
+                    ? 'Sistem sedang memuat data profil siswa terverifikasi dari database sekolah. Silakan klik tombol di bawah jika profil belum muncul otomatis.' 
+                    : 'Pilih salah satu siswa dari direktori kiri untuk menampilkan rincian komprehensif.'}
+                </p>
+                {isStudent && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const found = resolveStudent(db?.siswa);
+                      if (found) setViewingSiswa(found);
+                    }}
+                    className="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-sm transition"
+                  >
+                    Tampilkan Profil Saya
+                  </button>
+                )}
               </div>
             </div>
           )}
