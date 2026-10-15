@@ -49,6 +49,7 @@ import {
   Kehadiran
 } from '../types';
 import { findSiswa, getSiswaInfo } from '../services/api';
+import { StudentSelector } from './StudentSelector';
 
 interface KonselingViewProps {
   db: DatabaseState;
@@ -2982,23 +2983,16 @@ export default function KonselingView({
                     </div>
                     
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pilih Siswa untuk Dievaluasi</label>
-                      <select
-                        value={defaultSelectedId}
-                        onChange={(e) => setSelectedSummarySiswaId(e.target.value)}
-                        className="p-2.5 border border-slate-200 bg-white rounded-xl text-xs w-full font-semibold focus:outline-none focus:border-sky-500 transition"
-                      >
-                        <option value="" disabled>-- Pilih Siswa --</option>
-                        {db.siswa.map(s => {
-                          const summary = studentPointSummaries.find(sum => sum.siswa.id === s.id);
-                          const pointsText = summary ? `(${summary.totalPelanggaran} Pts Pelanggaran, -${summary.totalRemisi} Pts Remisi)` : '(0 Pts)';
-                          return (
-                            <option key={s.id} value={s.id}>
-                              {s.nama} {pointsText}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <StudentSelector
+                        students={db.siswa || []}
+                        classes={db.kelas || []}
+                        selectedStudentId={defaultSelectedId}
+                        onSelectStudent={(val) => setSelectedSummarySiswaId(val)}
+                        label="Pilih Siswa untuk Dievaluasi"
+                        theme="sky"
+                        required={false}
+                        helperText="Pilih kelas atau ketik nama/NIS untuk mengevaluasi poin kedisiplinan dan remisi siswa."
+                      />
                     </div>
 
                     {/* Big numbers scoreboard */}
@@ -3417,34 +3411,37 @@ export default function KonselingView({
             {/* Scrollable form container */}
             <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
               
-              {/* Common field: Student selection */}
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Pilih Siswa</label>
-                <select 
-                  value={
-                    activeTab === 'konseling' ? formKonseling.siswaId :
-                    activeTab === 'pelanggaran' ? formPelanggaran.siswaId :
-                    activeTab === 'remisi' ? formRemisiPoin.siswaId :
-                    activeTab === 'prestasi' ? formPrestasi.siswaId :
-                    activeTab === 'asesmen' ? formAsesmen.siswaId :
-                    activeTab === 'homevisit' ? formHomeVisit.siswaId : formKehadiran.siswaId
-                  } 
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (activeTab === 'konseling') setFormKonseling(prev => ({ ...prev, siswaId: val }));
-                    else if (activeTab === 'pelanggaran') setFormPelanggaran(prev => ({ ...prev, siswaId: val }));
-                    else if (activeTab === 'remisi') setFormRemisiPoin(prev => ({ ...prev, siswaId: val }));
-                    else if (activeTab === 'prestasi') setFormPrestasi(prev => ({ ...prev, siswaId: val }));
-                    else if (activeTab === 'asesmen') setFormAsesmen(prev => ({ ...prev, siswaId: val }));
-                    else if (activeTab === 'homevisit') setFormHomeVisit(prev => ({ ...prev, siswaId: val }));
-                    else if (activeTab === 'kehadiran') setFormKehadiran(prev => ({ ...prev, siswaId: val }));
-                  }}
-                  className="p-2.5 border border-slate-200 bg-white rounded-xl w-full"
-                  required
-                >
-                  {db.siswa.map(s => <option key={s.id} value={s.id}>{s.nama} ({db.kelas.find(k => k.id === s.kelasId)?.namaKelas})</option>)}
-                </select>
-              </div>
+              {/* Common field: Student selection with Dropdown Kelas & Pencarian Siswa Format Teks */}
+              <StudentSelector
+                students={db.siswa || []}
+                classes={db.kelas || []}
+                selectedStudentId={
+                  activeTab === 'konseling' ? formKonseling.siswaId :
+                  activeTab === 'pelanggaran' ? formPelanggaran.siswaId :
+                  activeTab === 'remisi' ? formRemisiPoin.siswaId :
+                  activeTab === 'prestasi' ? formPrestasi.siswaId :
+                  activeTab === 'asesmen' ? formAsesmen.siswaId :
+                  activeTab === 'homevisit' ? formHomeVisit.siswaId : formKehadiran.siswaId
+                }
+                onSelectStudent={(val) => {
+                  if (activeTab === 'konseling') setFormKonseling(prev => ({ ...prev, siswaId: val }));
+                  else if (activeTab === 'pelanggaran') setFormPelanggaran(prev => ({ ...prev, siswaId: val }));
+                  else if (activeTab === 'remisi') setFormRemisiPoin(prev => ({ ...prev, siswaId: val }));
+                  else if (activeTab === 'prestasi') setFormPrestasi(prev => ({ ...prev, siswaId: val }));
+                  else if (activeTab === 'asesmen') setFormAsesmen(prev => ({ ...prev, siswaId: val }));
+                  else if (activeTab === 'homevisit') setFormHomeVisit(prev => ({ ...prev, siswaId: val }));
+                  else if (activeTab === 'kehadiran') setFormKehadiran(prev => ({ ...prev, siswaId: val }));
+                }}
+                theme={
+                  activeTab === 'pelanggaran' ? 'rose' :
+                  activeTab === 'remisi' ? 'sky' :
+                  activeTab === 'kehadiran' ? 'emerald' :
+                  activeTab === 'prestasi' ? 'amber' : 'indigo'
+                }
+                label="Pilih Siswa"
+                required={true}
+                helperText="Pilih kelas atau ketik pencarian nama/NIS untuk memfilter siswa secara instan."
+              />
 
               {/* A. KONSELING FIELDS */}
               {activeTab === 'konseling' && (

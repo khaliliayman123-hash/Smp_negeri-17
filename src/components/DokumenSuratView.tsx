@@ -18,6 +18,7 @@ import {
   FileDown
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Surat, Dokumen } from '../types';
+import { StudentSelector } from './StudentSelector';
 
 interface DokumenSuratViewProps {
   db: DatabaseState;
@@ -958,17 +959,16 @@ export default function DokumenSuratView({
             </h3>
 
             <form onSubmit={handleDocUpload} className="space-y-3">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Pilih Siswa</label>
-                <select 
-                  value={selectedDocStudentId}
-                  onChange={(e) => setSelectedDocStudentId(e.target.value)}
-                  className="p-2.5 border border-slate-200 bg-white rounded-xl w-full"
-                  required
-                >
-                  {db.siswa.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
-                </select>
-              </div>
+              <StudentSelector
+                students={db.siswa || []}
+                classes={db.kelas || []}
+                selectedStudentId={selectedDocStudentId}
+                onSelectStudent={(val) => setSelectedDocStudentId(val)}
+                label="Pilih Siswa"
+                theme="emerald"
+                required={true}
+                helperText="Filter kelas & cari siswa untuk mengunggah dokumen kearsipan."
+              />
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 mb-1">Kategori Dokumen</label>

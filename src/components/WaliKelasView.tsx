@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran, CatatanPerkembangan } from '../types';
 import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
+import { StudentSelector } from './StudentSelector';
 
 interface HdsDetailDrawerProps {
   siswa: Siswa;
@@ -4466,26 +4467,22 @@ export default function WaliKelasView({
                 )}
 
                 <div className="space-y-4">
-                  {/* Student Select */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pilih Siswa <span className="text-rose-500">*</span></label>
-                    <select
-                      value={selectedStudentForReport}
-                      onChange={(e) => {
-                        setSelectedStudentForReport(e.target.value);
-                        setReportError('');
-                        setReportSuccessMsg('');
-                      }}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs focus:outline-none font-semibold transition-all text-slate-700"
-                    >
-                      <option value="">-- Pilih Siswa Kelas {currentClassName} --</option>
-                      {classStudents.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.nama} ({s.nis || 'Tanpa NIS'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Student Select with Dropdown Kelas & Pencarian Siswa Format Teks */}
+                  <StudentSelector
+                    students={db?.siswa || []}
+                    classes={db?.kelas || []}
+                    selectedStudentId={selectedStudentForReport}
+                    onSelectStudent={(id) => {
+                      setSelectedStudentForReport(id);
+                      setReportError('');
+                      setReportSuccessMsg('');
+                    }}
+                    theme="indigo"
+                    label="Pilih Siswa"
+                    required={true}
+                    initialClass={currentClassName}
+                    helperText={`Filter kelas & cari siswa untuk membuat laporan kejadian.`}
+                  />
 
                   {/* Incident Date */}
                   <div className="space-y-1.5">
@@ -4653,21 +4650,18 @@ export default function WaliKelasView({
               }}
               className="space-y-3 text-xs"
             >
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Pilih Siswa
-                </label>
-                <select
-                  value={formPelanggaran.siswaId}
-                  onChange={(e) => setFormPelanggaran({ ...formPelanggaran, siswaId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-rose-500"
-                  required
-                >
-                  {filteredStudents.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
-                  ))}
-                </select>
-              </div>
+              {/* Student Selector with Dropdown Kelas & Pencarian Siswa Format Teks */}
+              <StudentSelector
+                students={db?.siswa || []}
+                classes={db?.kelas || []}
+                selectedStudentId={formPelanggaran.siswaId}
+                onSelectStudent={(id) => setFormPelanggaran(prev => ({ ...prev, siswaId: id }))}
+                theme="rose"
+                label="Pilih Siswa"
+                required={true}
+                initialClass={currentClassName}
+                helperText="Filter kelas & cari siswa untuk mencatat pelanggaran kedisiplinan."
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -4796,21 +4790,18 @@ export default function WaliKelasView({
               }}
               className="space-y-3 text-xs"
             >
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Pilih Siswa
-                </label>
-                <select
-                  value={formRemisi.siswaId}
-                  onChange={(e) => setFormRemisi({ ...formRemisi, siswaId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
-                  required
-                >
-                  {filteredStudents.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
-                  ))}
-                </select>
-              </div>
+              {/* Student Selector with Dropdown Kelas & Pencarian Siswa Format Teks */}
+              <StudentSelector
+                students={db?.siswa || []}
+                classes={db?.kelas || []}
+                selectedStudentId={formRemisi.siswaId}
+                onSelectStudent={(id) => setFormRemisi(prev => ({ ...prev, siswaId: id }))}
+                theme="emerald"
+                label="Pilih Siswa"
+                required={true}
+                initialClass={currentClassName}
+                helperText="Filter kelas & cari siswa untuk menambahkan remisi poin kebaikan."
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -4950,21 +4941,18 @@ export default function WaliKelasView({
               }}
               className="space-y-3 text-xs"
             >
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Pilih Siswa
-                </label>
-                <select
-                  value={formPrestasi.siswaId}
-                  onChange={(e) => setFormPrestasi({ ...formPrestasi, siswaId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-amber-500"
-                  required
-                >
-                  {filteredStudents.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
-                  ))}
-                </select>
-              </div>
+              {/* Student Selector with Dropdown Kelas & Pencarian Siswa Format Teks */}
+              <StudentSelector
+                students={db?.siswa || []}
+                classes={db?.kelas || []}
+                selectedStudentId={formPrestasi.siswaId}
+                onSelectStudent={(id) => setFormPrestasi(prev => ({ ...prev, siswaId: id }))}
+                theme="amber"
+                label="Pilih Siswa"
+                required={true}
+                initialClass={currentClassName}
+                helperText="Filter kelas & cari siswa untuk mencatat pencapaian prestasi."
+              />
 
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
@@ -5111,21 +5099,18 @@ export default function WaliKelasView({
               }}
               className="space-y-3 text-xs"
             >
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Pilih Siswa
-                </label>
-                <select
-                  value={formKehadiran.siswaId}
-                  onChange={(e) => setFormKehadiran({ ...formKehadiran, siswaId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
-                  required
-                >
-                  {classStudents.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nama} (NIS: {s.nis || '-'})</option>
-                  ))}
-                </select>
-              </div>
+              {/* Student Selector with Dropdown Kelas & Pencarian Siswa Format Teks */}
+              <StudentSelector
+                students={db?.siswa || []}
+                classes={db?.kelas || []}
+                selectedStudentId={formKehadiran.siswaId}
+                onSelectStudent={(id) => setFormKehadiran(prev => ({ ...prev, siswaId: id }))}
+                theme="emerald"
+                label="Pilih Siswa"
+                required={true}
+                initialClass={currentClassName}
+                helperText="Filter kelas & cari siswa untuk merekap absensi presensi."
+              />
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
@@ -5301,24 +5286,18 @@ export default function WaliKelasView({
               }}
               className="space-y-3.5 text-xs"
             >
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                  Pilih Siswa <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={formCatatan.siswaId}
-                  onChange={(e) => setFormCatatan({ ...formCatatan, siswaId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 focus:bg-white focus:border-emerald-500 transition"
-                  required
-                >
-                  <option value="">-- Pilih Siswa Kelas {currentClassName} --</option>
-                  {classStudents.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nama} ({s.nis || 'Tanpa NIS'})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Student Selector with Dropdown Kelas & Pencarian Siswa Format Teks */}
+              <StudentSelector
+                students={db?.siswa || []}
+                classes={db?.kelas || []}
+                selectedStudentId={formCatatan.siswaId}
+                onSelectStudent={(id) => setFormCatatan(prev => ({ ...prev, siswaId: id }))}
+                theme="indigo"
+                label="Pilih Siswa"
+                required={true}
+                initialClass={currentClassName}
+                helperText="Filter kelas & cari siswa untuk menambahkan catatan kasus dan evaluasi."
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
