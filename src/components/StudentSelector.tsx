@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, X, Check, Filter } from 'lucide-react';
 import { Siswa, Kelas } from '../types';
 import { normalizeClassName } from '../services/api';
+import { searchAndRankStudents } from '../utils/studentSearch';
 
 export interface StudentSelectorProps {
   students: Siswa[];
@@ -93,7 +94,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
   const kelas8List = useMemo(() => availableClasses.filter(c => c.name.includes('8-') || c.level === 8), [availableClasses]);
   const kelas9List = useMemo(() => availableClasses.filter(c => c.name.includes('9-') || c.level === 9), [availableClasses]);
 
-  // Filter students based on selected class and search query
+  // Filter students based on selected class and search query with smart initial & prefix ranking
   const filteredStudents = useMemo(() => {
     let pool = students || [];
 
@@ -107,29 +108,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
       });
     }
 
-    // Filter by search text
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const qDigits = q.replace(/\D/g, '');
-      pool = pool.filter(s => {
-        if (!s) return false;
-        const name = String(s.nama || '').toLowerCase();
-        const nis = String(s.nis ?? '').toLowerCase();
-        const nisn = String(s.nisn ?? '').toLowerCase();
-        const nisDigits = nis.replace(/\D/g, '');
-        const nisnDigits = nisn.replace(/\D/g, '');
-
-        return (
-          name.includes(q) ||
-          nis.includes(q) ||
-          nisn.includes(q) ||
-          (qDigits && (nisDigits.includes(qDigits) || nisnDigits.includes(qDigits)))
-        );
-      });
-    }
-
-    // Sort alphabetically by student name
-    return [...pool].sort((a, b) => (a.nama || '').localeCompare(b.nama || '', 'id'));
+    return searchAndRankStudents(pool, searchQuery);
   }, [students, selectedClass, searchQuery]);
 
   // Theme-based ring and border accents

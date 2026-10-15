@@ -37,6 +37,7 @@ import {
 // Sub views
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Konseling, Pelanggaran, RemisiPoin, Prestasi, Asesmen, HomeVisit, Surat, Dokumen, LaporanKejadian, CatatanPerkembangan, PengaduanSiswa } from './types';
 import { apiService, WALI_KELAS_USERS, findSiswa, getSiswaInfo, normalizeClassName, standardKelasMap, getStudentsForClass } from './services/api';
+import { searchAndRankStudents } from './utils/studentSearch';
 import DashboardView from './components/DashboardView';
 import SiswaView from './components/SiswaView';
 import WaliKelasView from './components/WaliKelasView';
@@ -123,57 +124,18 @@ export default function App() {
   // Application Data States
   const [db, setDb] = useState<DatabaseState | null>(null);
 
-  // Memoized student search for Portal Siswa to avoid recalculating on every keystroke
+  // Memoized student search for Portal Siswa with accurate initial & prefix ranking
   const studentSearchResults = useMemo(() => {
     const allSiswa = db?.siswa || [];
     const allKelas = db?.kelas || [];
-    const q = siswaSearchQuery.toLowerCase().trim();
 
     const basePool = selectedSiswaKelasId 
       ? getStudentsForClass(allSiswa, selectedSiswaKelasId, allKelas)
       : allSiswa;
 
-    const searchPool = selectedSiswaKelasId ? basePool : allSiswa;
-
-    return searchPool
-      .map((s) => {
-        const nameLower = (s.nama || '').toLowerCase().trim();
-        const nisStr = (s.nis || '').toString().trim();
-        const nisnStr = (s.nisn || '').toString().trim();
-        const isPlaceholderNis = !nisStr || nisStr === '12345678' || nisStr === '0' || nisStr === '-';
-        const nameWords = nameLower.split(/\s+/);
-
-        if (!q) {
-          return { student: s, score: 1 };
-        }
-
-        let score = 0;
-        if (nameLower === q) {
-          score = 120;
-        } else if (nameLower.startsWith(q)) {
-          score = 100;
-        } else if (nameWords.some((w) => w.startsWith(q))) {
-          score = 85;
-        } else if (nameLower.includes(q)) {
-          score = 60;
-        } else if (nisnStr && nisnStr !== '0' && (nisnStr === q || nisnStr.startsWith(q))) {
-          score = 90;
-        } else if (!isPlaceholderNis && (nisStr === q || nisStr.startsWith(q))) {
-          score = 80;
-        }
-
-        if (score > 0 && selectedSiswaKelasId && s.kelasId === selectedSiswaKelasId) {
-          score += 25;
-        }
-
-        return { student: s, score };
-      })
-      .filter((item) => item.score > 0)
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return (a.student.nama || '').localeCompare(b.student.nama || '', undefined, { sensitivity: 'base', numeric: true });
-      })
-      .map(item => item.student);
+    return searchAndRankStudents(basePool, siswaSearchQuery, {
+      preferredClassId: selectedSiswaKelasId,
+    });
   }, [db?.siswa, db?.kelas, selectedSiswaKelasId, siswaSearchQuery]);
 
   const filteredDb = useMemo(() => {

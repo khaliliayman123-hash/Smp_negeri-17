@@ -50,6 +50,7 @@ import {
 } from '../types';
 import { findSiswa, getSiswaInfo } from '../services/api';
 import { StudentSelector } from './StudentSelector';
+import { isStudentSearchMatch, scoreStudentMatch } from '../utils/studentSearch';
 
 interface KonselingViewProps {
   db: DatabaseState;
@@ -295,67 +296,104 @@ export default function KonselingView({
     }
   };
 
-  // Memoized lists filtered by Search
+  // Memoized lists filtered by Search with accurate initial & prefix ranking
   const filteredList = useMemo(() => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim();
     
     if (activeTab === 'konseling') {
-      return db.konseling.filter(k => {
+      const list = db.konseling.filter(k => {
         const siswa = db.siswa.find(s => s.id === k.siswaId);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const nomorKonseling = String(k.nomorKonseling || '').toLowerCase();
-        const permasalahan = String(k.permasalahan || '').toLowerCase();
-        return (siswaNama.includes(q) || nomorKonseling.includes(q) || permasalahan.includes(q));
+        return isStudentSearchMatch(siswa, q, [k.nomorKonseling, k.permasalahan]);
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = db.siswa.find(s => s.id === a.siswaId);
+          const sB = db.siswa.find(s => s.id === b.siswaId);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     } else if (activeTab === 'pelanggaran') {
-      return db.pelanggaran.filter(p => {
+      const list = db.pelanggaran.filter(p => {
         const siswa = db.siswa.find(s => s.id === p.siswaId);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const jenisPelanggaran = String(p.jenisPelanggaran || '').toLowerCase();
-        const kategori = String(p.kategori || '').toLowerCase();
-        return (siswaNama.includes(q) || jenisPelanggaran.includes(q) || kategori.includes(q));
+        return isStudentSearchMatch(siswa, q, [p.jenisPelanggaran, p.kategori]);
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = db.siswa.find(s => s.id === a.siswaId);
+          const sB = db.siswa.find(s => s.id === b.siswaId);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     } else if (activeTab === 'remisi') {
-      return (db.remisiPoin || []).filter(r => {
+      const list = (db.remisiPoin || []).filter(r => {
         const siswa = db.siswa.find(s => s.id === r.siswaId);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const jenisRemisi = String(r.jenisRemisi || '').toLowerCase();
-        const kategori = String(r.kategori || '').toLowerCase();
-        return (siswaNama.includes(q) || jenisRemisi.includes(q) || kategori.includes(q));
+        return isStudentSearchMatch(siswa, q, [r.jenisRemisi, r.kategori]);
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = db.siswa.find(s => s.id === a.siswaId);
+          const sB = db.siswa.find(s => s.id === b.siswaId);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     } else if (activeTab === 'prestasi') {
-      return db.prestasi.filter(p => {
+      const list = db.prestasi.filter(p => {
         const siswa = db.siswa.find(s => s.id === p.siswaId);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const namaPrestasi = String(p.namaPrestasi || '').toLowerCase();
-        const tingkat = String(p.tingkat || '').toLowerCase();
-        return (siswaNama.includes(q) || namaPrestasi.includes(q) || tingkat.includes(q));
+        return isStudentSearchMatch(siswa, q, [p.namaPrestasi, p.tingkat]);
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = db.siswa.find(s => s.id === a.siswaId);
+          const sB = db.siswa.find(s => s.id === b.siswaId);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     } else if (activeTab === 'asesmen') {
-      return db.asesmen.filter(a => {
+      const list = db.asesmen.filter(a => {
         const siswa = db.siswa.find(s => s.id === a.siswaId);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const akpd = String(a.akpd || '').toLowerCase();
-        const iq = String(a.iq || '').toLowerCase();
-        return (siswaNama.includes(q) || akpd.includes(q) || iq.includes(q));
+        return isStudentSearchMatch(siswa, q, [a.akpd, a.iq != null ? String(a.iq) : '']);
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = db.siswa.find(s => s.id === a.siswaId);
+          const sB = db.siswa.find(s => s.id === b.siswaId);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     } else if (activeTab === 'homevisit') {
-      return db.homeVisit.filter(h => {
+      const list = db.homeVisit.filter(h => {
         const siswa = db.siswa.find(s => s.id === h.siswaId);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const tujuan = String(h.tujuan || '').toLowerCase();
-        const hasil = String(h.hasil || '').toLowerCase();
-        return (siswaNama.includes(q) || tujuan.includes(q) || hasil.includes(q));
+        return isStudentSearchMatch(siswa, q, [h.tujuan, h.hasil]);
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = db.siswa.find(s => s.id === a.siswaId);
+          const sB = db.siswa.find(s => s.id === b.siswaId);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     } else if (activeTab === 'kehadiran') {
-      return (db.kehadiran || []).filter(h => {
+      const list = (db.kehadiran || []).filter(h => {
         const siswa = findSiswa(db, h.siswaId, h);
-        const siswaNama = String(siswa?.nama || '').toLowerCase();
-        const mingguKe = String(h.mingguKe || '').toLowerCase();
-        const bulan = String(h.bulan || '').toLowerCase();
-        const keterangan = String(h.keterangan || '').toLowerCase();
-
-        const matchSearch = (siswaNama.includes(q) || mingguKe.includes(q) || bulan.includes(q) || keterangan.includes(q));
+        const matchSearch = isStudentSearchMatch(siswa, q, [h.mingguKe, h.bulan, h.keterangan]);
 
         let matchKelas = true;
         if (attendanceFilterKelas !== 'ALL') {
@@ -377,6 +415,16 @@ export default function KonselingView({
 
         return matchSearch && matchKelas && matchBulan;
       });
+      if (q) {
+        list.sort((a, b) => {
+          const sA = findSiswa(db, a.siswaId, a);
+          const sB = findSiswa(db, b.siswaId, b);
+          const scoreA = sA ? scoreStudentMatch(sA, q) : 0;
+          const scoreB = sB ? scoreStudentMatch(sB, q) : 0;
+          return scoreB - scoreA;
+        });
+      }
+      return list;
     }
     return [];
   }, [db, activeTab, searchQuery, attendanceFilterKelas, attendanceFilterBulan]);

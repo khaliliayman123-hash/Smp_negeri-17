@@ -11,6 +11,7 @@ import {
   PengaduanSiswa,
   Siswa
 } from '../types';
+import { scoreStudentMatch } from '../utils/studentSearch';
 import { 
   AlertCircle, 
   Send, 
@@ -338,18 +339,37 @@ export default function PengaduanView({
   const complaintsList = useMemo(() => {
     let list = [...rawComplaintsList];
 
-    // Filters for teachers/admin
+    // Filters for teachers/admin with accurate initial & prefix ranking
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(item => 
-        item && (
-          (item.judulPengaduan && item.judulPengaduan.toString().toLowerCase().includes(q)) ||
-          (item.namaSiswa && item.namaSiswa.toString().toLowerCase().includes(q)) ||
-          (item.nis && item.nis.toString().toLowerCase().includes(q)) ||
-          (item.kronologis && item.kronologis.toString().toLowerCase().includes(q)) ||
-          (item.kelas && item.kelas.toString().toLowerCase().includes(q))
-        )
-      );
+      const q = searchQuery.trim();
+      list = list.filter(item => {
+        if (!item) return false;
+        // Check student name matching with smart engine
+        const studentDummy: Partial<Siswa> = {
+          id: item.siswaId || '',
+          nama: item.namaSiswa || '',
+          nis: item.nis || '',
+          nisn: '',
+          kelasId: item.kelas || '',
+          jenisKelamin: 'Laki-laki',
+        };
+        const studentScore = scoreStudentMatch(studentDummy, q);
+        if (studentScore > 0) return true;
+
+        const qLower = q.toLowerCase();
+        return (
+          (item.judulPengaduan && item.judulPengaduan.toString().toLowerCase().includes(qLower)) ||
+          (item.kronologis && item.kronologis.toString().toLowerCase().includes(qLower)) ||
+          (item.kelas && item.kelas.toString().toLowerCase().includes(qLower))
+        );
+      }).sort((a, b) => {
+        const dummyA: Partial<Siswa> = { id: a.siswaId || '', nama: a.namaSiswa || '', nis: a.nis || '', nisn: '', kelasId: a.kelas || '', jenisKelamin: 'Laki-laki' };
+        const dummyB: Partial<Siswa> = { id: b.siswaId || '', nama: b.namaSiswa || '', nis: b.nis || '', nisn: '', kelasId: b.kelas || '', jenisKelamin: 'Laki-laki' };
+        const scoreA = scoreStudentMatch(dummyA, q);
+        const scoreB = scoreStudentMatch(dummyB, q);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return 0;
+      });
     }
 
     if (statusFilter !== 'Semua') {

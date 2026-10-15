@@ -27,6 +27,7 @@ import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
 import KehadiranQrScanner from './KehadiranQrScanner';
 import StudentQrCardModal from './StudentQrCardModal';
 import { StudentSelector } from './StudentSelector';
+import { isStudentSearchMatch, scoreStudentMatch } from '../utils/studentSearch';
 
 interface KehadiranViewProps {
   db: DatabaseState | null;
@@ -301,14 +302,11 @@ export default function KehadiranView({
         if (!studentMatch && !classMatch) return false;
       }
 
-      // 2. Search query
+      // 2. Search query with accurate initial & prefix ranking
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
         const student = findSiswa(db, k.siswaId, k);
-        const matchName = student && student.nama.toLowerCase().includes(q);
-        const matchNis = student && (student.nis.toLowerCase().includes(q) || (student.nisn && student.nisn.toLowerCase().includes(q)));
-        const matchKet = k.keterangan && k.keterangan.toLowerCase().includes(q);
-        if (!matchName && !matchNis && !matchKet) return false;
+        const matchSearch = isStudentSearchMatch(student, searchQuery, [k.keterangan]);
+        if (!matchSearch) return false;
       }
 
       // 3. Month filter
@@ -341,6 +339,15 @@ export default function KehadiranView({
       }
 
       return true;
+    }).sort((a, b) => {
+      if (searchQuery.trim()) {
+        const studentA = findSiswa(db, a.siswaId, a);
+        const studentB = findSiswa(db, b.siswaId, b);
+        const scoreA = studentA ? scoreStudentMatch(studentA, searchQuery) : 0;
+        const scoreB = studentB ? scoreStudentMatch(studentB, searchQuery) : 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+      return 0;
     });
   }, [db, activeStudents, selectedClassId, searchQuery, attendanceFilterBulan, attendanceFilterMinggu, startDate, endDate, getRecordDateRange]);
 

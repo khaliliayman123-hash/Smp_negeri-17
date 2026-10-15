@@ -58,6 +58,7 @@ import {
   Legend
 } from 'recharts';
 import { DatabaseState, User, Siswa } from '../types';
+import { isStudentSearchMatch, scoreStudentMatch } from '../utils/studentSearch';
 import { getSiswaInfo, normalizeClassName } from '../services/api';
 
 interface DashboardViewProps {
@@ -218,18 +219,22 @@ export default function DashboardView({ db, currentUser, onNavigateToSiswa }: Da
       .sort((a, b) => b.netPoints - a.netPoints);
   }, [studentViolationAnalytics, pointThreshold]);
 
-  // Filtered students for modal display (grade + search)
+  // Filtered students for modal display (grade + search with accurate initial & prefix ranking)
   const filteredModalStudents = useMemo(() => {
     return thresholdExceededStudents.filter(s => {
       if (modalFilterGrade !== 'ALL' && s.gradeLevel !== modalFilterGrade) return false;
       if (modalSearchQuery.trim()) {
-        const q = modalSearchQuery.toLowerCase().trim();
-        const matchesName = (s.nama || '').toLowerCase().includes(q);
-        const matchesNis = String(s.nis || '').includes(q);
-        const matchesKelas = s.namaKelas.toLowerCase().includes(q);
-        if (!matchesName && !matchesNis && !matchesKelas) return false;
+        const matches = isStudentSearchMatch(s as any, modalSearchQuery, [s.namaKelas]);
+        if (!matches) return false;
       }
       return true;
+    }).sort((a, b) => {
+      if (modalSearchQuery.trim()) {
+        const scoreA = scoreStudentMatch(a as any, modalSearchQuery);
+        const scoreB = scoreStudentMatch(b as any, modalSearchQuery);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+      return b.netPoints - a.netPoints;
     });
   }, [thresholdExceededStudents, modalFilterGrade, modalSearchQuery]);
 

@@ -48,6 +48,7 @@ import {
 import { DatabaseState, User, UserRole, Siswa, OrangTua, Kesehatan, Ekonomi, Psikologi, Sosial, Akademik, Asesmen, LaporanKejadian, Pelanggaran, RemisiPoin, Prestasi, Kehadiran, CatatanPerkembangan } from '../types';
 import { findSiswa, getSiswaInfo, normalizeClassName } from '../services/api';
 import { StudentSelector } from './StudentSelector';
+import { searchAndRankStudents, isStudentSearchMatch, scoreStudentMatch } from '../utils/studentSearch';
 
 interface HdsDetailDrawerProps {
   siswa: Siswa;
@@ -2389,15 +2390,9 @@ export default function WaliKelasView({
     });
   }, [db, currentClassName]);
 
-  // Apply search query filter over class students
+  // Apply search query filter over class students with accurate initial & prefix ranking
   const filteredStudents = useMemo(() => {
-    if (!searchQuery.trim()) return classStudents;
-    const q = searchQuery.toLowerCase();
-    return classStudents.filter(s => 
-      s.nama.toLowerCase().includes(q) || 
-      s.nis.toLowerCase().includes(q) || 
-      s.nisn.toLowerCase().includes(q)
-    );
+    return searchAndRankStudents(classStudents, searchQuery);
   }, [classStudents, searchQuery]);
 
   // Filter class violations (Kedisiplinan Tab)
@@ -2407,17 +2402,19 @@ export default function WaliKelasView({
     return db.pelanggaran.filter(p => studentIds.has(p.siswaId));
   }, [db, classStudents]);
 
-  // Search filter for Violations
+  // Search filter for Violations with smart ranking
   const filteredViolations = useMemo(() => {
     if (!searchQuery.trim()) return classViolations;
-    const q = searchQuery.toLowerCase();
     return classViolations.filter(p => {
       const student = findSiswa(db, p.siswaId, p);
-      return (
-        (student && student.nama.toLowerCase().includes(q)) ||
-        p.jenisPelanggaran.toLowerCase().includes(q) ||
-        p.kategori.toLowerCase().includes(q)
-      );
+      return isStudentSearchMatch(student, searchQuery, [p.jenisPelanggaran, p.kategori]);
+    }).sort((a, b) => {
+      const studentA = findSiswa(db, a.siswaId, a);
+      const studentB = findSiswa(db, b.siswaId, b);
+      const scoreA = studentA ? scoreStudentMatch(studentA, searchQuery) : 0;
+      const scoreB = studentB ? scoreStudentMatch(studentB, searchQuery) : 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
     });
   }, [classViolations, searchQuery, db]);
 
@@ -2428,17 +2425,19 @@ export default function WaliKelasView({
     return db.remisiPoin.filter(r => studentIds.has(r.siswaId));
   }, [db, classStudents]);
 
-  // Search filter for Remisi
+  // Search filter for Remisi with smart ranking
   const filteredRemisi = useMemo(() => {
     if (!searchQuery.trim()) return classRemisi;
-    const q = searchQuery.toLowerCase();
     return classRemisi.filter(r => {
       const student = findSiswa(db, r.siswaId, r);
-      return (
-        (student && student.nama.toLowerCase().includes(q)) ||
-        r.jenisRemisi.toLowerCase().includes(q) ||
-        r.kategori.toLowerCase().includes(q)
-      );
+      return isStudentSearchMatch(student, searchQuery, [r.jenisRemisi, r.kategori]);
+    }).sort((a, b) => {
+      const studentA = findSiswa(db, a.siswaId, a);
+      const studentB = findSiswa(db, b.siswaId, b);
+      const scoreA = studentA ? scoreStudentMatch(studentA, searchQuery) : 0;
+      const scoreB = studentB ? scoreStudentMatch(studentB, searchQuery) : 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
     });
   }, [classRemisi, searchQuery, db]);
 
@@ -2449,18 +2448,19 @@ export default function WaliKelasView({
     return db.prestasi.filter(p => studentIds.has(p.siswaId));
   }, [db, classStudents]);
 
-  // Search filter for Prestasi
+  // Search filter for Prestasi with smart ranking
   const filteredPrestasi = useMemo(() => {
     if (!searchQuery.trim()) return classPrestasi;
-    const q = searchQuery.toLowerCase();
     return classPrestasi.filter(p => {
       const student = findSiswa(db, p.siswaId, p);
-      return (
-        (student && student.nama.toLowerCase().includes(q)) ||
-        p.namaPrestasi.toLowerCase().includes(q) ||
-        p.tingkat.toLowerCase().includes(q) ||
-        p.juara.toLowerCase().includes(q)
-      );
+      return isStudentSearchMatch(student, searchQuery, [p.namaPrestasi, p.tingkat, p.juara]);
+    }).sort((a, b) => {
+      const studentA = findSiswa(db, a.siswaId, a);
+      const studentB = findSiswa(db, b.siswaId, b);
+      const scoreA = studentA ? scoreStudentMatch(studentA, searchQuery) : 0;
+      const scoreB = studentB ? scoreStudentMatch(studentB, searchQuery) : 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return (b.tahun || '').localeCompare(a.tahun || '');
     });
   }, [classPrestasi, searchQuery, db]);
 
@@ -2482,17 +2482,11 @@ export default function WaliKelasView({
     });
   }, [db, classStudents, currentClassName]);
 
-  // Search filter for Kehadiran
+  // Search filter for Kehadiran with smart ranking
   const filteredKehadiran = useMemo(() => {
     return classKehadiran.filter(k => {
       const student = findSiswa(db, k.siswaId, k);
-      const q = searchQuery.toLowerCase();
-      const matchSearch = !q || (
-        (student && student.nama.toLowerCase().includes(q)) ||
-        k.mingguKe.toLowerCase().includes(q) ||
-        k.bulan.toLowerCase().includes(q) ||
-        (k.keterangan && k.keterangan.toLowerCase().includes(q))
-      );
+      const matchSearch = isStudentSearchMatch(student, searchQuery, [k.mingguKe, k.bulan, k.keterangan]);
 
       let matchBulan = true;
       if (attendanceFilterBulan !== 'ALL') {
@@ -2505,6 +2499,15 @@ export default function WaliKelasView({
       }
 
       return matchSearch && matchBulan && matchMinggu;
+    }).sort((a, b) => {
+      if (searchQuery.trim()) {
+        const studentA = findSiswa(db, a.siswaId, a);
+        const studentB = findSiswa(db, b.siswaId, b);
+        const scoreA = studentA ? scoreStudentMatch(studentA, searchQuery) : 0;
+        const scoreB = studentB ? scoreStudentMatch(studentB, searchQuery) : 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+      return 0;
     });
   }, [classKehadiran, searchQuery, attendanceFilterBulan, attendanceFilterMinggu, db]);
 
@@ -2519,15 +2522,11 @@ export default function WaliKelasView({
     });
   }, [db, classStudents]);
 
-  // Search and filter for Catatan Perkembangan
+  // Search and filter for Catatan Perkembangan with smart ranking
   const filteredCatatanPerkembangan = useMemo(() => {
     return classCatatanPerkembangan.filter(c => {
       const student = findSiswa(db, c.siswaId, c);
-      const studentName = (student?.nama || (c as any).namaSiswa || '').toLowerCase();
-      const text = (c.catatan || '').toLowerCase();
-      const rec = (c.rekomendasi || '').toLowerCase();
-      const q = searchQuery.toLowerCase();
-      const matchSearch = !q || studentName.includes(q) || text.includes(q) || rec.includes(q);
+      const matchSearch = isStudentSearchMatch(student, searchQuery, [(c as any).namaSiswa, c.catatan, c.rekomendasi]);
 
       let matchKat = true;
       if (catatanFilterKategori !== 'ALL') {
@@ -2535,7 +2534,16 @@ export default function WaliKelasView({
       }
 
       return matchSearch && matchKat;
-    }).sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+    }).sort((a, b) => {
+      if (searchQuery.trim()) {
+        const studentA = findSiswa(db, a.siswaId, a);
+        const studentB = findSiswa(db, b.siswaId, b);
+        const scoreA = studentA ? scoreStudentMatch(studentA, searchQuery) : 0;
+        const scoreB = studentB ? scoreStudentMatch(studentB, searchQuery) : 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+      return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
+    });
   }, [classCatatanPerkembangan, searchQuery, catatanFilterKategori, db]);
 
   // Weekly attendance breakdown stats (Minggu 1 s.d. Minggu 5)

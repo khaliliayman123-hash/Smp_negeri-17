@@ -19,6 +19,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Siswa, DatabaseState } from '../types';
+import { searchAndRankStudents } from '../utils/studentSearch';
 
 interface StudentQrCardModalProps {
   siswa: Siswa;
@@ -171,13 +172,9 @@ export default function StudentQrCardModal({
     }
   };
 
-  // Student search filter
+  // Student search filter with accurate initial & prefix ranking
   const searchResults = searchQuery.trim()
-    ? allStudents.filter(s => 
-        (s.nama && s.nama.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (s.nis && String(s.nis).includes(searchQuery)) ||
-        (s.nisn && String(s.nisn).includes(searchQuery))
-      ).slice(0, 8)
+    ? searchAndRankStudents(allStudents, searchQuery, { limit: 8 })
     : [];
 
   return (

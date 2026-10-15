@@ -60,6 +60,7 @@ import {
   CatatanPerkembangan
 } from '../types';
 import { apiService, normalizeClassName, standardKelasMap, findSiswa, getSiswaInfo } from '../services/api';
+import { scoreStudentMatch } from '../utils/studentSearch';
 
 interface SiswaViewProps {
   db: DatabaseState;
@@ -1374,14 +1375,8 @@ export default function SiswaView({
           if (!matchesAllowed) return false;
         }
 
-        const nameStr = s.nama ? String(s.nama).toLowerCase() : '';
-        const nisStr = s.nis ? String(s.nis) : '';
-        const nisnStr = s.nisn ? String(s.nisn) : '';
-        const q = searchQuery.toLowerCase().trim();
-        const matchesSearch = !q || 
-                              nameStr.includes(q) || 
-                              nisStr.includes(q) || 
-                              nisnStr.includes(q);
+        const searchScore = searchQuery.trim() ? scoreStudentMatch(s, searchQuery) : 1;
+        const matchesSearch = searchScore > 0;
         const matchesKelas = selectedKelas === 'All' || s.kelasId === selectedKelas;
         const matchesGender = selectedGender === 'All' || s.jenisKelamin === selectedGender;
 
@@ -1432,6 +1427,15 @@ export default function SiswaView({
         return true;
       })
       .sort((a, b) => {
+        // If searching and sorting by default (name), rank by search relevance score first
+        if (searchQuery.trim() && sortBy === 'nama') {
+          const scoreA = scoreStudentMatch(a, searchQuery);
+          const scoreB = scoreStudentMatch(b, searchQuery);
+          if (scoreB !== scoreA) {
+            return scoreB - scoreA;
+          }
+        }
+
         let fieldA: any = a.nama;
         let fieldB: any = b.nama;
         if (sortBy === 'nis') {
